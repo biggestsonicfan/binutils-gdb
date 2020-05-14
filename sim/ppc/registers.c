@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -149,35 +150,6 @@ register_description(const char reg[])
     description.index = spr_ctr;
     description.size = sizeof(unsigned_word);
   }
-#ifdef WITH_ALTIVEC
-  else if (reg[0] == 'v' && reg[1] == 'r' && are_digits(reg + 2)) {
-    description.type = reg_vr;
-    description.index = atoi(reg+2);
-    description.size = sizeof(vreg);
-  }
-   else if (!strcmp(reg, "vscr")) {
-    description.type = reg_vscr;
-    description.index = 0;
-    description.size = sizeof(vscreg);
-  }
-#endif
-#ifdef WITH_E500
-  else if (reg[0] == 'e' && reg[1] == 'v' && are_digits(reg + 2)) {
-    description.type = reg_evr;
-    description.index = atoi(reg+2);
-    description.size = sizeof(unsigned64);
-  }
-  else if (reg[0] == 'r' && reg[1] == 'h' && are_digits(reg + 2)) {
-    description.type = reg_gprh;
-    description.index = atoi(reg+2);
-    description.size = sizeof(gpreg);
-  }
-  else if (!strcmp(reg, "acc")) {
-    description.type = reg_acc;
-    description.index = 0;
-    description.size = sizeof(unsigned64);
-  }
-#endif
   else {
     sprs spr = find_spr(reg);
     if (spr != nr_of_sprs) {

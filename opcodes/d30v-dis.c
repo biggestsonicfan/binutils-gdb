@@ -1,40 +1,124 @@
 /* Disassemble D30V instructions.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright 1997, 1998, 2000, 2001 Free Software Foundation, Inc.
 
-   This file is part of the GNU opcodes library.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
-
-#include "sysdep.h"
 #include <stdio.h>
+#include "sysdep.h"
 #include "opcode/d30v.h"
-#include "disassemble.h"
+#include "dis-asm.h"
 #include "opintl.h"
-#include "libiberty.h"
 
 #define PC_MASK 0xFFFFFFFF
+
+static int lookup_opcode PARAMS ((struct d30v_insn *insn, long num, int is_long));
+static void print_insn PARAMS ((struct disassemble_info *info, bfd_vma memaddr, long long num,
+				 struct d30v_insn *insn, int is_long, int show_ext));
+static int extract_value PARAMS ((long long num, struct d30v_operand *oper, int is_long));
+
+int
+print_insn_d30v (memaddr, info)
+     bfd_vma memaddr;
+     struct disassemble_info *info;
+{
+  int status, result;
+  bfd_byte buffer[12];
+  unsigned long in1, in2;
+  struct d30v_insn insn;
+  long long num;
+
+  insn.form = (struct d30v_format *) NULL;
+
+  info->bytes_per_line = 8;
+  info->bytes_per_chunk = 4;
+  info->display_endian = BFD_ENDIAN_BIG;
+
+  status = (*info->read_memory_func) (memaddr, buffer, 4, info);
+  if (status != 0)
+    {
+      (*info->memory_error_func) (status, memaddr, info);
+      return -1;
+    }
+  in1 = bfd_getb32 (buffer);
+
+  status = (*info->read_memory_func) (memaddr + 4, buffer, 4, info);
+  if (status != 0)
+    {
+      info->bytes_per_line = 8;
+      if (!(result = lookup_opcode (&insn, in1, 0)))
+	(*info->fprintf_func) (info->stream, ".long\t0x%x", in1);
+      else
+	print_insn (info, memaddr, (long long) in1, &insn, 0, result);
+      return 4;
+    }
+  in2 = bfd_getb32 (buffer);
+
+  if (in1 & in2 & FM01)
+    {
+      /* LONG instruction.  */
+      if (!(result = lookup_opcode (&insn, in1, 1)))
+	{
+	  (*info->fprintf_func) (info->stream, ".long\t0x%x,0x%x", in1, in2);
+	  return 8;
+	}
+      num = (long long) in1 << 32 | in2;
+      print_insn (info, memaddr, num, &insn, 1, result);
+    }
+  else
+    {
+      num = in1;
+      if (!(result = lookup_opcode (&insn, in1, 0)))
+	(*info->fprintf_func) (info->stream, ".long\t0x%x", in1);
+      else
+	print_insn (info, memaddr, num, &insn, 0, result);
+
+      switch (((in1 >> 31) << 1) | (in2 >> 31))
+	{
+	case 0:
+	  (*info->fprintf_func) (info->stream, "\t||\t");
+	  break;
+	case 1:
+	  (*info->fprintf_func) (info->stream, "\t->\t");
+	  break;
+	case 2:
+	  (*info->fprintf_func) (info->stream, "\t<-\t");
+	default:
+	  break;
+	}
+
+      insn.form = (struct d30v_format *) NULL;
+      num = in2;
+      if (!(result = lookup_opcode (&insn, in2, 0)))
+	(*info->fprintf_func) (info->stream, ".long\t0x%x", in2);
+      else
+	print_insn (info, memaddr, num, &insn, 0, result);
+    }
+  return 8;
+}
 
 /* Return 0 if lookup fails,
    1 if found and only one form,
    2 if found and there are short and long forms.  */
 
 static int
-lookup_opcode (struct d30v_insn *insn, long num, int is_long)
+lookup_opcode (insn, num, is_long)
+     struct d30v_insn *insn;
+     long num;
+     int is_long;
 {
-  int i = 0, op_index;
+  int i = 0, index;
   struct d30v_format *f;
   struct d30v_opcode *op = (struct d30v_opcode *) d30v_opcode_table;
   int op1 = (num >> 25) & 0x7;
@@ -56,11 +140,11 @@ lookup_opcode (struct d30v_insn *insn, long num, int is_long)
   while (op->op1 == op1 && op->op2 == op2)
     {
       /* Scan through all the formats for the opcode.  */
-      op_index = op->format[i++];
+      index = op->format[i++];
       do
 	{
-	  f = (struct d30v_format *) &d30v_format_table[op_index];
-	  while (f->form == op_index)
+	  f = (struct d30v_format *) &d30v_format_table[index];
+	  while (f->form == index)
 	    {
 	      if ((!is_long || f->form >= LONG) && (f->modifier == mod))
 		{
@@ -72,7 +156,7 @@ lookup_opcode (struct d30v_insn *insn, long num, int is_long)
 	  if (insn->form)
 	    break;
 	}
-      while ((op_index = op->format[i++]) != 0);
+      while ((index = op->format[i++]) != 0);
       if (insn->form)
 	break;
       op++;
@@ -89,44 +173,18 @@ lookup_opcode (struct d30v_insn *insn, long num, int is_long)
     return 1;
 }
 
-static int
-extract_value (uint64_t num, const struct d30v_operand *oper, int is_long)
-{
-  unsigned int val;
-  int shift = 12 - oper->position;
-  unsigned int mask = (0xFFFFFFFF >> (32 - oper->bits));
-
-  if (is_long)
-    {
-      if (oper->bits == 32)
-	/* Piece together 32-bit constant.  */
-	val = ((num & 0x3FFFF)
-	       | ((num & 0xFF00000) >> 2)
-	       | ((num & 0x3F00000000LL) >> 6));
-      else
-	val = (num >> (32 + shift)) & mask;
-    }
-  else
-    val = (num >> shift) & mask;
-
-  if (oper->flags & OPERAND_SHIFT)
-    val <<= 3;
-
-  return val;
-}
-
 static void
-print_insn (struct disassemble_info *info,
-	    bfd_vma memaddr,
-	    uint64_t num,
-	    struct d30v_insn *insn,
-	    int is_long,
-	    int show_ext)
+print_insn (info, memaddr, num, insn, is_long, show_ext)
+     struct disassemble_info *info;
+     bfd_vma memaddr;
+     long long num;
+     struct d30v_insn *insn;
+     int is_long;
+     int show_ext;
 {
-  unsigned int val, opnum;
-  const struct d30v_operand *oper;
-  int i, match, need_comma = 0, need_paren = 0, found_control = 0;
-  unsigned int opind = 0;
+  int val, opnum, need_comma = 0;
+  struct d30v_operand *oper;
+  int i, match, opind = 0, need_paren = 0, found_control = 0;
 
   (*info->fprintf_func) (info->stream, "%s", insn->op->name);
 
@@ -136,7 +194,7 @@ print_insn (struct disassemble_info *info,
       opind++;
       val =
 	extract_value (num,
-		       &d30v_operand_table[insn->form->operands[0]],
+		       (struct d30v_operand *) &d30v_operand_table[insn->form->operands[0]],
 		       is_long);
       (*info->fprintf_func) (info->stream, "%s", d30v_cc_names[val]);
     }
@@ -155,12 +213,10 @@ print_insn (struct disassemble_info *info,
 
   (*info->fprintf_func) (info->stream, "\t");
 
-  while (opind < ARRAY_SIZE (insn->form->operands)
-	 && (opnum = insn->form->operands[opind++]) != 0)
+  while ((opnum = insn->form->operands[opind++]) != 0)
     {
       int bits;
-
-      oper = &d30v_operand_table[opnum];
+      oper = (struct d30v_operand *) &d30v_operand_table[opnum];
       bits = oper->bits;
       if (oper->flags & OPERAND_SHIFT)
 	bits += 3;
@@ -210,10 +266,9 @@ print_insn (struct disassemble_info *info,
 	  match = 0;
 	  if (oper->flags & OPERAND_CONTROL)
 	    {
-	      const struct d30v_operand *oper3
-		= &d30v_operand_table[insn->form->operands[2]];
+	      struct d30v_operand *oper3 =
+		(struct d30v_operand *) &d30v_operand_table[insn->form->operands[2]];
 	      int id = extract_value (num, oper3, is_long);
-
 	      found_control = 1;
 	      switch (id)
 		{
@@ -228,9 +283,7 @@ print_insn (struct disassemble_info *info,
 		  val |= OPERAND_FLAG;
 		  break;
 		default:
-		  /* xgettext: c-format */
-		  opcodes_error_handler (_("illegal id (%d)"), id);
-		  abort ();
+		  fprintf (stderr, "illegal id (%d)\n", id);
 		}
 	    }
 	  else if (oper->flags & OPERAND_ACC)
@@ -271,10 +324,14 @@ print_insn (struct disassemble_info *info,
 	  /* IMM6S3 is unsigned.  */
 	  if (oper->flags & OPERAND_SIGNED || bits == 32)
 	    {
-	      unsigned int sign = 1u << (bits - 1);
-	      if (val & sign)
+	      long max;
+	      max = (1 << (bits - 1));
+	      if (val & max)
 		{
-		  val = -val & (sign + sign - 1);
+		  if (bits == 32)
+		    val = -val;
+		  else
+		    val = -val & ((1 << bits) - 1);
 		  neg = 1;
 		}
 	    }
@@ -299,100 +356,52 @@ print_insn (struct disassemble_info *info,
 	{
 	  if (oper->flags & OPERAND_SIGNED)
 	    {
-	      unsigned int sign = 1u << (bits - 1);
-
-	      if (val & sign)
+	      int max = (1 << (bits - 1));
+	      if (val & max)
 		{
-		  val = -val & (sign + sign - 1);
+		  val = -val;
+		  if (bits < 32)
+		    val &= ((1 << bits) - 1);
 		  (*info->fprintf_func) (info->stream, "-");
 		}
 	    }
 	  (*info->fprintf_func) (info->stream, "0x%x", val);
 	}
       /* If there is another operand, then write a comma and space.  */
-      if (opind < ARRAY_SIZE (insn->form->operands)
-	  && insn->form->operands[opind]
-	  && !(found_control && opind == 2))
+      if (insn->form->operands[opind] && !(found_control && opind == 2))
 	need_comma = 1;
     }
   if (need_paren)
     (*info->fprintf_func) (info->stream, ")");
 }
 
-int
-print_insn_d30v (bfd_vma memaddr, struct disassemble_info *info)
+static int
+extract_value (num, oper, is_long)
+     long long num;
+     struct d30v_operand *oper;
+     int is_long;
 {
-  int status, result;
-  bfd_byte buffer[12];
-  uint32_t in1, in2;
-  struct d30v_insn insn;
-  uint64_t num;
+  int val;
+  int shift = 12 - oper->position;
+  int mask = (0xFFFFFFFF >> (32 - oper->bits));
 
-  insn.form = NULL;
-
-  info->bytes_per_line = 8;
-  info->bytes_per_chunk = 4;
-  info->display_endian = BFD_ENDIAN_BIG;
-
-  status = (*info->read_memory_func) (memaddr, buffer, 4, info);
-  if (status != 0)
+  if (is_long)
     {
-      (*info->memory_error_func) (status, memaddr, info);
-      return -1;
-    }
-  in1 = bfd_getb32 (buffer);
-
-  status = (*info->read_memory_func) (memaddr + 4, buffer, 4, info);
-  if (status != 0)
-    {
-      info->bytes_per_line = 8;
-      if (!(result = lookup_opcode (&insn, in1, 0)))
-	(*info->fprintf_func) (info->stream, ".long\t0x%x", in1);
-      else
-	print_insn (info, memaddr, (uint64_t) in1, &insn, 0, result);
-      return 4;
-    }
-  in2 = bfd_getb32 (buffer);
-
-  if (in1 & in2 & FM01)
-    {
-      /* LONG instruction.  */
-      if (!(result = lookup_opcode (&insn, in1, 1)))
+      if (oper->bits == 32)
 	{
-	  (*info->fprintf_func) (info->stream, ".long\t0x%x,0x%x", in1, in2);
-	  return 8;
+	  /* Piece together 32-bit constant.  */
+	  val = ((num & 0x3FFFF)
+		 | ((num & 0xFF00000) >> 2)
+		 | ((num & 0x3F00000000LL) >> 6));
 	}
-      num = (uint64_t) in1 << 32 | in2;
-      print_insn (info, memaddr, num, &insn, 1, result);
+      else
+	val = (num >> (32 + shift)) & mask;
     }
   else
-    {
-      num = in1;
-      if (!(result = lookup_opcode (&insn, in1, 0)))
-	(*info->fprintf_func) (info->stream, ".long\t0x%x", in1);
-      else
-	print_insn (info, memaddr, num, &insn, 0, result);
+    val = (num >> shift) & mask;
 
-      switch (((in1 >> 31) << 1) | (in2 >> 31))
-	{
-	case 0:
-	  (*info->fprintf_func) (info->stream, "\t||\t");
-	  break;
-	case 1:
-	  (*info->fprintf_func) (info->stream, "\t->\t");
-	  break;
-	case 2:
-	  (*info->fprintf_func) (info->stream, "\t<-\t");
-	default:
-	  break;
-	}
+  if (oper->flags & OPERAND_SHIFT)
+    val <<= 3;
 
-      insn.form = NULL;
-      num = in2;
-      if (!(result = lookup_opcode (&insn, in2, 0)))
-	(*info->fprintf_func) (info->stream, ".long\t0x%x", in2);
-      else
-	print_insn (info, memaddr, num, &insn, 0, result);
-    }
-  return 8;
+  return val;
 }

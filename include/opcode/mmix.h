@@ -1,23 +1,22 @@
 /* mmix.h -- Header file for MMIX opcode table
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001 Free Software Foundation, Inc.
    Written by Hans-Peter Nilsson (hp@bitrange.com)
 
-   This file is part of GDB, GAS, and the GNU binutils.
+This file is part of GDB, GAS, and the GNU binutils.
 
-   GDB, GAS, and the GNU binutils are free software; you can redistribute
-   them and/or modify them under the terms of the GNU General Public
-   License as published by the Free Software Foundation; either version 3,
-   or (at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version 2,
+or (at your option) any later version.
 
-   GDB, GAS, and the GNU binutils are distributed in the hope that they
-   will be useful, but WITHOUT ANY WARRANTY; without even the implied
-   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
-   the GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING3.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* We could have just a char*[] table indexed by the register number, but
    that would not allow for synonyms.  The table is terminated with an
@@ -173,14 +172,13 @@ extern const struct mmix_spec_reg mmix_spec_regs[];
 #define COND_INV_BIT 0x8
 #define PRED_INV_BIT 0x10
 
-#define PUSHGO_INSN_BYTE 0xbeu
-#define GO_INSN_BYTE 0x9eu
-#define SETL_INSN_BYTE 0xe3u
-#define INCML_INSN_BYTE 0xe6u
-#define INCMH_INSN_BYTE 0xe5u
-#define INCH_INSN_BYTE 0xe4u
-#define SWYM_INSN_BYTE 0xfdu
-#define JMP_INSN_BYTE 0xf0u
+#define PUSHGO_INSN_BYTE 0xbe
+#define GO_INSN_BYTE 0x9e
+#define SETL_INSN_BYTE 0xe3
+#define INCML_INSN_BYTE 0xe6
+#define INCMH_INSN_BYTE 0xe5
+#define INCH_INSN_BYTE 0xe4
+#define SWYM_INSN_BYTE 0xfd
 
 /* We can have 256 - 32 (local registers) - 1 ($255 is not allocatable)
    global registers.  */

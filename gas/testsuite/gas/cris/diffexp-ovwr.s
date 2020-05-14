@@ -6,7 +6,6 @@
 ;   one is tested) can take "difference-expressions".
 ;
  .text
- .syntax no_register_prefix
 start:
  .dword 0xf0+b-a-0xc5
  .byte 0xf0+b-a-0xc7

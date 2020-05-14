@@ -1,41 +1,61 @@
-#   Copyright 2001-2020 Free Software Foundation, Inc.
+#   Copyright 2001
+#   Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Michael Snyder. (msnyder@redhat.com)
+
+if $tracelevel then {
+    strace $tracelevel
+}
 
 #
 # Test breakpoints at consecutive instruction addresses.
 #
 
+set prms_id 0
+set bug_id 0
 
-standard_testfile
+set testfile "consecutive"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
 
-if [get_compiler_info] {
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug additional_flags=-w}] != "" } {
+    gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if [get_compiler_info ${binfile}] {
     return -1
 }
 
-if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug nowarnings}]} {
-    return -1
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+if [target_info exists gdb_stub] {
+    gdb_step_for_stub;
 }
 
 if ![runto_main] then {
     perror "couldn't run to breakpoint"
     continue
 }
-
-set is_stmt [is_stmt_addresses $srcfile]
 
 set nl "\[\r\n\]+"
 
@@ -46,18 +66,33 @@ gdb_test "continue" "Breakpoint $decimal, foo .*" \
 set bp_addr 0
 set stop_addr 0
 
-gdb_test_multiple "x /2i \$pc" "get breakpoint address for foo" {
-    -re "=> $hex.*${nl}   ($hex).*$gdb_prompt $" {
+send_gdb "x /2i \$pc\n"
+gdb_expect {
+    global hex
+    global nl
+    global bp_addr
+    global gdb_prompt
+
+    -re "$hex.*${nl}($hex).*$gdb_prompt $" {
 	set bp_addr $expect_out(1,string)
 	pass "get breakpoint address for foo"
+    }
+    -re ".*$gdb_prompt $" {
+	fail "get breakpoint address for foo"
+	return 0;
+    }
+    timeout {
+	fail "get breakpoint address for foo (timeout)"
+	return 0;
     }
 }
 
 gdb_test "break \*$bp_addr" "Breakpoint $decimal at $bp_addr: file .*" \
 	"set bp, 2nd instr"
 
-gdb_test_multiple "step" "stopped at bp, 2nd instr" {
-    -re -wrap "Breakpoint $decimal, ($hex) in foo.*" {
+send_gdb "step\n"
+gdb_expect {
+    -re "Breakpoint $decimal, ($hex) in foo.*$gdb_prompt $" {
 	set stop_addr $expect_out(1,string)
 	if [eval expr "$bp_addr == $stop_addr"] then {
 	    pass "stopped at bp, 2nd instr"
@@ -65,16 +100,12 @@ gdb_test_multiple "step" "stopped at bp, 2nd instr" {
 	    fail "stopped at bp, 2nd instr (wrong address)"
 	}
     }
-    -re -wrap "Breakpoint $decimal, foo.*" {
-	set stop_addr [get_valueof "/x" "\$pc" "" "value of pc"]
-	set stop_addr_is_stmt [hex_in_list $stop_addr $is_stmt]
-	if { ! $stop_addr_is_stmt } {
-	    fail "stopped at bp, 2nd instr (missing hex prefix)"
-	} elseif [eval expr "$bp_addr == $stop_addr"] then {
-	    pass "stopped at bp, 2nd instr"
-	} else {
-	    fail "stopped at bp, 2nd instr (wrong address)"
-	}
+    -re ".*$gdb_prompt $" {
+	fail "stopped at bp, 2nd instr"
+    }
+    timeout {
+	fail "stopped at bp, 2nd instr (timeout)"
+
     }
 }
 

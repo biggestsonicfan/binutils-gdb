@@ -2,22 +2,23 @@
 
 THIS FILE IS MACHINE GENERATED WITH CGEN.
 
-Copyright 1996-2020 Free Software Foundation, Inc.
+Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
 
 This file is part of the GNU simulators.
 
-   This file is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 */
 
@@ -25,7 +26,7 @@ This file is part of the GNU simulators.
 #define M32RBF_DECODE_H
 
 extern const IDESC *m32rbf_decode (SIM_CPU *, IADDR,
-                                  CGEN_INSN_WORD, CGEN_INSN_WORD,
+                                  CGEN_INSN_INT, CGEN_INSN_INT,
                                   ARGBUF *);
 extern void m32rbf_init_idesc_table (SIM_CPU *);
 extern void m32rbf_sem_init_idesc_table (SIM_CPU *);
@@ -59,8 +60,7 @@ typedef enum m32rbf_insn_type {
  , M32RBF_INSN_ST, M32RBF_INSN_ST_D, M32RBF_INSN_STB, M32RBF_INSN_STB_D
  , M32RBF_INSN_STH, M32RBF_INSN_STH_D, M32RBF_INSN_ST_PLUS, M32RBF_INSN_ST_MINUS
  , M32RBF_INSN_SUB, M32RBF_INSN_SUBV, M32RBF_INSN_SUBX, M32RBF_INSN_TRAP
- , M32RBF_INSN_UNLOCK, M32RBF_INSN_CLRPSW, M32RBF_INSN_SETPSW, M32RBF_INSN_BSET
- , M32RBF_INSN_BCLR, M32RBF_INSN_BTST, M32RBF_INSN__MAX
+ , M32RBF_INSN_UNLOCK, M32RBF_INSN_MAX
 } M32RBF_INSN_TYPE;
 
 /* Enum declaration for semantic formats in cpu family m32rbf.  */
@@ -78,8 +78,7 @@ typedef enum m32rbf_sfmt_type {
  , M32RBF_SFMT_NOP, M32RBF_SFMT_RAC, M32RBF_SFMT_RTE, M32RBF_SFMT_SETH
  , M32RBF_SFMT_SLL3, M32RBF_SFMT_SLLI, M32RBF_SFMT_ST, M32RBF_SFMT_ST_D
  , M32RBF_SFMT_STB, M32RBF_SFMT_STB_D, M32RBF_SFMT_STH, M32RBF_SFMT_STH_D
- , M32RBF_SFMT_ST_PLUS, M32RBF_SFMT_TRAP, M32RBF_SFMT_UNLOCK, M32RBF_SFMT_CLRPSW
- , M32RBF_SFMT_SETPSW, M32RBF_SFMT_BSET, M32RBF_SFMT_BTST
+ , M32RBF_SFMT_ST_PLUS, M32RBF_SFMT_TRAP, M32RBF_SFMT_UNLOCK
 } M32RBF_SFMT_TYPE;
 
 /* Function unit handlers (user written).  */

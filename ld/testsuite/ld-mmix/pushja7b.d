@@ -1,7 +1,7 @@
 #source: start.s
 #source: a.s
 #source: pushja.s
-#as: -x --no-pushj-stubs
+#as: -x
 #ld: -m mmo
 #objdump: -dr
 

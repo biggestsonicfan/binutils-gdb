@@ -2,7 +2,7 @@
 #source: gregpsj1.s
 #source: start.s
 #source: a.s
-#as: -x --no-pushj-stubs
+#as: -x
 #ld: -m elf64mmix
 #objdump: -dt
 
@@ -11,9 +11,14 @@
 .*:     file format elf64-mmix
 
 SYMBOL TABLE:
-0+ l    d  \.text	0+ (|\.text)
-0+7f0 l    d  \.MMIX\.reg_contents	0+ (|\.MMIX\.reg_contents)
-#...
+0+ l    d  .text	0+ 
+2000000000000000 l    d  .data	0+ 
+2000000000000000 l    d  .sbss	0+ 
+2000000000000000 l    d  .bss	0+ 
+0+7f0 l    d  \.MMIX\.reg_contents	0+ 
+0+ l    d  \*ABS\*	0+ 
+0+ l    d  \*ABS\*	0+ 
+0+ l    d  \*ABS\*	0+ 
 0+14 g       \.text	0+ _start
 0+fe g       \*REG\*	0+ areg
 #...

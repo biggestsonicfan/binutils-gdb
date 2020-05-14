@@ -1,23 +1,22 @@
 /* This file is a modified version of 'a.out.h'.  It is to be used in all
    GNU tools modified to support the i80960 (or tools that operate on
    object files created by such tools).
-
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   
+   Copyright 2001 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
  
 /* All i80960 development is done in a CROSS-DEVELOPMENT environment.  I.e.,
    object code is generated on, and executed under the direction of a symbolic
@@ -87,16 +86,16 @@ struct external_exec
 
 /* These macros use the a_xxx field names, since they operate on the exec
    structure after it's been byte-swapped and realigned on the host machine.  */
-#define N_BADMAG(x)	(((x)->a_info)!=BMAGIC)
+#define N_BADMAG(x)	(((x).a_info)!=BMAGIC)
 #define N_TXTOFF(x)	EXEC_BYTES_SIZE
-#define N_DATOFF(x)	( N_TXTOFF(x) + (x)->a_text )
-#define N_TROFF(x)	( N_DATOFF(x) + (x)->a_data )
+#define N_DATOFF(x)	( N_TXTOFF(x) + (x).a_text )
+#define N_TROFF(x)	( N_DATOFF(x) + (x).a_data )
 #define N_TRELOFF	N_TROFF
-#define N_DROFF(x)	( N_TROFF(x) + (x)->a_trsize )
+#define N_DROFF(x)	( N_TROFF(x) + (x).a_trsize )
 #define N_DRELOFF	N_DROFF
-#define N_SYMOFF(x)	( N_DROFF(x) + (x)->a_drsize )
-#define N_STROFF(x)	( N_SYMOFF(x) + (x)->a_syms )
-#define N_DATADDR(x)	( (x)->a_dload )
+#define N_SYMOFF(x)	( N_DROFF(x) + (x).a_drsize )
+#define N_STROFF(x)	( N_SYMOFF(x) + (x).a_syms )
+#define N_DATADDR(x)	( (x).a_dload )    
 
 /* Address of text segment in memory after it is loaded.  */
 #if !defined (N_TXTADDR)

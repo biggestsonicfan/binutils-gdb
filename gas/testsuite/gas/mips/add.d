@@ -1,6 +1,5 @@
-#objdump: -dr --prefix-addresses
+#objdump: -dr --prefix-addresses -mmips:4000
 #name: MIPS add
-#as: -32
 
 # Test the add macro.
 
@@ -18,4 +17,4 @@ Disassembly of section .text:
 0+0020 <[^>]*> ori	at,at,0xa5a5
 0+0024 <[^>]*> add	a0,a0,at
 0+0028 <[^>]*> addiu	a0,a0,1
-	\.\.\.
+0+002c <[^>]*> nop

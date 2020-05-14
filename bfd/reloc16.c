@@ -1,39 +1,39 @@
 /* 8 and 16 bit COFF relocation functions, for BFD.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1998, 2000, 2001
+   Free Software Foundation, Inc.
    Written by Cygnus Support.
 
-   This file is part of BFD, the Binary File Descriptor library.
+This file is part of BFD, the Binary File Descriptor library.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
-
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* Most of this hacked by Steve Chamberlain <sac@cygnus.com>.  */
 
-/* These routines are used by coff-z8k to do relocation.
+/* These routines are used by coff-h8300 and coff-z8k to do
+   relocation.
 
    FIXME: This code should be rewritten to support the new COFF
    linker.  Basically, they need to deal with COFF relocs rather than
    BFD generic relocs.  They should store the relocs in some location
    where coff_link_input_bfd can find them (and coff_link_input_bfd
    should be changed to use this location rather than rereading the
-   file) (unless info->keep_memory is FALSE, in which case they should
+   file) (unless info->keep_memory is false, in which case they should
    free up the relocs after dealing with them).  */
 
-#include "sysdep.h"
 #include "bfd.h"
+#include "sysdep.h"
 #include "libbfd.h"
 #include "bfdlink.h"
 #include "genlink.h"
@@ -41,9 +41,10 @@
 #include "libcoff.h"
 
 bfd_vma
-bfd_coff_reloc16_get_value (arelent *reloc,
-			    struct bfd_link_info *link_info,
-			    asection *input_section)
+bfd_coff_reloc16_get_value (reloc, link_info, input_section)
+     arelent *reloc;
+     struct bfd_link_info *link_info;
+     asection *input_section;
 {
   bfd_vma value;
   asymbol *symbol = *(reloc->sym_ptr_ptr);
@@ -63,7 +64,7 @@ bfd_coff_reloc16_get_value (arelent *reloc,
 	 the generic symbols.  */
       h = bfd_wrapped_link_hash_lookup (input_section->owner, link_info,
 					bfd_asymbol_name (symbol),
-					FALSE, FALSE, TRUE);
+					false, false, true);
       if (h != (struct bfd_link_hash_entry *) NULL
 	  && (h->type == bfd_link_hash_defined
 	      || h->type == bfd_link_hash_defweak))
@@ -73,15 +74,13 @@ bfd_coff_reloc16_get_value (arelent *reloc,
       else if (h != (struct bfd_link_hash_entry *) NULL
 	       && h->type == bfd_link_hash_common)
 	value = h->u.c.size;
-      else if (h != (struct bfd_link_hash_entry *) NULL
-	       && h->type == bfd_link_hash_undefweak)
-	/* This is a GNU extension.  */
-	value = 0;
       else
 	{
-	  (*link_info->callbacks->undefined_symbol)
-	    (link_info, bfd_asymbol_name (symbol),
-	     input_section->owner, input_section, reloc->address, TRUE);
+	  if (!((*link_info->callbacks->undefined_symbol)
+		(link_info, bfd_asymbol_name (symbol),
+		 input_section->owner, input_section, reloc->address,
+		 true)))
+	    abort ();
 	  value = 0;
 	}
     }
@@ -99,10 +98,11 @@ bfd_coff_reloc16_get_value (arelent *reloc,
 }
 
 void
-bfd_perform_slip (bfd *abfd,
-		  unsigned int slip,
-		  asection *input_section,
-		  bfd_vma value)
+bfd_perform_slip (abfd, slip, input_section, value)
+     bfd *abfd;
+     unsigned int slip;
+     asection *input_section;
+     bfd_vma value;
 {
   asymbol **s;
 
@@ -136,11 +136,12 @@ bfd_perform_slip (bfd *abfd,
     }
 }
 
-bfd_boolean
-bfd_coff_reloc16_relax_section (bfd *abfd,
-				asection *input_section,
-				struct bfd_link_info *link_info,
-				bfd_boolean *again)
+boolean
+bfd_coff_reloc16_relax_section (abfd, input_section, link_info, again)
+     bfd *abfd;
+     asection *input_section;
+     struct bfd_link_info *link_info;
+     boolean *again;
 {
   /* Get enough memory to hold the stuff.  */
   bfd *input_bfd = input_section->owner;
@@ -150,20 +151,16 @@ bfd_coff_reloc16_relax_section (bfd *abfd,
   arelent **reloc_vector = NULL;
   long reloc_count;
 
-  if (bfd_link_relocatable (link_info))
-    (*link_info->callbacks->einfo)
-      (_("%P%F: --relax and -r may not be used together\n"));
-
   /* We only do global relaxation once.  It is not safe to do it multiple
      times (see discussion of the "shrinks" array below).  */
-  *again = FALSE;
+  *again = false;
 
   if (reloc_size < 0)
-    return FALSE;
+    return false;
 
   reloc_vector = (arelent **) bfd_malloc ((bfd_size_type) reloc_size);
   if (!reloc_vector && reloc_size > 0)
-    return FALSE;
+    return false;
 
   /* Get the relocs and think about them.  */
   reloc_count =
@@ -172,7 +169,7 @@ bfd_coff_reloc16_relax_section (bfd *abfd,
   if (reloc_count < 0)
     {
       free (reloc_vector);
-      return FALSE;
+      return false;
     }
 
   /* The reloc16.c and related relaxing code is very simple, the price
@@ -196,57 +193,60 @@ bfd_coff_reloc16_relax_section (bfd *abfd,
       bfd_size_type amt;
 
       /* Allocate and initialize the shrinks array for this section.
-	 The last element is used as an accumulator of shrinks.  */
+         The last element is used as an accumlator of shrinks.  */
       amt = reloc_count + 1;
       amt *= sizeof (unsigned);
       shrinks = (unsigned *) bfd_zmalloc (amt);
 
       /* Loop until nothing changes in this section.  */
-      do
-	{
-	  arelent **parent;
-	  unsigned int i;
-	  long j;
+      do {
+	arelent **parent;
+	unsigned int i;
+	long j;
 
-	  another_pass = 0;
+	another_pass = 0;
 
-	  for (i = 0, parent = reloc_vector; *parent; parent++, i++)
-	    {
-	      /* Let the target/machine dependent code examine each reloc
-		 in this section and attempt to shrink it.  */
-	      shrink = bfd_coff_reloc16_estimate (abfd, input_section, *parent,
-						  shrinks[i], link_info);
+	for (i = 0, parent = reloc_vector; *parent; parent++, i++)
+	  {
+	    /* Let the target/machine dependent code examine each reloc
+	       in this section and attempt to shrink it.  */
+	    shrink = bfd_coff_reloc16_estimate (abfd, input_section, *parent,
+						shrinks[i], link_info);
 
-	      /* If it shrunk, note it in the shrinks array and set up for
-		 another pass.  */
-	      if (shrink != shrinks[i])
-		{
-		  another_pass = 1;
-		  for (j = i + 1; j <= reloc_count; j++)
-		    shrinks[j] += shrink - shrinks[i];
-		}
-	    }
-	}
+	    /* If it shrunk, note it in the shrinks array and set up for
+	       another pass.  */
+	    if (shrink != shrinks[i])
+	      {
+	        another_pass = 1;
+		for (j = i + 1; j <= reloc_count; j++)
+		  shrinks[j] += shrink - shrinks[i];
+	      }
+	  }
+      }
       while (another_pass);
 
       shrink = shrinks[reloc_count];
       free ((char *) shrinks);
     }
 
-  input_section->rawsize = input_section->size;
-  input_section->size -= shrink;
+  input_section->_cooked_size -= shrink;
   free ((char *) reloc_vector);
-  return TRUE;
+  return true;
 }
 
 bfd_byte *
-bfd_coff_reloc16_get_relocated_section_contents
-  (bfd *in_abfd,
-   struct bfd_link_info *link_info,
-   struct bfd_link_order *link_order,
-   bfd_byte *data,
-   bfd_boolean relocatable,
-   asymbol **symbols)
+bfd_coff_reloc16_get_relocated_section_contents(in_abfd,
+						link_info,
+						link_order,
+						data,
+						relocateable,
+						symbols)
+     bfd *in_abfd;
+     struct bfd_link_info *link_info;
+     struct bfd_link_order *link_order;
+     bfd_byte *data;
+     boolean relocateable;
+     asymbol **symbols;
 {
   /* Get enough memory to hold the stuff.  */
   bfd *input_bfd = link_order->u.indirect.section->owner;
@@ -254,21 +254,23 @@ bfd_coff_reloc16_get_relocated_section_contents
   long reloc_size = bfd_get_reloc_upper_bound (input_bfd, input_section);
   arelent **reloc_vector;
   long reloc_count;
-  bfd_size_type sz;
 
   if (reloc_size < 0)
     return NULL;
 
-  /* If producing relocatable output, don't bother to relax.  */
-  if (relocatable)
+  /* If producing relocateable output, don't bother to relax.  */
+  if (relocateable)
     return bfd_generic_get_relocated_section_contents (in_abfd, link_info,
 						       link_order,
-						       data, relocatable,
+						       data, relocateable,
 						       symbols);
 
   /* Read in the section.  */
-  sz = input_section->rawsize ? input_section->rawsize : input_section->size;
-  if (!bfd_get_section_contents (input_bfd, input_section, data, 0, sz))
+  if (!bfd_get_section_contents(input_bfd,
+				input_section,
+				data,
+				(bfd_vma) 0,
+				input_section->_raw_size))
     return NULL;
 
   reloc_vector = (arelent **) bfd_malloc ((bfd_size_type) reloc_size);

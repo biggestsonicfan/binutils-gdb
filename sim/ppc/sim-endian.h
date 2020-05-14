@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -93,6 +94,7 @@ INLINE_PSIM_ENDIAN(unsigned_8) endian_le2h_8(unsigned_8 x);
 
 #if defined(__linux__)
 # include <endian.h>
+# include <asm/byteorder.h>
 # if defined(__LITTLE_ENDIAN) && !defined(LITTLE_ENDIAN)
 #  define LITTLE_ENDIAN __LITTLE_ENDIAN
 # endif
@@ -152,6 +154,13 @@ INLINE_PSIM_ENDIAN(unsigned_8) endian_le2h_8(unsigned_8 x);
 # if (WITH_HOST_BYTE_ORDER != LITTLE_ENDIAN)
 #  error "x86 was little endian last time I looked ..."
 # endif
+#endif
+
+#if (defined (__i486__) || defined (__i586__) || defined (__i686__)) && defined(__GNUC__) && WITH_BSWAP
+#undef  htonl
+#undef  ntohl
+#define htonl(IN) __extension__ ({ int _out; __asm__ ("bswap %0" : "=r" (_out) : "0" (IN)); _out; })
+#define ntohl(IN) __extension__ ({ int _out; __asm__ ("bswap %0" : "=r" (_out) : "0" (IN)); _out; })
 #endif
 
 /* Power or PowerPC running AIX  */

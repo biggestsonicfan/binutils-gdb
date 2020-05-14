@@ -20,16 +20,16 @@ Sections:
 Idx Name[ ]+Size[ ]+VMA[ ]+LMA[ ]+File off  Algn
   0 \.text[ ]+0+4  0+  0+  0+  2\*\*2
 [ ]+CONTENTS, ALLOC, LOAD, CODE
-  1 \.di +0+27ffb +0+ +0+ +0+ +2\*\*2
-[ ]+CONTENTS, READONLY
+  1 \.debug_info   0+27ffb  0+  0+  0+  2\*\*2
+[ ]+CONTENTS, READONLY, DEBUGGING
 Contents of section \.text:
  0000 e3fd0001[ ]+.*
-Contents of section \.di:
- 00000 2a000000 00000000 00000000 00000000  .*
+Contents of section \.debug_info:
+ 0000 2a000000 00000000 00000000 00000000  .*
 #...
- 07ff0 00000000 00000000 00000000 2b2c0000  .*
+ 7ff0 00000000 00000000 00000000 2b2c0000  .*
 #...
- 0fff0 00000000 00000000 00002d2e 00000000  .*
+ fff0 00000000 00000000 00002d2e 00000000  .*
 #...
  17ff0 00000000 00000000 002f3000 00000000  .*
 #...

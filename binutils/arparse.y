@@ -1,24 +1,23 @@
 %{
-/* arparse.y - Strange script language parser */
+/* arparse.y - Stange script language parser */
 
-/* Copyright (C) 1992-2020 Free Software Foundation, Inc.
+/*   Copyright 1992, 1993, 1995, 1997, 1999 Free Software Foundation, Inc.
 
-   This file is part of GNU Binutils.
+This file is part of GNU Binutils.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 
 /* Contributed by Steve Chamberlain
@@ -26,12 +25,12 @@
 
 */
 #define DONTDECLARE_MALLOC
-#include "sysdep.h"
 #include "bfd.h"
+#include "bucomm.h"
 #include "arsup.h"
 extern int verbose;
-extern int yylex (void);
-static int yyerror (const char *);
+extern int yylex PARAMS ((void));
+static int yyerror PARAMS ((const char *));
 %}
 
 %union {
@@ -59,7 +58,7 @@ struct list *list ;
 %token SAVE
 %token OPEN
 
-%type <list> modulelist
+%type <list> modulelist 
 %type <list> modulename
 %type <name> optional_filename
 %%
@@ -78,8 +77,8 @@ command_line:
 	;
 
 command:
-		open_command
-	|	create_command
+		open_command	
+	|	create_command	
 	| 	verbose_command
 	|	directory_command
 	|	addlib_command
@@ -102,11 +101,11 @@ extract_command:
 		{ ar_extract($2); }
 	;
 
-replace_command:
+replace_command:	
 		REPLACE modulename
 		{ ar_replace($2); }
 	;
-
+	
 clear_command:
 		CLEAR
 		{ ar_clear(); }
@@ -121,12 +120,12 @@ addmod_command:
 		{ ar_addmod($2); }
 	;
 
-list_command:
+list_command:	
 		LIST
 		{ ar_list(); }
 	;
 
-save_command:
+save_command:	
 		SAVE
 		{ ar_save(); }
 	;
@@ -134,12 +133,12 @@ save_command:
 
 
 open_command:
-		OPEN FILENAME
+		OPEN FILENAME 
 		{ ar_open($2,0); }
 	;
 
 create_command:
-		CREATE FILENAME
+		CREATE FILENAME 
 		{ ar_open($2,1); }
 	;
 
@@ -162,7 +161,7 @@ optional_filename:
 	;
 
 modulelist:
-	'(' modulename ')'
+	'(' modulename ')' 
 		{ $$ = $2; }
 	|
 		{ $$ = 0; }
@@ -171,22 +170,22 @@ modulelist:
 modulename:
 		modulename optcomma FILENAME
 		{ 	struct list *n  = (struct list *) malloc(sizeof(struct list));
-			n->next = $1;
+			n->next = $1; 
 			n->name = $3;
 			$$ = n;
 		 }
 	|	{ $$ = 0; }
 	;
-
+	
 
 optcomma:
 		','
 	|
 	;
-
-
+	
+		
 verbose_command:
-	VERBOSE
+	VERBOSE 
 		{ verbose = !verbose; }
 	;
 
@@ -194,7 +193,8 @@ verbose_command:
 %%
 
 static int
-yyerror (const char *x ATTRIBUTE_UNUSED)
+yyerror (x)
+     const char *x ATTRIBUTE_UNUSED;
 {
   extern int linenumber;
 

@@ -1,33 +1,34 @@
 /* bit_fix.h
-   Copyright (C) 1987-2020 Free Software Foundation, Inc.
+   Copyright 1987, 1992, 2000, 2001 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
-   GAS is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   GAS is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 /* The bit_fix was implemented to support machines that need variables
    to be inserted in bitfields other than 1, 2 and 4 bytes.
-   Furthermore it gives us a possibility to mask in bits in the symbol
-   when it's fixed in the object code and check the symbols limits.
+   Furthermore it gives us a possibillity to mask in bits in the symbol
+   when it's fixed in the objectcode and check the symbols limits.
 
    The or-mask is used to set the huffman bits in displacements for the
    ns32k port.
    The acbi, addqi, movqi, cmpqi instruction requires an assembler that
    can handle bitfields.  Ie. handle an expression, evaluate it and insert
-   the result in some bitfield.  (eg: 5 bits in a short field of an opcode).  */
+   the result in some bitfield.  (eg: 5 bits in a short field of an opcode)
+   */
 
 #ifndef __bit_fix_h__
 #define __bit_fix_h__

@@ -1,27 +1,28 @@
 /* ldfile.h -
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright 1991, 1992, 1993, 1994, 1995, 2000, 2002
+   Free Software Foundation, Inc.
 
-   This file is part of the GNU Binutils.
+   This file is part of GLD, the Gnu Linker.
 
-   This program is free software; you can redistribute it and/or modify
+   GLD is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+   the Free Software Foundation; either version 1, or (at your option)
+   any later version.
 
-   This program is distributed in the hope that it will be useful,
+   GLD is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   along with GLD; see the file COPYING.  If not, write to
+   the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef LDFILE_H
 #define LDFILE_H
 
-extern bfd_boolean ldfile_assumed_script;
+extern const char *ldfile_input_filename;
+extern boolean ldfile_assumed_script;
 extern unsigned long ldfile_output_machine;
 extern enum bfd_architecture ldfile_output_architecture;
 extern const char *ldfile_output_machine_name;
@@ -34,30 +35,23 @@ typedef struct search_dirs {
   struct search_dirs *next;
   /* Name of directory.  */
   const char *name;
-  /* TRUE if this is from the command line.  */
-  bfd_boolean cmdline;
+  /* true if this is from the command line.  */
+  boolean cmdline;
 } search_dirs_type;
 
 extern search_dirs_type *search_head;
 
-extern void ldfile_add_arch
-  (const char *);
-extern void ldfile_add_library_path
-  (const char *, bfd_boolean cmdline);
-extern void ldfile_open_command_file
-  (const char *name);
-extern void ldfile_open_script_file
-  (const char *name);
-extern void ldfile_open_default_command_file
-  (const char *name);
-extern void ldfile_open_file
-  (struct lang_input_statement_struct *);
-extern bfd_boolean ldfile_try_open_bfd
-  (const char *, struct lang_input_statement_struct *);
-extern void ldfile_set_output_arch
-  (const char *, enum bfd_architecture);
-extern bfd_boolean ldfile_open_file_search
-  (const char *arch, struct lang_input_statement_struct *,
-   const char *lib, const char *suffix);
+extern void ldfile_add_arch PARAMS ((const char *));
+extern void ldfile_add_library_path PARAMS ((const char *, boolean cmdline));
+extern void ldfile_open_command_file PARAMS ((const char *name));
+extern void ldfile_open_file PARAMS ((struct lang_input_statement_struct *));
+extern boolean ldfile_try_open_bfd
+  PARAMS ((const char *, struct lang_input_statement_struct *));
+extern FILE *ldfile_find_command_file
+  PARAMS ((const char *name, const char *extend));
+extern void ldfile_set_output_arch PARAMS ((const char *));
+extern boolean ldfile_open_file_search
+  PARAMS ((const char *arch, struct lang_input_statement_struct *,
+	   const char *lib, const char *suffix));
 
 #endif

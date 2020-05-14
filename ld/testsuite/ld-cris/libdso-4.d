@@ -1,6 +1,6 @@
 #source: dso-2.s
-#as: --pic --no-underscore --em=criself
-#ld: --shared -m crislinux --hash-style=sysv
+#as: --pic --no-underscore
+#ld: --shared -m crislinux
 #objdump: -T
 
 # DSO with an undef symbol "dsofn".  See undef1.d.

@@ -1,13 +1,13 @@
 /*  bb_exit_func.c - dumps all the basic-block statistics linked into
     the bb_head chain to .d files.
 
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -17,8 +17,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.
 
    This code was contributed by:
 
@@ -44,7 +44,7 @@ struct bb *__bb_head = (struct bb *) 0;
 
 
 void
-__bb_exit_func ()
+__bb_exit_func (void)
 {
   const int version = GMON_VERSION;
   struct gmon_hdr ghdr;

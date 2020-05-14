@@ -1,22 +1,3 @@
-/* Copyright (C) 2012-2020 Free Software Foundation, Inc.
-
-   This file is part of GNU Binutils.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
-
 #ifndef cg_arcs_h
 #define cg_arcs_h
 
@@ -43,9 +24,9 @@ Arc;
 extern unsigned int num_cycles;	/* number of cycles discovered */
 extern Sym *cycle_header;	/* cycle headers */
 
-extern void arc_add (Sym * parent, Sym * child, unsigned long count);
-extern Arc *arc_lookup (Sym * parent, Sym * child);
-extern Sym **cg_assemble (void);
+extern void arc_add PARAMS ((Sym * parent, Sym * child, unsigned long count));
+extern Arc *arc_lookup PARAMS ((Sym * parent, Sym * child));
+extern Sym **cg_assemble PARAMS ((void));
 extern Arc **arcs;
 extern unsigned int numarcs;
 

@@ -1,11 +1,12 @@
 /* Native-dependent code for GNU/Linux SPARC.
-   Copyright (C) 2005-2020 Free Software Foundation, Inc.
+
+   Copyright 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,65 +15,86 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
 #include "regcache.h"
-
+   
 #include <sys/procfs.h>
+
+/* Prototypes for supply_gregset etc.  */
 #include "gregset.h"
 
-#include "sparc-tdep.h"
-#include "sparc-nat.h"
-#include "inferior.h"
-#include "target.h"
-#include "linux-nat.h"
-
-class sparc_linux_nat_target final : public linux_nat_target
-{
-public:
-  /* Add our register access methods.  */
-  void fetch_registers (struct regcache *regcache, int regnum) override
-  { sparc_fetch_inferior_registers (regcache, regnum); }
-
-  void store_registers (struct regcache *regcache, int regnum) override
-  { sparc_store_inferior_registers (regcache, regnum); }
-};
-
-static sparc_linux_nat_target the_sparc_linux_nat_target;
-
 void
-supply_gregset (struct regcache *regcache, const prgregset_t *gregs)
+supply_gregset (elf_gregset_t *gregsetp)
 {
-  sparc32_supply_gregset (sparc_gregmap, regcache, -1, gregs);
+  elf_greg_t *regp = (elf_greg_t *) gregsetp;
+  int i;
+
+  for (i = G0_REGNUM; i <= I7_REGNUM; i++)
+    supply_register (i, (char *) (regp + (i - G0_REGNUM)));
+
+  supply_register (PS_REGNUM, (char *) (regp + 32));
+
+  supply_register (PC_REGNUM, (char *) (regp + 33));
+  supply_register (NPC_REGNUM, (char *) (regp + 34));
+  supply_register (Y_REGNUM, (char *) (regp + 35));
+
+  supply_register (WIM_REGNUM, (char *) (regp + 36));
+  supply_register (TBR_REGNUM, (char *) (regp + 37));
+
+  /* Fill inaccessible registers with zero.  */
+  supply_register (CPS_REGNUM, NULL);
 }
 
 void
-supply_fpregset (struct regcache *regcache, const prfpregset_t *fpregs)
+fill_gregset (elf_gregset_t *gregsetp, int regno)
 {
-  sparc32_supply_fpregset (sparc_fpregmap, regcache, -1, fpregs);
+  elf_greg_t *regp = (elf_greg_t *) gregsetp;
+  int i;
+
+  for (i = G0_REGNUM; i <= I7_REGNUM; i++)
+    if (regno == -1 || regno == i)
+      regcache_collect (i, regp + (i - G0_REGNUM));
+
+  if (regno == -1 || regno == PS_REGNUM)
+    regcache_collect (PS_REGNUM, regp + 32);
+
+  if (regno == -1 || regno == PC_REGNUM)
+    regcache_collect (PC_REGNUM, regp + 33);
+  if (regno == -1 || regno == NPC_REGNUM)
+    regcache_collect (NPC_REGNUM, regp + 34);
+  if (regno == -1 || regno == Y_REGNUM)
+    regcache_collect (Y_REGNUM, regp + 35);
+
+  if (regno == -1 || regno == WIM_REGNUM)
+    regcache_collect (WIM_REGNUM, regp + 36);
+  if (regno == -1 || regno == TBR_REGNUM)
+    regcache_collect (TBR_REGNUM, regp + 37);
 }
 
 void
-fill_gregset (const struct regcache *regcache, prgregset_t *gregs, int regnum)
+supply_fpregset (elf_fpregset_t *fpregsetp)
 {
-  sparc32_collect_gregset (sparc_gregmap, regcache, regnum, gregs);
+  int i;
+
+  for (i = FP0_REGNUM; i < FP0_REGNUM + 32; i++)
+    supply_register (i, (char *) &fpregsetp->pr_fr.pr_regs[i - FP0_REGNUM]);
+
+  supply_register (FPS_REGNUM, (char *) &fpregsetp->pr_fsr);
 }
 
 void
-fill_fpregset (const struct regcache *regcache,
-	       prfpregset_t *fpregs, int regnum)
+fill_fpregset (elf_fpregset_t *fpregsetp, int regno)
 {
-  sparc32_collect_fpregset (sparc_fpregmap, regcache, regnum, fpregs);
-}
+  int i;
 
-void _initialize_sparc_linux_nat ();
-void
-_initialize_sparc_linux_nat ()
-{
-  sparc_fpregmap = &sparc32_bsd_fpregmap;
+  for (i = FP0_REGNUM; i < FP0_REGNUM + 32; i++)
+    if (regno == -1 || regno == i)
+      regcache_collect (i, &fpregsetp->pr_fr.pr_regs[i - FP0_REGNUM]);
 
-  /* Register the target.  */
-  linux_target = &the_sparc_linux_nat_target;
-  add_inf_child_target (&the_sparc_linux_nat_target);
+  if (regno == -1 || regno == FPS_REGNUM)
+    regcache_collect (FPS_REGNUM, &fpregsetp->pr_fsr);
 }

@@ -1,6 +1,5 @@
-#objdump: -dr --prefix-addresses
+#objdump: -dr --prefix-addresses -mmips:4000
 #name: MIPS and
-#as: -32
 
 # Test the and macro.
 
@@ -32,4 +31,4 @@ Disassembly of section .text:
 0+0058 <[^>]*> nor	a0,a1,at
 0+005c <[^>]*> ori	a0,a1,0x0
 0+0060 <[^>]*> xori	a0,a1,0x0
-	\.\.\.
+	...

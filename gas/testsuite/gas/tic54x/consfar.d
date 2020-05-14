@@ -7,55 +7,55 @@
 
 Disassembly of section .text:
 
-0+000 <binary>:
+00000000 <binary>:
    0:	0003.*
    1:	0004.*
 
-0+002 <octal>:
+00000002 <octal>:
    2:	0009.*
    3:	000a.*
    4:	000b.*
 
-0+005 <hex>:
+00000005 <hex>:
    5:	000f.*
    6:	0010.*
 
-0+007 <field>:
+00000007 <field>:
    7:	6440.*
    8:	0123.*
    9:	4000.*
    a:	0000.*
    b:	1234.*
 
-0+00c <byte>:
+0000000c <byte>:
    c:	00aa.*
    d:	00bb.*
 
-0+00e <word>:
+0000000e <word>:
    e:	0ccc.*
 
-0+00f <xlong>:
+0000000f <xlong>:
    f:	0eee.*
   10:	efff.*
 	...
 
-0+012 <long>:
+00000012 <long>:
   12:	eeee.*
   13:	ffff.*
 
-0+014 <int>:
+00000014 <int>:
   14:	dddd.*
 
-0+015 <xfloat>:
+00000015 <xfloat>:
   15:	3fff.*
   16:	ffac.*
 	...
 
-0+018 <float>:
+00000018 <float>:
   18:	3fff.*
   19:	ffac.*
 
-0+01a <string>:
+0000001a <string>:
   1a:	0061.*
   1b:	0062.*
   1c:	0063.*
@@ -69,7 +69,7 @@ Disassembly of section .text:
   24:	0067.*
   25:	0030.*
 
-0+026 <pstring>:
+00000026 <pstring>:
   26:	6162.*
   27:	6364.*
   28:	6162.*
@@ -77,7 +77,7 @@ Disassembly of section .text:
   2a:	6566.*
   2b:	6700.*
 
-0+02c <DAT1>:
+0000002c <DAT1>:
   2c:	0000.*
   2d:	abcd.*
   2e:	0000.*
@@ -87,18 +87,18 @@ Disassembly of section .text:
   32:	0000.*
   33:	006f.*
 
-0+034 <xlong.0>:
+00000034 <xlong.0>:
   34:	0000.*
 .*34: ARELEXT.*
   35:	002c.*
   36:	aabb.*
   37:	ccdd.*
 
-0+038 <DAT2>:
+00000038 <DAT2>:
   38:	0000.*
 	...
 
-0+03a <DAT3>:
+0000003a <DAT3>:
   3a:	1234.*
   3b:	5678.*
   3c:	0000.*

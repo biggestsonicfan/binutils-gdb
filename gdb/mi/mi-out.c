@@ -1,6 +1,6 @@
 /* MI Command Set - output generating routines.
 
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2002 Free Software Foundation, Inc.
 
    Contributed by Cygnus Solutions (a Red Hat company).
 
@@ -8,7 +8,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -17,335 +17,436 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
+#include "ui-out.h"
 #include "mi-out.h"
 
-#include <vector>
+struct ui_out_data
+  {
+    int suppress_field_separator;
+    int suppress_output;
+    int mi_version;
+    struct ui_file *buffer;
+  };
 
-#include "interps.h"
-#include "ui-out.h"
-#include "utils.h"
+/* These are the MI output functions */
 
-/* Mark beginning of a table.  */
+static void mi_table_begin (struct ui_out *uiout, int nbrofcols,
+			    int nr_rows, const char *tblid);
+static void mi_table_body (struct ui_out *uiout);
+static void mi_table_end (struct ui_out *uiout);
+static void mi_table_header (struct ui_out *uiout, int width,
+			     enum ui_align alig, const char *col_name,
+			     const char *colhdr);
+static void mi_begin (struct ui_out *uiout, enum ui_out_type type,
+		      int level, const char *id);
+static void mi_end (struct ui_out *uiout, enum ui_out_type type, int level);
+static void mi_field_int (struct ui_out *uiout, int fldno, int width,
+			  enum ui_align alig, const char *fldname, int value);
+static void mi_field_skip (struct ui_out *uiout, int fldno, int width,
+			   enum ui_align alig, const char *fldname);
+static void mi_field_string (struct ui_out *uiout, int fldno, int width,
+			     enum ui_align alig, const char *fldname,
+			     const char *string);
+static void mi_field_fmt (struct ui_out *uiout, int fldno,
+			  int width, enum ui_align align,
+			  const char *fldname, const char *format,
+			  va_list args);
+static void mi_spaces (struct ui_out *uiout, int numspaces);
+static void mi_text (struct ui_out *uiout, const char *string);
+static void mi_message (struct ui_out *uiout, int verbosity,
+			const char *format, va_list args);
+static void mi_wrap_hint (struct ui_out *uiout, char *identstring);
+static void mi_flush (struct ui_out *uiout);
+
+/* This is the MI ui-out implementation functions vector */
+
+/* FIXME: This can be initialized dynamically after default is set to
+   handle initial output in main.c */
+
+struct ui_out_impl mi_ui_out_impl =
+{
+  mi_table_begin,
+  mi_table_body,
+  mi_table_end,
+  mi_table_header,
+  mi_begin,
+  mi_end,
+  mi_field_int,
+  mi_field_skip,
+  mi_field_string,
+  mi_field_fmt,
+  mi_spaces,
+  mi_text,
+  mi_message,
+  mi_wrap_hint,
+  mi_flush,
+  1, /* Needs MI hacks.  */
+};
+
+/* Prototypes for local functions */
+
+extern void _initialize_mi_out (void);
+static void field_separator (struct ui_out *uiout);
+static void mi_open (struct ui_out *uiout, const char *name,
+		     enum ui_out_type type);
+static void mi_close (struct ui_out *uiout, enum ui_out_type type);
+
+static void out_field_fmt (struct ui_out *uiout, int fldno, char *fldname,
+			   char *format,...);
+
+/* Mark beginning of a table */
 
 void
-mi_ui_out::do_table_begin (int nr_cols, int nr_rows,
-			   const char *tblid)
+mi_table_begin (struct ui_out *uiout,
+		int nr_cols,
+		int nr_rows,
+		const char *tblid)
 {
-  open (tblid, ui_out_type_tuple);
-  do_field_signed (-1, -1, ui_left, "nr_rows", nr_rows);
-  do_field_signed (-1, -1, ui_left, "nr_cols", nr_cols);
-  open ("hdr", ui_out_type_list);
+  struct ui_out_data *data = ui_out_data (uiout);
+  mi_open (uiout, tblid, ui_out_type_tuple);
+  if (data->mi_version == 0)
+    {
+      if (nr_rows == 0)
+	data->suppress_output = 1;
+      else
+	mi_open (uiout, "hdr", ui_out_type_list);
+      return;
+    }
+  mi_field_int (uiout, -1/*fldno*/, -1/*width*/, -1/*alin*/,
+		"nr_rows", nr_rows);
+  mi_field_int (uiout, -1/*fldno*/, -1/*width*/, -1/*alin*/,
+		"nr_cols", nr_cols);
+  mi_open (uiout, "hdr", ui_out_type_list);
 }
 
-/* Mark beginning of a table body.  */
+/* Mark beginning of a table body */
 
 void
-mi_ui_out::do_table_body ()
+mi_table_body (struct ui_out *uiout)
 {
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
   /* close the table header line if there were any headers */
-  close (ui_out_type_list);
-  open ("body", ui_out_type_list);
+  mi_close (uiout, ui_out_type_list);
+  if (data->mi_version == 0)
+    return;
+  mi_open (uiout, "body", ui_out_type_list);
 }
 
-/* Mark end of a table.  */
+/* Mark end of a table */
 
 void
-mi_ui_out::do_table_end ()
+mi_table_end (struct ui_out *uiout)
 {
-  close (ui_out_type_list); /* body */
-  close (ui_out_type_tuple);
+  struct ui_out_data *data = ui_out_data (uiout);
+  data->suppress_output = 0;
+  if (data->mi_version == 0)
+    {
+      mi_close (uiout, ui_out_type_tuple);
+      return;
+    }
+  mi_close (uiout, ui_out_type_list); /* body */
+  mi_close (uiout, ui_out_type_tuple);
 }
 
-/* Specify table header.  */
+/* Specify table header */
 
 void
-mi_ui_out::do_table_header (int width, ui_align alignment,
-			    const std::string &col_name,
-			    const std::string &col_hdr)
+mi_table_header (struct ui_out *uiout, int width, enum ui_align alignment,
+		 const char *col_name,
+		 const char *colhdr)
 {
-  open (NULL, ui_out_type_tuple);
-  do_field_signed (0, 0, ui_center, "width", width);
-  do_field_signed (0, 0, ui_center, "alignment", alignment);
-  do_field_string (0, 0, ui_center, "col_name", col_name.c_str (),
-		   ui_file_style ());
-  do_field_string (0, width, alignment, "colhdr", col_hdr.c_str (),
-		   ui_file_style ());
-  close (ui_out_type_tuple);
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
+  if (data->mi_version == 0)
+    {
+      mi_field_string (uiout, 0, width, alignment, 0, colhdr);
+      return;
+    }
+  mi_open (uiout, NULL, ui_out_type_tuple);
+  mi_field_int (uiout, 0, 0, 0, "width", width);
+  mi_field_int (uiout, 0, 0, 0, "alignment", alignment);
+  mi_field_string (uiout, 0, 0, 0, "col_name", col_name);
+  mi_field_string (uiout, 0, width, alignment, "colhdr", colhdr);
+  mi_close (uiout, ui_out_type_tuple);
 }
 
-/* Mark beginning of a list.  */
+/* Mark beginning of a list */
 
 void
-mi_ui_out::do_begin (ui_out_type type, const char *id)
+mi_begin (struct ui_out *uiout,
+	  enum ui_out_type type,
+	  int level,
+	  const char *id)
 {
-  open (id, type);
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
+  mi_open (uiout, id, type);
 }
 
-/* Mark end of a list.  */
+/* Mark end of a list */
 
 void
-mi_ui_out::do_end (ui_out_type type)
+mi_end (struct ui_out *uiout,
+	enum ui_out_type type,
+	int level)
 {
-  close (type);
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
+  mi_close (uiout, type);
 }
 
-/* Output an int field.  */
+/* output an int field */
 
 void
-mi_ui_out::do_field_signed (int fldno, int width, ui_align alignment,
-			    const char *fldname, LONGEST value)
+mi_field_int (struct ui_out *uiout, int fldno, int width,
+              enum ui_align alignment, const char *fldname, int value)
 {
-  do_field_string (fldno, width, alignment, fldname, plongest (value),
-		   ui_file_style ());
+  char buffer[20];		/* FIXME: how many chars long a %d can become? */
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
+
+  sprintf (buffer, "%d", value);
+  mi_field_string (uiout, fldno, width, alignment, fldname, buffer);
 }
 
-/* Output an unsigned field.  */
+/* used to ommit a field */
 
 void
-mi_ui_out::do_field_unsigned (int fldno, int width, ui_align alignment,
-			      const char *fldname, ULONGEST value)
+mi_field_skip (struct ui_out *uiout, int fldno, int width,
+               enum ui_align alignment, const char *fldname)
 {
-  do_field_string (fldno, width, alignment, fldname, pulongest (value),
-		   ui_file_style ());
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
+  mi_field_string (uiout, fldno, width, alignment, fldname, "");
 }
 
-/* Used to omit a field.  */
+/* other specific mi_field_* end up here so alignment and field
+   separators are both handled by mi_field_string */
 
 void
-mi_ui_out::do_field_skip (int fldno, int width, ui_align alignment,
-			  const char *fldname)
+mi_field_string (struct ui_out *uiout,
+		 int fldno,
+		 int width,
+		 enum ui_align align,
+		 const char *fldname,
+		 const char *string)
 {
-}
-
-/* Other specific mi_field_* end up here so alignment and field
-   separators are both handled by mi_field_string. */
-
-void
-mi_ui_out::do_field_string (int fldno, int width, ui_align align,
-			    const char *fldname, const char *string,
-			    const ui_file_style &style)
-{
-  ui_file *stream = m_streams.back ();
-  field_separator ();
-
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
+  field_separator (uiout);
   if (fldname)
-    fprintf_unfiltered (stream, "%s=", fldname);
-  fprintf_unfiltered (stream, "\"");
+    fprintf_unfiltered (data->buffer, "%s=", fldname);
+  fprintf_unfiltered (data->buffer, "\"");
   if (string)
-    fputstr_unfiltered (string, '"', stream);
-  fprintf_unfiltered (stream, "\"");
+    fputstr_unfiltered (string, '"', data->buffer);
+  fprintf_unfiltered (data->buffer, "\"");
 }
 
-void
-mi_ui_out::do_field_fmt (int fldno, int width, ui_align align,
-			 const char *fldname, const ui_file_style &style,
-			 const char *format, va_list args)
-{
-  ui_file *stream = m_streams.back ();
-  field_separator ();
+/* This is the only field function that does not align */
 
+void
+mi_field_fmt (struct ui_out *uiout, int fldno,
+	      int width, enum ui_align align,
+	      const char *fldname,
+	      const char *format,
+	      va_list args)
+{
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_output)
+    return;
+  field_separator (uiout);
   if (fldname)
-    fprintf_unfiltered (stream, "%s=\"", fldname);
+    fprintf_unfiltered (data->buffer, "%s=\"", fldname);
   else
-    fputs_unfiltered ("\"", stream);
-  vfprintf_unfiltered (stream, format, args);
-  fputs_unfiltered ("\"", stream);
+    fputs_unfiltered ("\"", data->buffer);
+  vfprintf_unfiltered (data->buffer, format, args);
+  fputs_unfiltered ("\"", data->buffer);
 }
 
 void
-mi_ui_out::do_spaces (int numspaces)
+mi_spaces (struct ui_out *uiout, int numspaces)
 {
 }
 
 void
-mi_ui_out::do_text (const char *string)
+mi_text (struct ui_out *uiout, const char *string)
 {
 }
 
 void
-mi_ui_out::do_message (const ui_file_style &style,
-		       const char *format, va_list args)
+mi_message (struct ui_out *uiout, int verbosity,
+	    const char *format,
+	    va_list args)
 {
 }
 
 void
-mi_ui_out::do_wrap_hint (const char *identstring)
+mi_wrap_hint (struct ui_out *uiout, char *identstring)
 {
   wrap_here (identstring);
 }
 
 void
-mi_ui_out::do_flush ()
+mi_flush (struct ui_out *uiout)
 {
-
-  gdb_flush (m_streams.back ());
+  struct ui_out_data *data = ui_out_data (uiout);
+  gdb_flush (data->buffer);
 }
 
-void
-mi_ui_out::do_redirect (ui_file *outstream)
+/* local functions */
+
+/* Like mi_field_fmt, but takes a variable number of args
+   and makes a va_list and does not insert a separator */
+
+/* VARARGS */
+static void
+out_field_fmt (struct ui_out *uiout, int fldno, char *fldname,
+	       char *format,...)
 {
-  if (outstream != NULL)
-    m_streams.push_back (outstream);
+  struct ui_out_data *data = ui_out_data (uiout);
+  va_list args;
+
+  field_separator (uiout);
+  if (fldname)
+    fprintf_unfiltered (data->buffer, "%s=\"", fldname);
   else
-    m_streams.pop_back ();
+    fputs_unfiltered ("\"", data->buffer);
+
+  va_start (args, format);
+  vfprintf_unfiltered (data->buffer, format, args);
+
+  fputs_unfiltered ("\"", data->buffer);
+
+  va_end (args);
 }
 
-void
-mi_ui_out::field_separator ()
+/* access to ui_out format private members */
+
+static void
+field_separator (struct ui_out *uiout)
 {
-  if (m_suppress_field_separator)
-    m_suppress_field_separator = false;
+  struct ui_out_data *data = ui_out_data (uiout);
+  if (data->suppress_field_separator)
+    data->suppress_field_separator = 0;
   else
-    fputc_unfiltered (',', m_streams.back ());
+    fputc_unfiltered (',', data->buffer);
 }
 
-void
-mi_ui_out::open (const char *name, ui_out_type type)
+static void
+mi_open (struct ui_out *uiout,
+	 const char *name,
+	 enum ui_out_type type)
 {
-  ui_file *stream = m_streams.back ();
-
-  field_separator ();
-  m_suppress_field_separator = true;
-
+  struct ui_out_data *data = ui_out_data (uiout);
+  field_separator (uiout);
+  data->suppress_field_separator = 1;
   if (name)
-    fprintf_unfiltered (stream, "%s=", name);
-
+    fprintf_unfiltered (data->buffer, "%s=", name);
   switch (type)
     {
     case ui_out_type_tuple:
-      fputc_unfiltered ('{', stream);
+      fputc_unfiltered ('{', data->buffer);
       break;
-
     case ui_out_type_list:
-      fputc_unfiltered ('[', stream);
+      if (data->mi_version == 0)
+	fputc_unfiltered ('{', data->buffer);
+      else
+	fputc_unfiltered ('[', data->buffer);
       break;
-
     default:
-      internal_error (__FILE__, __LINE__, _("bad switch"));
+      internal_error (__FILE__, __LINE__, "bad switch");
     }
 }
 
-void
-mi_ui_out::close (ui_out_type type)
+static void
+mi_close (struct ui_out *uiout,
+	  enum ui_out_type type)
 {
-  ui_file *stream = m_streams.back ();
-
+  struct ui_out_data *data = ui_out_data (uiout);
   switch (type)
     {
     case ui_out_type_tuple:
-      fputc_unfiltered ('}', stream);
+      fputc_unfiltered ('}', data->buffer);
       break;
-
     case ui_out_type_list:
-      fputc_unfiltered (']', stream);
+      if (data->mi_version == 0)
+	fputc_unfiltered ('}', data->buffer);
+      else
+	fputc_unfiltered (']', data->buffer);
       break;
-
     default:
-      internal_error (__FILE__, __LINE__, _("bad switch"));
+      internal_error (__FILE__, __LINE__, "bad switch");
     }
-
-  m_suppress_field_separator = false;
+  data->suppress_field_separator = 0;
 }
 
-string_file *
-mi_ui_out::main_stream ()
-{
-  gdb_assert (m_streams.size () == 1);
-
-  return (string_file *) m_streams.back ();
-}
-
-/* Clear the buffer.  */
+/* add a string to the buffer */
 
 void
-mi_ui_out::rewind ()
+mi_out_buffered (struct ui_out *uiout, char *string)
 {
-  main_stream ()->clear ();
+  struct ui_out_data *data = ui_out_data (uiout);
+  fprintf_unfiltered (data->buffer, "%s", string);
 }
 
-/* Dump the buffer onto the specified stream.  */
+/* clear the buffer */
 
 void
-mi_ui_out::put (ui_file *where)
+mi_out_rewind (struct ui_out *uiout)
 {
-  string_file *mi_stream = main_stream ();
-
-  where->write (mi_stream->data (), mi_stream->size ());
-  mi_stream->clear ();
+  struct ui_out_data *data = ui_out_data (uiout);
+  ui_file_rewind (data->buffer);
 }
 
-/* Return the current MI version.  */
+/* dump the buffer onto the specified stream */
 
-int
-mi_ui_out::version ()
+static void
+do_write (void *data, const char *buffer, long length_buffer)
 {
-  return m_mi_version;
-}
-
-/* Constructor for an `mi_out_data' object.  */
-
-mi_ui_out::mi_ui_out (int mi_version)
-: ui_out (mi_version >= 3
-	  ? fix_multi_location_breakpoint_output : (ui_out_flag) 0),
-  m_suppress_field_separator (false),
-  m_suppress_output (false),
-  m_mi_version (mi_version)
-{
-  string_file *stream = new string_file ();
-  m_streams.push_back (stream);
-}
-
-mi_ui_out::~mi_ui_out ()
-{
-}
-
-/* See mi/mi-out.h.  */
-
-mi_ui_out *
-mi_out_new (const char *mi_version)
-{
-  if (streq (mi_version, INTERP_MI3) ||  streq (mi_version, INTERP_MI))
-    return new mi_ui_out (3);
-
-  if (streq (mi_version, INTERP_MI2))
-    return new mi_ui_out (2);
-
-  if (streq (mi_version, INTERP_MI1))
-    return new mi_ui_out (1);
-
-  return nullptr;
-}
-
-/* Helper function to return the given UIOUT as an mi_ui_out.  It is an error
-   to call this function with an ui_out that is not an MI.  */
-
-static mi_ui_out *
-as_mi_ui_out (ui_out *uiout)
-{
-  mi_ui_out *mi_uiout = dynamic_cast<mi_ui_out *> (uiout);
-
-  gdb_assert (mi_uiout != NULL);
-
-  return mi_uiout;
-}
-
-int
-mi_version (ui_out *uiout)
-{
-  return as_mi_ui_out (uiout)->version ();
+  ui_file_write (data, buffer, length_buffer);
 }
 
 void
-mi_out_put (ui_out *uiout, struct ui_file *stream)
+mi_out_put (struct ui_out *uiout,
+	    struct ui_file *stream)
 {
-  return as_mi_ui_out (uiout)->put (stream);
+  struct ui_out_data *data = ui_out_data (uiout);
+  ui_file_put (data->buffer, do_write, stream);
+  ui_file_rewind (data->buffer);
 }
 
-void
-mi_out_rewind (ui_out *uiout)
+/* initalize private members at startup */
+
+struct ui_out *
+mi_out_new (int mi_version)
 {
-  return as_mi_ui_out (uiout)->rewind ();
+  int flags = 0;
+  struct ui_out_data *data = XMALLOC (struct ui_out_data);
+  data->suppress_field_separator = 0;
+  data->suppress_output = 0;
+  data->mi_version = mi_version;
+  /* FIXME: This code should be using a ``string_file'' and not the
+     TUI buffer hack. */
+  data->buffer = mem_fileopen ();
+  return ui_out_new (&mi_ui_out_impl, data, flags);
+}
+
+/* standard gdb initialization hook */
+void
+_initialize_mi_out (void)
+{
+  /* nothing happens here */
 }

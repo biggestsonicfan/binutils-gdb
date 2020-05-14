@@ -3,7 +3,7 @@
 	.global F
 F:
 	@ First we test the basic syntax and bit patterns of the opcodes.
-	@ Most of these tests deliberately use d0/r0 to avoid setting
+	@ Most of these tests deliberatly use d0/r0 to avoid setting
 	@ any more bits than necessary.
 
 	@ Comparison operations
@@ -276,9 +276,3 @@ F:
 
 	fmdhreq	d1, r15
 	fmdlreq	d15, r1
-
-	# Add three nop instructions to ensure that the
-	# output is 32-byte aligned as required for arm-aout.
-	nop
-	nop
-	nop

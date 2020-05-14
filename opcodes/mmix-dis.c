@@ -1,49 +1,50 @@
 /* mmix-dis.c -- Disassemble MMIX instructions.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001 Free Software Foundation, Inc.
    Written by Hans-Peter Nilsson (hp@bitrange.com)
 
-   This file is part of the GNU opcodes library.
+This file is part of GDB and the GNU binutils.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+GDB and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version 2,
+or (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+GDB and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "sysdep.h"
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "opcode/mmix.h"
-#include "disassemble.h"
+#include "dis-asm.h"
 #include "libiberty.h"
 #include "bfd.h"
 #include "opintl.h"
 
-#define BAD_CASE(x)						\
-  do								\
-   {								\
-     opcodes_error_handler (_("bad case %d (%s) in %s:%d"),	\
-			    x, #x, __FILE__, __LINE__);		\
-     abort ();							\
-   }								\
+#define BAD_CASE(x)				\
+ do						\
+   {						\
+     fprintf (stderr,				\
+	      _("Bad case %d (%s) in %s:%d\n"),	\
+	      x, #x, __FILE__, __LINE__);	\
+     abort ();					\
+   }						\
  while (0)
 
-#define FATAL_DEBUG						\
- do								\
-   {								\
-     opcodes_error_handler (_("internal: non-debugged code "	\
-			      "(test-case missing): %s:%d"),	\
-			    __FILE__, __LINE__);		\
-     abort ();							\
-   }								\
+#define FATAL_DEBUG								\
+ do										\
+   {										\
+     fprintf (stderr,								\
+	      _("Internal: Non-debugged code (test-case missing): %s:%d"),	\
+	      __FILE__, __LINE__);						\
+     abort ();									\
+   }						\
  while (0)
 
 #define ROUND_MODE(n)					\
@@ -54,29 +55,32 @@
 #define INSN_IMMEDIATE_BIT (IMM_OFFSET_BIT << 24)
 #define INSN_BACKWARD_OFFSET_BIT (1 << 24)
 
-#define MAX_REG_NAME_LEN       256
-#define MAX_SPEC_REG_NAME_LEN  32
 struct mmix_dis_info
  {
-   const char *reg_name[MAX_REG_NAME_LEN];
-   const char *spec_reg_name[MAX_SPEC_REG_NAME_LEN];
+   const char *reg_name[256];
+   const char *spec_reg_name[32];
 
    /* Waste a little memory so we don't have to allocate each separately.
       We could have an array with static contents for these, but on the
       other hand, we don't have to.  */
-   char basic_reg_name[MAX_REG_NAME_LEN][sizeof ("$255")];
+   char basic_reg_name[256][sizeof ("$255")];
  };
+
+static boolean initialize_mmix_dis_info PARAMS ((struct disassemble_info *));
+static const struct mmix_opcode *get_opcode PARAMS ((unsigned long));
+
 
 /* Initialize a target-specific array in INFO.  */
 
-static bfd_boolean
-initialize_mmix_dis_info (struct disassemble_info *info)
+static boolean
+initialize_mmix_dis_info (info)
+     struct disassemble_info *info;
 {
   struct mmix_dis_info *minfop = malloc (sizeof (struct mmix_dis_info));
-  long i;
+  int i;
 
   if (minfop == NULL)
-    return FALSE;
+    return false;
 
   memset (minfop, 0, sizeof (*minfop));
 
@@ -98,12 +102,12 @@ initialize_mmix_dis_info (struct disassemble_info *info)
 	  long symsize = bfd_get_symtab_upper_bound (abfd);
 	  asymbol **syms = malloc (symsize);
 	  long nsyms;
+	  long i;
 
 	  if (syms == NULL)
-	    {
-	      FATAL_DEBUG;
+	    { FATAL_DEBUG;
 	      free (minfop);
-	      return FALSE;
+	      return false;
 	    }
 	  nsyms = bfd_canonicalize_symtab (abfd, syms);
 
@@ -113,7 +117,7 @@ initialize_mmix_dis_info (struct disassemble_info *info)
 	  for (i = 0; i < nsyms && syms[i] != NULL; i++)
 	    {
 	      if (syms[i]->section == reg_section
-		  && syms[i]->value < MAX_REG_NAME_LEN
+		  && syms[i]->value < 256
 		  && minfop->reg_name[syms[i]->value] == NULL)
 		minfop->reg_name[syms[i]->value] = syms[i]->name;
 	    }
@@ -121,10 +125,10 @@ initialize_mmix_dis_info (struct disassemble_info *info)
     }
 
   /* Fill in the rest with the canonical names.  */
-  for (i = 0; i < MAX_REG_NAME_LEN; i++)
+  for (i = 0; i < 256; i++)
     if (minfop->reg_name[i] == NULL)
       {
-	sprintf (minfop->basic_reg_name[i], "$%ld", i);
+	sprintf (minfop->basic_reg_name[i], "$%d", i);
 	minfop->reg_name[i] = minfop->basic_reg_name[i];
       }
 
@@ -132,8 +136,8 @@ initialize_mmix_dis_info (struct disassemble_info *info)
   for (i = 0; mmix_spec_regs[i].name != NULL; i++)
     minfop->spec_reg_name[mmix_spec_regs[i].number] = mmix_spec_regs[i].name;
 
-  info->private_data = (void *) minfop;
-  return TRUE;
+  info->private_data = (PTR) minfop;
+  return true;
 }
 
 /* A table indexed by the first byte is constructed as we disassemble each
@@ -144,12 +148,12 @@ initialize_mmix_dis_info (struct disassemble_info *info)
    "further entry" will just show that there was no other match.  */
 
 static const struct mmix_opcode *
-get_opcode (unsigned long insn)
+get_opcode (insn)
+     unsigned long insn;
 {
   static const struct mmix_opcode **opcodes = NULL;
   const struct mmix_opcode *opcodep = mmix_opcodes;
   unsigned int opcode_part = (insn >> 24) & 255;
-
   if (opcodes == NULL)
     opcodes = xcalloc (256, sizeof (struct mmix_opcode *));
 
@@ -207,7 +211,6 @@ get_opcode (unsigned long insn)
 	case mmix_operands_roundregs:
 	  {
 	    int midbyte = (insn >> 8) & 255;
-
 	    if (midbyte <= 4)
 	      return opcodep;
 	  }
@@ -240,26 +243,12 @@ get_opcode (unsigned long insn)
   return NULL;
 }
 
-static inline const char *
-get_reg_name (const struct mmix_dis_info * minfop, unsigned int x)
-{
-  if (x >= MAX_REG_NAME_LEN)
-    return _("*illegal*");
-  return minfop->reg_name[x];
-}
-
-static inline const char *
-get_spec_reg_name (const struct mmix_dis_info * minfop, unsigned int x)
-{
-  if (x >= MAX_SPEC_REG_NAME_LEN)
-    return _("*illegal*");
-  return minfop->spec_reg_name[x];
-}
-
 /* The main disassembly function.  */
 
 int
-print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
+print_insn_mmix (memaddr, info)
+     bfd_vma memaddr;
+     struct disassemble_info *info;
 {
   unsigned char buffer[4];
   unsigned long insn;
@@ -351,15 +340,15 @@ print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
     case mmix_operands_regs:
       /*  All registers: "$X,$Y,$Z".  */
       (*info->fprintf_func) (info->stream, "%s,%s,%s",
-			     get_reg_name (minfop, x),
-			     get_reg_name (minfop, y),
-			     get_reg_name (minfop, z));
+			     minfop->reg_name[x],
+			     minfop->reg_name[y],
+			     minfop->reg_name[z]);
       break;
 
     case mmix_operands_reg_yz:
       /* Like SETH - "$X,YZ".  */
       (*info->fprintf_func) (info->stream, "%s,0x%x",
-			     get_reg_name (minfop, x), y * 256 + z);
+			     minfop->reg_name[x], y * 256 + z);
       break;
 
     case mmix_operands_regs_z_opt:
@@ -368,13 +357,12 @@ print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
       /* The regular "$X,$Y,$Z|Z".  */
       if (insn & INSN_IMMEDIATE_BIT)
 	(*info->fprintf_func) (info->stream, "%s,%s,%d",
-			       get_reg_name (minfop, x),
-			       get_reg_name (minfop, y), z);
+			       minfop->reg_name[x], minfop->reg_name[y], z);
       else
 	(*info->fprintf_func) (info->stream, "%s,%s,%s",
-			       get_reg_name (minfop, x),
-			       get_reg_name (minfop, y),
-			       get_reg_name (minfop, z));
+			       minfop->reg_name[x],
+			       minfop->reg_name[y],
+			       minfop->reg_name[z]);
       break;
 
     case mmix_operands_jmp:
@@ -397,23 +385,23 @@ print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
 	{
 	  if (insn & INSN_IMMEDIATE_BIT)
 	    (*info->fprintf_func) (info->stream, "%s,%s,%d",
-				   get_reg_name (minfop, x),
+				   minfop->reg_name[x],
 				   ROUND_MODE (y), z);
 	  else
 	    (*info->fprintf_func) (info->stream, "%s,%s,%s",
-				   get_reg_name (minfop, x),
+				   minfop->reg_name[x],
 				   ROUND_MODE (y),
-				   get_reg_name (minfop, z));
+				   minfop->reg_name[z]);
 	}
       else
 	{
 	  if (insn & INSN_IMMEDIATE_BIT)
 	    (*info->fprintf_func) (info->stream, "%s,%d",
-				   get_reg_name (minfop, x), z);
+				   minfop->reg_name[x], z);
 	  else
 	    (*info->fprintf_func) (info->stream, "%s,%s",
-				   get_reg_name (minfop, x),
-				   get_reg_name (minfop, z));
+				   minfop->reg_name[x],
+				   minfop->reg_name[z]);
 	}
       break;
 
@@ -427,13 +415,13 @@ print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
 	 "$X,ROUND_MODE,$Z".  */
       if (y != 0)
 	(*info->fprintf_func) (info->stream, "%s,%s,%s",
-			       get_reg_name (minfop, x),
+			       minfop->reg_name[x],
 			       ROUND_MODE (y),
-			       get_reg_name (minfop, z));
+			       minfop->reg_name[z]);
       else
 	(*info->fprintf_func) (info->stream, "%s,%s",
-			       get_reg_name (minfop, x),
-			       get_reg_name (minfop, z));
+			       minfop->reg_name[x],
+			       minfop->reg_name[z]);
       break;
 
     case mmix_operands_sync:
@@ -446,22 +434,22 @@ print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
       /* Like SYNCD - "X,$Y,$Z|Z".  */
       if (insn & INSN_IMMEDIATE_BIT)
 	(*info->fprintf_func) (info->stream, "%d,%s,%d",
-			       x, get_reg_name (minfop, y), z);
+			       x, minfop->reg_name[y], z);
       else
 	(*info->fprintf_func) (info->stream, "%d,%s,%s",
-			       x, get_reg_name (minfop, y),
-			       get_reg_name (minfop, z));
+			       x, minfop->reg_name[y],
+			       minfop->reg_name[z]);
       break;
 
     case mmix_operands_neg:
       /* Like NEG and NEGU - "$X,Y,$Z|Z".  */
       if (insn & INSN_IMMEDIATE_BIT)
 	(*info->fprintf_func) (info->stream, "%s,%d,%d",
-			       get_reg_name (minfop, x), y, z);
+			       minfop->reg_name[x], y, z);
       else
 	(*info->fprintf_func) (info->stream, "%s,%d,%s",
-			       get_reg_name (minfop, x), y,
-			       get_reg_name (minfop, z));
+			       minfop->reg_name[x], y,
+			       minfop->reg_name[z]);
       break;
 
     case mmix_operands_pushj:
@@ -475,7 +463,7 @@ print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
 
 	info->target = memaddr + offset;
 
-	(*info->fprintf_func) (info->stream, "%s,", get_reg_name (minfop, x));
+	(*info->fprintf_func) (info->stream, "%s,", minfop->reg_name[x]);
 	(*info->print_address_func) (memaddr + offset, info);
       }
       break;
@@ -483,26 +471,26 @@ print_insn_mmix (bfd_vma memaddr, struct disassemble_info *info)
     case mmix_operands_get:
       /* GET - "X,spec_reg".  */
       (*info->fprintf_func) (info->stream, "%s,%s",
-			     get_reg_name (minfop, x),
-			     get_spec_reg_name (minfop, z));
+			     minfop->reg_name[x],
+			     minfop->spec_reg_name[z]);
       break;
 
     case mmix_operands_put:
       /* PUT - "spec_reg,$Z|Z".  */
       if (insn & INSN_IMMEDIATE_BIT)
 	(*info->fprintf_func) (info->stream, "%s,%d",
-			       get_spec_reg_name (minfop, x), z);
+			       minfop->spec_reg_name[x], z);
       else
 	(*info->fprintf_func) (info->stream, "%s,%s",
-			       get_spec_reg_name (minfop, x),
-			       get_reg_name (minfop, z));
+			       minfop->spec_reg_name[x],
+			       minfop->reg_name[z]);
       break;
 
     case mmix_operands_set:
       /*  Two registers, "$X,$Y".  */
       (*info->fprintf_func) (info->stream, "%s,%s",
-			     get_reg_name (minfop, x),
-			     get_reg_name (minfop, y));
+			     minfop->reg_name[x],
+			     minfop->reg_name[y]);
       break;
 
     case mmix_operands_save:

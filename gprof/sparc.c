@@ -39,15 +39,30 @@
      */
 #define	CALL	(0xc0000000)
 
-void sparc_find_call (Sym *, bfd_vma, bfd_vma);
+void sparc_find_call PARAMS ((Sym *, bfd_vma, bfd_vma));
 
 void
-sparc_find_call (Sym *parent, bfd_vma p_lowpc, bfd_vma p_highpc)
+sparc_find_call (parent, p_lowpc, p_highpc)
+     Sym *parent;
+     bfd_vma p_lowpc;
+     bfd_vma p_highpc;
 {
   bfd_vma pc, dest_pc;
   unsigned int insn;
   Sym *child;
 
+  if (core_text_space == 0)
+    {
+      return;
+    }
+  if (p_lowpc < s_lowpc)
+    {
+      p_lowpc = s_lowpc;
+    }
+  if (p_highpc > s_highpc)
+    {
+      p_highpc = s_highpc;
+    }
   DBG (CALLDEBUG, printf ("[find_call] %s: 0x%lx to 0x%lx\n",
 			  parent->name, (unsigned long) p_lowpc,
 			  (unsigned long) p_highpc));
@@ -65,21 +80,18 @@ sparc_find_call (Sym *parent, bfd_vma p_lowpc, bfd_vma p_highpc)
 	   */
 	  dest_pc = pc + (((bfd_signed_vma) (insn & 0x3fffffff)
 			   ^ 0x20000000) - 0x20000000);
-	  if (hist_check_address (dest_pc))
+	  if (dest_pc >= s_lowpc && dest_pc <= s_highpc)
 	    {
 	      child = sym_lookup (&symtab, dest_pc);
-	      if (child)
+	      DBG (CALLDEBUG,
+		   printf ("\tdest_pc=0x%lx, (name=%s, addr=0x%lx)\n",
+			   (unsigned long) dest_pc, child->name,
+			   (unsigned long) child->addr));
+	      if (child->addr == dest_pc)
 		{
-	          DBG (CALLDEBUG,
-		      printf ("\tdest_pc=0x%lx, (name=%s, addr=0x%lx)\n",
-			     (unsigned long) dest_pc, child->name,
-			     (unsigned long) child->addr));
-	          if (child->addr == dest_pc)
-		    {
-		      /* a hit:  */
-		      arc_add (parent, child, (unsigned long) 0);
-		      continue;
-		    }
+		  /* a hit:  */
+		  arc_add (parent, child, (unsigned long) 0);
+		  continue;
 		}
 	    }
 	  /*

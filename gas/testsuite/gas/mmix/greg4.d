@@ -5,11 +5,11 @@
 .*:     file format elf64-mmix
 
 SYMBOL TABLE:
-0+ l    d  \.text	0+ (|\.text)
-0+ l    d  \.data	0+ (|\.data)
-0+ l    d  \.bss	0+ (|\.bss)
+0+ l    d  \.text	0+ 
+0+ l    d  \.data	0+ 
+0+ l    d  \.bss	0+ 
 0+4 l       \.text	0+ x
-0+ l    d  \.MMIX\.reg_contents	0+ (|\.MMIX\.reg_contents)
+0+ l    d  \.MMIX\.reg_contents	0+ 
 
 
 RELOCATION RECORDS FOR \[\.text\]:
@@ -24,5 +24,6 @@ OFFSET           TYPE              VALUE
 
 Contents of section \.text:
  0000 fd000000 fd000001 9f000004           .*
+Contents of section \.data:
 Contents of section \.MMIX\.reg_contents:
  0000 00000000 00000000                    .*

@@ -1,58 +1,34 @@
-/* This test file is part of GDB, the GNU debugger.
+/* Often the behavior of any particular test depends upon what compiler was
+   used to compile the test.  As each test is compiled, this file is
+   preprocessed by the same compiler used to compile that specific test
+   (different tests might be compiled by different compilers, particularly
+   if compiled at different times), and used to generate a *.ci (compiler
+   info) file for that test.
 
-   Copyright 1995-2020 Free Software Foundation, Inc.
+   I.E., when callfuncs is compiled, a callfuncs.ci file will be generated,
+   which can then be sourced by callfuncs.exp to give callfuncs.exp access
+   to information about the compilation environment.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+   TODO:  It might be a good idea to add expect code that tests each
+   definition made with 'set" to see if one already exists, and if so
+   warn about conflicts if it is being set to something else.  */
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 6))
+set supports_template_debugging 1
+#else
+set supports_template_debugging 0
+#endif
 
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-   */
-
-/* This file is exactly like compiler.c.  I could just use compiler.c if
-   I could be sure that every C++ compiler accepted extensions of ".c".  */
-
-set compiler_info "unknown"
+#if defined(__cplusplus) 
+set supports_template_debugging 1
+#else
+set supports_template_debugging 0
+#endif
 
 #if defined (__GNUC__)
-#if defined (__GNUC_PATCHLEVEL__)
-/* Only GCC versions >= 3.0 define the __GNUC_PATCHLEVEL__ macro.  */
-set compiler_info [join {gcc __GNUC__ __GNUC_MINOR__ __GNUC_PATCHLEVEL__} -]
+set gcc_compiled __GNUC__
 #else
-set compiler_info [join {gcc __GNUC__ __GNUC_MINOR__ "unknown"} -]
-#endif
-#endif
-
-#if defined (__xlc__)
-/* IBM'x xlc compiler. NOTE:  __xlc__ expands to a double quoted string of four
-   numbers separated by '.'s: currently "7.0.0.0" */
-set need_a_set [regsub -all {\.} [join {xlc __xlc__} -] - compiler_info]
+set gcc_compiled 0
 #endif
 
-#if defined (__ARMCC_VERSION)
-set compiler_info [join {armcc __ARMCC_VERSION} -]
-#endif
-
-#if defined (__clang__)
-set compiler_info [join {clang __clang_major__ __clang_minor__ __clang_patchlevel__} -]
-#endif
-
-#if defined (__ICC)
-set icc_major [string range __ICC 0 1]
-set icc_minor [format "%d" [string range __ICC 2 [expr {[string length __ICC] -1}]]]
-set icc_update __INTEL_COMPILER_UPDATE
-set compiler_info [join "icc $icc_major $icc_minor $icc_update" -]
-#elif defined (__ICL)
-set icc_major [string range __ICL 0 1]
-set icc_minor [format "%d" [string range __ICL 2 [expr {[string length __ICL] -1}]]]
-set icc_update __INTEL_COMPILER_UPDATE
-set compiler_info [join "icc $icc_major $icc_minor $icc_update" -]
-#endif
+return 0

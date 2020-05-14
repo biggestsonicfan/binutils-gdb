@@ -1,5 +1,5 @@
 /* Create and destroy argument vectors (argv's)
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright (C) 1992, 2001 Free Software Foundation, Inc.
    Written by Fred Fish @ Cygnus Support
 
 This file is part of the libiberty library.
@@ -15,33 +15,39 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 
 /*  Create and destroy argument vectors.  An argument vector is simply an
     array of string pointers, terminated by a NULL pointer. */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "ansidecl.h"
 #include "libiberty.h"
-#include "safe-ctype.h"
+
+#define ISBLANK(ch) ((ch) == ' ' || (ch) == '\t')
 
 /*  Routines imported from standard C runtime libraries. */
+
+#ifdef __STDC__
 
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <sys/types.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+
+#else	/* !__STDC__ */
+
+#if !defined _WIN32 || defined __GNUC__
+extern char *memcpy ();		/* Copy memory region */
+extern int strlen ();		/* Count length of string */
+extern char *malloc ();		/* Standard memory allocater */
+extern char *realloc ();	/* Standard memory reallocator */
+extern void free ();		/* Free malloc'd memory */
+extern char *strdup ();		/* Duplicate a string */
 #endif
-#if HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif
+
+#endif	/* __STDC__ */
+
 
 #ifndef NULL
 #define NULL 0
@@ -56,7 +62,7 @@ Boston, MA 02110-1301, USA.  */
 
 /*
 
-@deftypefn Extension char** dupargv (char * const *@var{vector})
+@deftypefn Extension char** dupargv (char **@var{vector})
 
 Duplicate an argument vector.  Simply scans through @var{vector},
 duplicating each argument until the terminating @code{NULL} is found.
@@ -69,7 +75,8 @@ argument vector.
 */
 
 char **
-dupargv (char * const *argv)
+dupargv (argv)
+     char **argv;
 {
   int argc;
   char **copy;
@@ -79,11 +86,22 @@ dupargv (char * const *argv)
   
   /* the vector */
   for (argc = 0; argv[argc] != NULL; argc++);
-  copy = (char **) xmalloc ((argc + 1) * sizeof (char *));
-
+  copy = (char **) malloc ((argc + 1) * sizeof (char *));
+  if (copy == NULL)
+    return NULL;
+  
   /* the strings */
   for (argc = 0; argv[argc] != NULL; argc++)
-    copy[argc] = xstrdup (argv[argc]);
+    {
+      int len = strlen (argv[argc]);
+      copy[argc] = malloc (sizeof (char *) * (len + 1));
+      if (copy[argc] == NULL)
+	{
+	  freeargv (copy);
+	  return NULL;
+	}
+      strcpy (copy[argc], argv[argc]);
+    }
   copy[argc] = NULL;
   return copy;
 }
@@ -101,7 +119,8 @@ itself.
 
 */
 
-void freeargv (char **vector)
+void freeargv (vector)
+char **vector;
 {
   register char **scan;
 
@@ -113,24 +132,6 @@ void freeargv (char **vector)
 	}
       free (vector);
     }
-}
-
-static void
-consume_whitespace (const char **input)
-{
-  while (ISSPACE (**input))
-    {
-      (*input)++;
-    }
-}
-
-static int
-only_whitespace (const char* input)
-{
-  while (*input != EOS && ISSPACE (*input))
-    input++;
-
-  return (*input == EOS);
 }
 
 /*
@@ -145,7 +146,7 @@ remains unchanged.  The last element of the vector is followed by a
 @code{NULL} element.
 
 All of the memory for the pointer array and copies of the string
-is obtained from @code{xmalloc}.  All of the memory can be returned to the
+is obtained from @code{malloc}.  All of the memory can be returned to the
 system with the single function call @code{freeargv}, which takes the
 returned result of @code{buildargv}, as it's argument.
 
@@ -173,7 +174,8 @@ returned, as appropriate.
 
 */
 
-char **buildargv (const char *input)
+char **buildargv (input)
+     const char *input;
 {
   char *arg;
   char *copybuf;
@@ -187,26 +189,37 @@ char **buildargv (const char *input)
 
   if (input != NULL)
     {
-      copybuf = (char *) xmalloc (strlen (input) + 1);
+      copybuf = (char *) alloca (strlen (input) + 1);
       /* Is a do{}while to always execute the loop once.  Always return an
 	 argv, even for null strings.  See NOTES above, test case below. */
       do
 	{
 	  /* Pick off argv[argc] */
-	  consume_whitespace (&input);
-
+	  while (ISBLANK (*input))
+	    {
+	      input++;
+	    }
 	  if ((maxargc == 0) || (argc >= (maxargc - 1)))
 	    {
 	      /* argv needs initialization, or expansion */
 	      if (argv == NULL)
 		{
 		  maxargc = INITIAL_MAXARGC;
-		  nargv = (char **) xmalloc (maxargc * sizeof (char *));
+		  nargv = (char **) malloc (maxargc * sizeof (char *));
 		}
 	      else
 		{
 		  maxargc *= 2;
-		  nargv = (char **) xrealloc (argv, maxargc * sizeof (char *));
+		  nargv = (char **) realloc (argv, maxargc * sizeof (char *));
+		}
+	      if (nargv == NULL)
+		{
+		  if (argv != NULL)
+		    {
+		      freeargv (argv);
+		      argv = NULL;
+		    }
+		  break;
 		}
 	      argv = nargv;
 	      argv[argc] = NULL;
@@ -215,7 +228,7 @@ char **buildargv (const char *input)
 	  arg = copybuf;
 	  while (*input != EOS)
 	    {
-	      if (ISSPACE (*input) && !squote && !dquote && !bsquote)
+	      if (ISBLANK (*input) && !squote && !dquote && !bsquote)
 		{
 		  break;
 		}
@@ -271,246 +284,24 @@ char **buildargv (const char *input)
 		}
 	    }
 	  *arg = EOS;
-	  argv[argc] = xstrdup (copybuf);
+	  argv[argc] = strdup (copybuf);
+	  if (argv[argc] == NULL)
+	    {
+	      freeargv (argv);
+	      argv = NULL;
+	      break;
+	    }
 	  argc++;
 	  argv[argc] = NULL;
 
-	  consume_whitespace (&input);
+	  while (ISBLANK (*input))
+	    {
+	      input++;
+	    }
 	}
       while (*input != EOS);
-
-      free (copybuf);
     }
   return (argv);
-}
-
-/*
-
-@deftypefn Extension int writeargv (char * const *@var{argv}, FILE *@var{file})
-
-Write each member of ARGV, handling all necessary quoting, to the file
-named by FILE, separated by whitespace.  Return 0 on success, non-zero
-if an error occurred while writing to FILE.
-
-@end deftypefn
-
-*/
-
-int
-writeargv (char * const *argv, FILE *f)
-{
-  int status = 0;
-
-  if (f == NULL)
-    return 1;
-
-  while (*argv != NULL)
-    {
-      const char *arg = *argv;
-
-      while (*arg != EOS)
-        {
-          char c = *arg;
-
-          if (ISSPACE(c) || c == '\\' || c == '\'' || c == '"')
-            if (EOF == fputc ('\\', f))
-              {
-                status = 1;
-                goto done;
-              }
-
-          if (EOF == fputc (c, f))
-            {
-              status = 1;
-              goto done;
-            }
-          arg++;
-        }
-
-      /* Write out a pair of quotes for an empty argument.  */
-      if (arg == *argv)
-	if (EOF == fputs ("\"\"", f))
-	  {
-	    status = 1;
-	    goto done;
-	  }
-
-      if (EOF == fputc ('\n', f))
-        {
-          status = 1;
-          goto done;
-        }
-      argv++;
-    }
-
- done:
-  return status;
-}
-
-/*
-
-@deftypefn Extension void expandargv (int *@var{argcp}, char ***@var{argvp})
-
-The @var{argcp} and @code{argvp} arguments are pointers to the usual
-@code{argc} and @code{argv} arguments to @code{main}.  This function
-looks for arguments that begin with the character @samp{@@}.  Any such
-arguments are interpreted as ``response files''.  The contents of the
-response file are interpreted as additional command line options.  In
-particular, the file is separated into whitespace-separated strings;
-each such string is taken as a command-line option.  The new options
-are inserted in place of the option naming the response file, and
-@code{*argcp} and @code{*argvp} will be updated.  If the value of
-@code{*argvp} is modified by this function, then the new value has
-been dynamically allocated and can be deallocated by the caller with
-@code{freeargv}.  However, most callers will simply call
-@code{expandargv} near the beginning of @code{main} and allow the
-operating system to free the memory when the program exits.
-
-@end deftypefn
-
-*/
-
-void
-expandargv (int *argcp, char ***argvp)
-{
-  /* The argument we are currently processing.  */
-  int i = 0;
-  /* To check if ***argvp has been dynamically allocated.  */
-  char ** const original_argv = *argvp;
-  /* Limit the number of response files that we parse in order
-     to prevent infinite recursion.  */
-  unsigned int iteration_limit = 2000;
-  /* Loop over the arguments, handling response files.  We always skip
-     ARGVP[0], as that is the name of the program being run.  */
-  while (++i < *argcp)
-    {
-      /* The name of the response file.  */
-      const char *filename;
-      /* The response file.  */
-      FILE *f;
-      /* An upper bound on the number of characters in the response
-	 file.  */
-      long pos;
-      /* The number of characters in the response file, when actually
-	 read.  */
-      size_t len;
-      /* A dynamically allocated buffer used to hold options read from a
-	 response file.  */
-      char *buffer;
-      /* Dynamically allocated storage for the options read from the
-	 response file.  */
-      char **file_argv;
-      /* The number of options read from the response file, if any.  */
-      size_t file_argc;
-#ifdef S_ISDIR
-      struct stat sb;
-#endif
-      /* We are only interested in options of the form "@file".  */
-      filename = (*argvp)[i];
-      if (filename[0] != '@')
-	continue;
-      /* If we have iterated too many times then stop.  */
-      if (-- iteration_limit == 0)
-	{
-	  fprintf (stderr, "%s: error: too many @-files encountered\n", (*argvp)[0]);
-	  xexit (1);
-	}
-#ifdef S_ISDIR
-      if (stat (filename+1, &sb) < 0)
-	continue;
-      if (S_ISDIR(sb.st_mode))
-	{
-	  fprintf (stderr, "%s: error: @-file refers to a directory\n", (*argvp)[0]);
-	  xexit (1);
-	}
-#endif
-      /* Read the contents of the file.  */
-      f = fopen (++filename, "r");
-      if (!f)
-	continue;
-      if (fseek (f, 0L, SEEK_END) == -1)
-	goto error;
-      pos = ftell (f);
-      if (pos == -1)
-	goto error;
-      if (fseek (f, 0L, SEEK_SET) == -1)
-	goto error;
-      buffer = (char *) xmalloc (pos * sizeof (char) + 1);
-      len = fread (buffer, sizeof (char), pos, f);
-      if (len != (size_t) pos
-	  /* On Windows, fread may return a value smaller than POS,
-	     due to CR/LF->CR translation when reading text files.
-	     That does not in-and-of itself indicate failure.  */
-	  && ferror (f))
-	goto error;
-      /* Add a NUL terminator.  */
-      buffer[len] = '\0';
-      /* If the file is empty or contains only whitespace, buildargv would
-	 return a single empty argument.  In this context we want no arguments,
-	 instead.  */
-      if (only_whitespace (buffer))
-	{
-	  file_argv = (char **) xmalloc (sizeof (char *));
-	  file_argv[0] = NULL;
-	}
-      else
-	/* Parse the string.  */
-	file_argv = buildargv (buffer);
-      /* If *ARGVP is not already dynamically allocated, copy it.  */
-      if (*argvp == original_argv)
-	*argvp = dupargv (*argvp);
-      /* Count the number of arguments.  */
-      file_argc = 0;
-      while (file_argv[file_argc])
-	++file_argc;
-      /* Free the original option's memory.  */
-      free ((*argvp)[i]);
-      /* Now, insert FILE_ARGV into ARGV.  The "+1" below handles the
-	 NULL terminator at the end of ARGV.  */ 
-      *argvp = ((char **) 
-		xrealloc (*argvp, 
-			  (*argcp + file_argc + 1) * sizeof (char *)));
-      memmove (*argvp + i + file_argc, *argvp + i + 1, 
-	       (*argcp - i) * sizeof (char *));
-      memcpy (*argvp + i, file_argv, file_argc * sizeof (char *));
-      /* The original option has been replaced by all the new
-	 options.  */
-      *argcp += file_argc - 1;
-      /* Free up memory allocated to process the response file.  We do
-	 not use freeargv because the individual options in FILE_ARGV
-	 are now in the main ARGV.  */
-      free (file_argv);
-      free (buffer);
-      /* Rescan all of the arguments just read to support response
-	 files that include other response files.  */
-      --i;
-    error:
-      /* We're all done with the file now.  */
-      fclose (f);
-    }
-}
-
-/*
-
-@deftypefn Extension int countargv (char * const *@var{argv})
-
-Return the number of elements in @var{argv}.
-Returns zero if @var{argv} is NULL.
-
-@end deftypefn
-
-*/
-
-int
-countargv (char * const *argv)
-{
-  int argc;
-
-  if (argv == NULL)
-    return 0;
-  for (argc = 0; argv[argc] != NULL; argc++)
-    continue;
-  return argc;
 }
 
 #ifdef MAIN
@@ -534,8 +325,7 @@ static const char *const tests[] =
   NULL
 };
 
-int
-main (void)
+int main ()
 {
   char **argv;
   const char *const *test;

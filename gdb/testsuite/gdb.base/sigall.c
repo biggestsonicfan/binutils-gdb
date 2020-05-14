@@ -1,424 +1,801 @@
 #include <signal.h>
 #include <unistd.h>
 
+#ifdef __sh__
+#define signal(a,b)	/* Signals not supported on this target - make them go away */
+#endif
 
 /* Signal handlers, we set breakpoints in them to make sure that the
    signals really get delivered.  */
 
+#ifdef PROTOTYPES
 void
 handle_ABRT (int sig)
+#else
+void
+handle_ABRT (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_HUP (int sig)
+#else
+void
+handle_HUP (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_QUIT (int sig)
+#else
+void
+handle_QUIT (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_ILL (int sig)
+#else
+void
+handle_ILL (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_EMT (int sig)
+#else
+void
+handle_EMT (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_FPE (int sig)
+#else
+void
+handle_FPE (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_BUS (int sig)
+#else
+void
+handle_BUS (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_SEGV (int sig)
+#else
+void
+handle_SEGV (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_SYS (int sig)
+#else
+void
+handle_SYS (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_PIPE (int sig)
+#else
+void
+handle_PIPE (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_ALRM (int sig)
+#else
+void
+handle_ALRM (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_URG (int sig)
+#else
+void
+handle_URG (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_TSTP (int sig)
+#else
+void
+handle_TSTP (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_CONT (int sig)
+#else
+void
+handle_CONT (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_CHLD (int sig)
+#else
+void
+handle_CHLD (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_TTIN (int sig)
+#else
+void
+handle_TTIN (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_TTOU (int sig)
+#else
+void
+handle_TTOU (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_IO (int sig)
+#else
+void
+handle_IO (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_XCPU (int sig)
+#else
+void
+handle_XCPU (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_XFSZ (int sig)
+#else
+void
+handle_XFSZ (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_VTALRM (int sig)
+#else
+void
+handle_VTALRM (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_PROF (int sig)
+#else
+void
+handle_PROF (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_WINCH (int sig)
+#else
+void
+handle_WINCH (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_LOST (int sig)
+#else
+void
+handle_LOST (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_USR1 (int sig)
+#else
+void
+handle_USR1 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_USR2 (int sig)
+#else
+void
+handle_USR2 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_PWR (int sig)
+#else
+void
+handle_PWR (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_POLL (int sig)
+#else
+void
+handle_POLL (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_WIND (int sig)
+#else
+void
+handle_WIND (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_PHONE (int sig)
+#else
+void
+handle_PHONE (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_WAITING (int sig)
+#else
+void
+handle_WAITING (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_LWP (int sig)
+#else
+void
+handle_LWP (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_DANGER (int sig)
+#else
+void
+handle_DANGER (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_GRANT (int sig)
+#else
+void
+handle_GRANT (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_RETRACT (int sig)
+#else
+void
+handle_RETRACT (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_MSG (int sig)
+#else
+void
+handle_MSG (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_SOUND (int sig)
+#else
+void
+handle_SOUND (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_SAK (int sig)
+#else
+void
+handle_SAK (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_PRIO (int sig)
+#else
+void
+handle_PRIO (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_33 (int sig)
+#else
+void
+handle_33 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_34 (int sig)
+#else
+void
+handle_34 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_35 (int sig)
+#else
+void
+handle_35 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_36 (int sig)
+#else
+void
+handle_36 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_37 (int sig)
+#else
+void
+handle_37 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_38 (int sig)
+#else
+void
+handle_38 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_39 (int sig)
+#else
+void
+handle_39 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_40 (int sig)
+#else
+void
+handle_40 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_41 (int sig)
+#else
+void
+handle_41 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_42 (int sig)
+#else
+void
+handle_42 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_43 (int sig)
+#else
+void
+handle_43 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_44 (int sig)
+#else
+void
+handle_44 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_45 (int sig)
+#else
+void
+handle_45 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_46 (int sig)
+#else
+void
+handle_46 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_47 (int sig)
+#else
+void
+handle_47 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_48 (int sig)
+#else
+void
+handle_48 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_49 (int sig)
+#else
+void
+handle_49 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_50 (int sig)
+#else
+void
+handle_50 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_51 (int sig)
+#else
+void
+handle_51 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_52 (int sig)
+#else
+void
+handle_52 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_53 (int sig)
+#else
+void
+handle_53 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_54 (int sig)
+#else
+void
+handle_54 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_55 (int sig)
+#else
+void
+handle_55 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_56 (int sig)
+#else
+void
+handle_56 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_57 (int sig)
+#else
+void
+handle_57 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_58 (int sig)
+#else
+void
+handle_58 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_59 (int sig)
+#else
+void
+handle_59 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_60 (int sig)
+#else
+void
+handle_60 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_61 (int sig)
+#else
+void
+handle_61 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_62 (int sig)
+#else
+void
+handle_62 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_63 (int sig)
+#else
+void
+handle_63 (sig)
+     int sig;
+#endif
 {
 }
 
+#ifdef PROTOTYPES
 void
 handle_TERM (int sig)
+#else
+void
+handle_TERM (sig)
+     int sig;
+#endif
 {
 }
 
-/* Functions to send signals.  These also serve as markers.
-   Ordered ANSI-standard signals first, other signals second,
-   with signals in each block ordered by their numerical values
-   on a typical POSIX platform.  */
-
-/* SIGINT, SIGILL, SIGABRT, SIGFPE, SIGSEGV and SIGTERM
-   are ANSI-standard signals and are always available.  */
-
-int
-gen_ILL ()
-{
-  kill (getpid (), SIGILL);
-  return 0;
-}
-
+/* Functions to send signals.  These also serve as markers.  */
 int
 gen_ABRT ()
 {
   kill (getpid (), SIGABRT);
   return 0;
 }  
-
-int x;
-
-int
-gen_FPE ()
-{
-  /* The intent behind generating SIGFPE this way is to check the mapping
-     from the CPU exception itself to the signals.  It would be nice to
-     do the same for SIGBUS, SIGSEGV, etc., but I suspect that even this
-     test might turn out to be insufficiently portable.  */
-
-#if 0
-  /* Loses on the PA because after the signal handler executes we try to
-     re-execute the failing instruction again.  Perhaps we could siglongjmp
-     out of the signal handler?  */
-  /* The expect script looks for the word "kill"; don't delete it.  */
-  return 5 / x; /* and we both started jumping up and down yelling kill */
-#else
-  kill (getpid (), SIGFPE);
-#endif
-  return 0;
-}
-
-int
-gen_SEGV ()
-{
-  kill (getpid (), SIGSEGV);
-  return 0;
-}
-
-int
-gen_TERM ()
-{
-  kill (getpid (), SIGTERM);
-  return 0;
-}
-
-/* All other signals need preprocessor conditionals.  */
 
 int
 gen_HUP ()
@@ -443,12 +820,45 @@ return 0;
 }
 
 int
+gen_ILL ()
+{
+#ifdef SIGILL
+  kill (getpid (), SIGILL);
+#else
+  handle_ILL (0);
+#endif
+return 0;
+}
+
+int
 gen_EMT ()
 {
 #ifdef SIGEMT
   kill (getpid (), SIGEMT);
 #else
   handle_EMT (0);
+#endif
+return 0;
+}
+
+int x;
+
+int
+gen_FPE ()
+{
+  /* The intent behind generating SIGFPE this way is to check the mapping
+     from the CPU exception itself to the signals.  It would be nice to
+     do the same for SIGBUS, SIGSEGV, etc., but I suspect that even this
+     test might turn out to be insufficiently portable.  */
+
+#if 0
+  /* Loses on the PA because after the signal handler executes we try to
+     re-execute the failing instruction again.  Perhaps we could siglongjmp
+     out of the signal handler?  */
+  /* The expect script looks for the word "kill"; don't delete it.  */
+  return 5 / x; /* and we both started jumping up and down yelling kill */
+#else
+  kill (getpid (), SIGFPE);
 #endif
 return 0;
 }
@@ -460,6 +870,17 @@ gen_BUS ()
   kill (getpid (), SIGBUS);
 #else
   handle_BUS (0);
+#endif
+return 0;
+}
+
+int
+gen_SEGV ()
+{
+#ifdef SIGSEGV
+  kill (getpid (), SIGSEGV);
+#else
+  handle_SEGV (0);
 #endif
 return 0;
 }
@@ -632,7 +1053,7 @@ return 0;
 int
 gen_LOST ()
 {
-#if defined(SIGLOST) && SIGLOST != SIGABRT
+#if defined(SIGLOST) && (!defined(SIGABRT) || SIGLOST != SIGABRT)
   kill (getpid (), SIGLOST);
 #else
   handle_LOST (0);
@@ -665,7 +1086,7 @@ return 0;
 int
 gen_PWR ()
 {
-#if defined(SIGPWR) && (!defined (SIGLOST) || SIGPWR != SIGLOST)
+#ifdef SIGPWR
   kill (getpid (), SIGPWR);
 #else
   handle_PWR (0);
@@ -1145,46 +1566,42 @@ gen_63 ()
 #endif
 return 0;
 }
+
+int
+gen_TERM ()
+{
+  kill (getpid (), SIGTERM);
+return 0;
+}  
 
 int
 main ()
 {
-
-#ifdef SIG_SETMASK
-  /* Ensure all the signals aren't blocked.
-     The environment in which the testsuite is run may have blocked some
-     for whatever reason.  */
-  {
-    sigset_t newset;
-    sigemptyset (&newset);
-    sigprocmask (SIG_SETMASK, &newset, NULL);
-  }
+#ifdef usestubs
+  set_debug_traps ();
+  breakpoint ();
 #endif
-
-  /* Signals are ordered ANSI-standard signals first, other signals
-     second, with signals in each block ordered by their numerical
-     values on a typical POSIX platform.  */
-
-  /* SIGINT, SIGILL, SIGABRT, SIGFPE, SIGSEGV and SIGTERM
-     are ANSI-standard signals and are always available.  */
-  signal (SIGILL, handle_ILL);
   signal (SIGABRT, handle_ABRT);
-  signal (SIGFPE, handle_FPE);
-  signal (SIGSEGV, handle_SEGV);
-  signal (SIGTERM, handle_TERM);
-
-  /* All other signals need preprocessor conditionals.  */
 #ifdef SIGHUP
   signal (SIGHUP, handle_HUP);
 #endif
 #ifdef SIGQUIT
   signal (SIGQUIT, handle_QUIT);
 #endif
+#ifdef SIGILL
+  signal (SIGILL, handle_ILL);
+#endif
 #ifdef SIGEMT
   signal (SIGEMT, handle_EMT);
 #endif
+#ifdef SIGFPE
+  signal (SIGFPE, handle_FPE);
+#endif
 #ifdef SIGBUS
   signal (SIGBUS, handle_BUS);
+#endif
+#ifdef SIGSEGV
+  signal (SIGSEGV, handle_SEGV);
 #endif
 #ifdef SIGSYS
   signal (SIGSYS, handle_SYS);
@@ -1231,7 +1648,7 @@ main ()
 #ifdef SIGWINCH
   signal (SIGWINCH, handle_WINCH);
 #endif
-#if defined(SIGLOST) && SIGLOST != SIGABRT
+#if defined(SIGLOST) && (!defined(SIGABRT) || SIGLOST != SIGABRT)
   signal (SIGLOST, handle_LOST);
 #endif
 #ifdef SIGUSR1
@@ -1240,7 +1657,7 @@ main ()
 #ifdef SIGUSR2
   signal (SIGUSR2, handle_USR2);
 #endif
-#if defined(SIGPWR) && (!defined (SIGLOST) || SIGPWR != SIGLOST)
+#ifdef SIGPWR
   signal (SIGPWR, handle_PWR);
 #endif
 #if defined (SIGPOLL) && (!defined (SIGIO) || SIGPOLL != SIGIO)
@@ -1313,6 +1730,7 @@ main ()
   signal (62, handle_62);
   signal (63, handle_63);
 #endif /* lynx */
+  signal (SIGTERM, handle_TERM);
 
   x = 0;
 

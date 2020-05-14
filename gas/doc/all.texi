@@ -1,4 +1,5 @@
-@c Copyright (C) 1992-2020 Free Software Foundation, Inc.
+@c Copyright 1992, 1993, 1994, 1996, 1997, 1999, 2000, 2001, 2002
+@c Free Software Foundation, Inc.
 @c This file is part of the documentation for the GAS manual
 
 @c Configuration settings for all-inclusive version of manual
@@ -18,75 +19,47 @@
 @c Object formats of interest
 @c ==========================
 @set AOUT
+@set BOUT
 @set COFF
 @set ELF
 @set SOM
 
 @c CPUs of interest
 @c ================
-@set AARCH64
+@set A29K
 @set ALPHA
 @set ARC
 @set ARM
-@set AVR
-@set Blackfin
-@set BPF
-@set CR16
 @set CRIS
-@set CSKY
 @set D10V
 @set D30V
-@set EPIPHANY
 @set H8/300
+@set H8/500
 @set HPPA
 @set I370
 @set I80386
-@set IA64
+@set I860
+@set I960
 @set IP2K
-@set LM32
-@set M32C
 @set M32R
-@set xc16x
 @set M68HC11
-@set S12Z
 @set M680X0
+@set M880X0
 @set MCORE
-@set METAG
-@set MICROBLAZE
 @set MIPS
 @set MMIX
-@set MS1
-@set MSP430
-@set NIOSII
-@set NDS32
-@set NS32K
-@set OPENRISC
 @set PDP11
 @set PJ
 @set PPC
-@set PRU
-@set RL78
-@set RISCV
-@set RX
-@set S390
-@set SCORE
 @set SH
 @set SPARC
-@set TIC54X
-@set TIC6X
-@set TILEGX
-@set TILEPRO
+@set C54X
 @set V850
 @set VAX
-@set VISIUM
-@set WASM32
-@set XGATE
-@set XSTORMY16
-@set XTENSA
-@set Z80
+@set VXWORKS
 @set Z8000
 
-@c Does this version of the assembler use the difference-table kludge?
+@c Does this version of the assembler use the difference-table kluge?
 @set DIFF-TBL-KLUGE
 
 @c Do all machines described use IEEE floating point?

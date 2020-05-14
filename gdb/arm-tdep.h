@@ -1,11 +1,11 @@
 /* Common target dependent code for GDB on ARM systems.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,30 +14,65 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
-#ifndef ARM_TDEP_H
-#define ARM_TDEP_H
+#include "osabi.h"
 
-/* Forward declarations.  */
-struct regset;
-struct address_space;
-struct get_next_pcs;
-struct arm_get_next_pcs;
-struct gdb_get_next_pcs;
+/* Register numbers of various important registers.  Note that some of
+   these values are "real" register numbers, and correspond to the
+   general registers of the machine, and some are "phony" register
+   numbers which are too large to be actual register numbers as far as
+   the user is concerned but do serve to get the desired values when
+   passed to read_register.  */
 
-/* Set to true if the 32-bit mode is in use.  */
+enum gdb_regnum {
+  ARM_A1_REGNUM = 0,		/* first integer-like argument */
+  ARM_A4_REGNUM = 3,		/* last integer-like argument */
+  ARM_AP_REGNUM = 11,
+  ARM_SP_REGNUM = 13,		/* Contains address of top of stack */
+  ARM_LR_REGNUM = 14,		/* address to return to from a function call */
+  ARM_PC_REGNUM = 15,		/* Contains program counter */
+  ARM_F0_REGNUM = 16,		/* first floating point register */
+  ARM_F3_REGNUM = 19,		/* last floating point argument register */
+  ARM_F7_REGNUM = 23, 		/* last floating point register */
+  ARM_FPS_REGNUM = 24,		/* floating point status register */
+  ARM_PS_REGNUM = 25,		/* Contains processor status */
+  ARM_FP_REGNUM = 11,		/* Frame register in ARM code, if used.  */
+  THUMB_FP_REGNUM = 7,		/* Frame register in Thumb code, if used.  */
+  ARM_NUM_ARG_REGS = 4, 
+  ARM_LAST_ARG_REGNUM = ARM_A4_REGNUM,
+  ARM_NUM_FP_ARG_REGS = 4,
+  ARM_LAST_FP_ARG_REGNUM = ARM_F3_REGNUM
+};
 
-extern bool arm_apcs_32;
+/* Used in target-specific code when we need to know the size of the
+   largest type of register we need to handle.  */
+#define ARM_MAX_REGISTER_RAW_SIZE	12
+#define ARM_MAX_REGISTER_VIRTUAL_SIZE	8
 
-#include "gdbarch.h"
-#include "arch/arm.h"
-#include "infrun.h"
+/* Size of integer registers.  */
+#define INT_REGISTER_RAW_SIZE		4
+#define INT_REGISTER_VIRTUAL_SIZE	4
 
-#include <vector>
+/* Say how long FP registers are.  Used for documentation purposes and
+   code readability in this header.  IEEE extended doubles are 80
+   bits.  DWORD aligned they use 96 bits.  */
+#define FP_REGISTER_RAW_SIZE	12
+
+/* GCC doesn't support long doubles (extended IEEE values).  The FP
+   register virtual size is therefore 64 bits.  Used for documentation
+   purposes and code readability in this header.  */
+#define FP_REGISTER_VIRTUAL_SIZE	8
+
+/* Status registers are the same size as general purpose registers.
+   Used for documentation purposes and code readability in this
+   header.  */
+#define STATUS_REGISTER_SIZE	4
 
 /* Number of machine registers.  The only define actually required 
-   is gdbarch_num_regs.  The other definitions are used for documentation
+   is NUM_REGS.  The other definitions are used for documentation
    purposes and code readability.  */
 /* For 26 bit ARM code, a fake copy of the PC is placed in register 25 (PS)
    (and called PS for processor status) so the status bits can be cleared
@@ -48,248 +83,74 @@ extern bool arm_apcs_32;
 #define NUM_GREGS	16	/* Number of general purpose registers.  */
 
 
+/* Instruction condition field values.  */
+#define INST_EQ		0x0
+#define INST_NE		0x1
+#define INST_CS		0x2
+#define INST_CC		0x3
+#define INST_MI		0x4
+#define INST_PL		0x5
+#define INST_VS		0x6
+#define INST_VC		0x7
+#define INST_HI		0x8
+#define INST_LS		0x9
+#define INST_GE		0xa
+#define INST_LT		0xb
+#define INST_GT		0xc
+#define INST_LE		0xd
+#define INST_AL		0xe
+#define INST_NV		0xf
+
+#define FLAG_N		0x80000000
+#define FLAG_Z		0x40000000
+#define FLAG_C		0x20000000
+#define FLAG_V		0x10000000
 
 /* Type of floating-point code in use by inferior.  There are really 3 models
    that are traditionally supported (plus the endianness issue), but gcc can
    only generate 2 of those.  The third is APCS_FLOAT, where arguments to
    functions are passed in floating-point registers.  
 
-   In addition to the traditional models, VFP adds two more. 
-
-   If you update this enum, don't forget to update fp_model_strings in 
-   arm-tdep.c.  */
+   In addition to the traditional models, VFP adds two more.  */
 
 enum arm_float_model
 {
-  ARM_FLOAT_AUTO,	/* Automatic detection.  Do not set in tdep.  */
-  ARM_FLOAT_SOFT_FPA,	/* Traditional soft-float (mixed-endian on LE ARM).  */
-  ARM_FLOAT_FPA,	/* FPA co-processor.  GCC calling convention.  */
-  ARM_FLOAT_SOFT_VFP,	/* Soft-float with pure-endian doubles.  */
-  ARM_FLOAT_VFP,	/* Full VFP calling convention.  */
-  ARM_FLOAT_LAST	/* Keep at end.  */
-};
-
-/* ABI used by the inferior.  */
-enum arm_abi_kind
-{
-  ARM_ABI_AUTO,
-  ARM_ABI_APCS,
-  ARM_ABI_AAPCS,
-  ARM_ABI_LAST
-};
-
-/* Convention for returning structures.  */
-
-enum struct_return
-{
-  pcc_struct_return,		/* Return "short" structures in memory.  */
-  reg_struct_return		/* Return "short" structures in registers.  */
+  ARM_FLOAT_SOFT,
+  ARM_FLOAT_FPA,
+  ARM_FLOAT_SOFT_VFP,
+  ARM_FLOAT_VFP
 };
 
 /* Target-dependent structure in gdbarch.  */
 struct gdbarch_tdep
 {
-  /* The ABI for this architecture.  It should never be set to
-     ARM_ABI_AUTO.  */
-  enum arm_abi_kind arm_abi;
+  enum gdb_osabi osabi;		/* OS/ABI of inferior.  */
 
   enum arm_float_model fp_model; /* Floating point calling conventions.  */
 
-  bool have_fpa_registers;	/* Does the target report the FPA registers?  */
-  bool have_wmmx_registers;	/* Does the target report the WMMX registers?  */
-  /* The number of VFP registers reported by the target.  It is zero
-     if VFP registers are not supported.  */
-  int vfp_register_count;
-  bool have_vfp_pseudos;	/* Are we synthesizing the single precision
-				   VFP registers?  */
-  bool have_neon_pseudos;	/* Are we synthesizing the quad precision
-				   NEON registers?  Requires
-				   have_vfp_pseudos.  */
-  bool have_neon;		/* Do we have a NEON unit?  */
-
-  bool is_m;			/* Does the target follow the "M" profile.  */
   CORE_ADDR lowest_pc;		/* Lowest address at which instructions 
 				   will appear.  */
 
-  const gdb_byte *arm_breakpoint;	/* Breakpoint pattern for an ARM insn.  */
+  const char *arm_breakpoint;	/* Breakpoint pattern for an ARM insn.  */
   int arm_breakpoint_size;	/* And its size.  */
-  const gdb_byte *thumb_breakpoint;	/* Breakpoint pattern for a Thumb insn.  */
+  const char *thumb_breakpoint;	/* Breakpoint pattern for an ARM insn.  */
   int thumb_breakpoint_size;	/* And its size.  */
 
-  /* If the Thumb breakpoint is an undefined instruction (which is
-     affected by IT blocks) rather than a BKPT instruction (which is
-     not), then we need a 32-bit Thumb breakpoint to preserve the
-     instruction count in IT blocks.  */
-  const gdb_byte *thumb2_breakpoint;
-  int thumb2_breakpoint_size;
-
-  int jb_pc;			/* Offset to PC value in jump buffer.
+  int jb_pc;			/* Offset to PC value in jump buffer. 
 				   If this is negative, longjmp support
 				   will be disabled.  */
   size_t jb_elt_size;		/* And the size of each entry in the buf.  */
-
-  /* Convention for returning structures.  */
-  enum struct_return struct_return;
-
-  /* ISA-specific data types.  */
-  struct type *arm_ext_type;
-  struct type *neon_double_type;
-  struct type *neon_quad_type;
-
-   /* syscall record.  */
-  int (*arm_syscall_record) (struct regcache *regcache, unsigned long svc_number);
 };
 
-/* Structures used for displaced stepping.  */
+#ifndef LOWEST_PC
+#define LOWEST_PC (gdbarch_tdep (current_gdbarch)->lowest_pc)
+#endif
 
-/* The maximum number of temporaries available for displaced instructions.  */
-#define DISPLACED_TEMPS			16
-/* The maximum number of modified instructions generated for one single-stepped
-   instruction, including the breakpoint (usually at the end of the instruction
-   sequence) and any scratch words, etc.  */
-#define ARM_DISPLACED_MODIFIED_INSNS	8
+/* Prototypes for internal interfaces needed by more than one MD file.  */
+int arm_pc_is_thumb_dummy (CORE_ADDR);
 
-struct arm_displaced_step_closure : public displaced_step_closure
-{
-  ULONGEST tmp[DISPLACED_TEMPS];
-  int rd;
-  int wrote_to_pc;
-  union
-  {
-    struct
-    {
-      int xfersize;
-      int rn;			   /* Writeback register.  */
-      unsigned int immed : 1;      /* Offset is immediate.  */
-      unsigned int writeback : 1;  /* Perform base-register writeback.  */
-      unsigned int restore_r4 : 1; /* Used r4 as scratch.  */
-    } ldst;
+int arm_pc_is_thumb (CORE_ADDR);
 
-    struct
-    {
-      unsigned long dest;
-      unsigned int link : 1;
-      unsigned int exchange : 1;
-      unsigned int cond : 4;
-    } branch;
+CORE_ADDR thumb_get_next_pc (CORE_ADDR);
 
-    struct
-    {
-      unsigned int regmask;
-      int rn;
-      CORE_ADDR xfer_addr;
-      unsigned int load : 1;
-      unsigned int user : 1;
-      unsigned int increment : 1;
-      unsigned int before : 1;
-      unsigned int writeback : 1;
-      unsigned int cond : 4;
-    } block;
-
-    struct
-    {
-      unsigned int immed : 1;
-    } preload;
-
-    struct
-    {
-      /* If non-NULL, override generic SVC handling (e.g. for a particular
-         OS).  */
-      int (*copy_svc_os) (struct gdbarch *gdbarch, struct regcache *regs,
-			  arm_displaced_step_closure *dsc);
-    } svc;
-  } u;
-
-  /* The size of original instruction, 2 or 4.  */
-  unsigned int insn_size;
-  /* True if the original insn (and thus all replacement insns) are Thumb
-     instead of ARM.   */
-  unsigned int is_thumb;
-
-  /* The slots in the array is used in this way below,
-     - ARM instruction occupies one slot,
-     - Thumb 16 bit instruction occupies one slot,
-     - Thumb 32-bit instruction occupies *two* slots, one part for each.  */
-  unsigned long modinsn[ARM_DISPLACED_MODIFIED_INSNS];
-  int numinsns;
-  CORE_ADDR insn_addr;
-  CORE_ADDR scratch_base;
-  void (*cleanup) (struct gdbarch *, struct regcache *,
-		   arm_displaced_step_closure *);
-};
-
-/* Values for the WRITE_PC argument to displaced_write_reg.  If the register
-   write may write to the PC, specifies the way the CPSR T bit, etc. is
-   modified by the instruction.  */
-
-enum pc_write_style
-{
-  BRANCH_WRITE_PC,
-  BX_WRITE_PC,
-  LOAD_WRITE_PC,
-  ALU_WRITE_PC,
-  CANNOT_WRITE_PC
-};
-
-extern void
-  arm_process_displaced_insn (struct gdbarch *gdbarch, CORE_ADDR from,
-			      CORE_ADDR to, struct regcache *regs,
-			      arm_displaced_step_closure *dsc);
-extern void
-  arm_displaced_init_closure (struct gdbarch *gdbarch, CORE_ADDR from,
-			      CORE_ADDR to, arm_displaced_step_closure *dsc);
-extern ULONGEST
-  displaced_read_reg (struct regcache *regs, arm_displaced_step_closure *dsc,
-		      int regno);
-extern void
-  displaced_write_reg (struct regcache *regs,
-		       arm_displaced_step_closure *dsc, int regno,
-		       ULONGEST val, enum pc_write_style write_pc);
-
-CORE_ADDR arm_skip_stub (struct frame_info *, CORE_ADDR);
-
-ULONGEST arm_get_next_pcs_read_memory_unsigned_integer (CORE_ADDR memaddr,
-							int len,
-							int byte_order);
-
-CORE_ADDR arm_get_next_pcs_addr_bits_remove (struct arm_get_next_pcs *self,
-					     CORE_ADDR val);
-
-int arm_get_next_pcs_is_thumb (struct arm_get_next_pcs *self);
-
-std::vector<CORE_ADDR> arm_software_single_step (struct regcache *);
-int arm_is_thumb (struct regcache *regcache);
-int arm_frame_is_thumb (struct frame_info *frame);
-
-extern void arm_displaced_step_fixup (struct gdbarch *,
-				      struct displaced_step_closure *,
-				      CORE_ADDR, CORE_ADDR, struct regcache *);
-
-/* Return the bit mask in ARM_PS_REGNUM that indicates Thumb mode.  */
-extern int arm_psr_thumb_bit (struct gdbarch *);
-
-/* Is the instruction at the given memory address a Thumb or ARM
-   instruction?  */
-extern int arm_pc_is_thumb (struct gdbarch *, CORE_ADDR);
-
-extern int arm_process_record (struct gdbarch *gdbarch, 
-                               struct regcache *regcache, CORE_ADDR addr);
-/* Functions exported from arm-bsd-tdep.h.  */
-
-/* Return the appropriate register set for the core section identified
-   by SECT_NAME and SECT_SIZE.  */
-
-extern void
-  armbsd_iterate_over_regset_sections (struct gdbarch *gdbarch,
-				       iterate_over_regset_sections_cb *cb,
-				       void *cb_data,
-				       const struct regcache *regcache);
-
-/* Get the correct Arm target description with given FP hardware type.  */
-const target_desc *arm_read_description (arm_fp_type fp_type);
-
-/* Get the correct Arm M-Profile target description with given hardware
-   type.  */
-const target_desc *arm_read_mprofile_description (arm_m_profile_type m_type);
-
-#endif /* arm-tdep.h */
+CORE_ADDR arm_get_next_pc (CORE_ADDR);

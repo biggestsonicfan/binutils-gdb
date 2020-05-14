@@ -1,11 +1,12 @@
 /* Annotation routines for GDB.
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright 1986, 1989, 1990, 1991, 1992, 1994, 1998, 1999, 2000
+   Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,14 +15,16 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
-
-#ifndef ANNOTATE_H
-#define ANNOTATE_H
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "symtab.h"
 #include "gdbtypes.h"
 
+extern void breakpoints_changed (void);
+
+extern void annotate_ignore_count_change (void);
 extern void annotate_breakpoint (int);
 extern void annotate_catchpoint (int);
 extern void annotate_watchpoint (int);
@@ -42,10 +45,6 @@ extern void annotate_record (void);
 extern void annotate_breakpoints_table_end (void);
 
 extern void annotate_frames_invalid (void);
-extern void annotate_new_thread (void);
-extern void annotate_thread_changed (void);
-
-extern void annotate_display_prompt (void);
 
 struct type;
 
@@ -77,26 +76,9 @@ extern void annotate_arg_name_end (void);
 extern void annotate_arg_value (struct type *);
 extern void annotate_arg_end (void);
 
-/* Wrap calls to annotate_arg_begin and annotate_arg_end in an RAII
-   class. */
-struct annotate_arg_emitter
-{
-  annotate_arg_emitter () { annotate_arg_begin (); }
-  ~annotate_arg_emitter () { annotate_arg_end (); }
+extern void annotate_source (char *, int, int, int, CORE_ADDR);
 
-  DISABLE_COPY_AND_ASSIGN (annotate_arg_emitter);
-};
-
-/* If annotations are turned on then print annotation describing the full
-   name of the source file S and the line number LINE and its corresponding
-   character position.
-
-   MID_STATEMENT is nonzero if the PC is not at the beginning of that
-   line.  */
-extern void annotate_source_line (struct symtab *s, int line,
-				  int mid_statement, CORE_ADDR pc);
-
-extern void annotate_frame_begin (int, struct gdbarch *, CORE_ADDR);
+extern void annotate_frame_begin (int, CORE_ADDR);
 extern void annotate_function_call (void);
 extern void annotate_signal_handler_caller (void);
 extern void annotate_frame_address (void);
@@ -117,7 +99,8 @@ extern void annotate_elt_rep_end (void);
 extern void annotate_elt (void);
 extern void annotate_array_section_end (void);
 
-extern void (*deprecated_annotate_signalled_hook) (void);
-extern void (*deprecated_annotate_signal_hook) (void);
-
-#endif /* ANNOTATE_H */
+extern void (*annotate_starting_hook) (void);
+extern void (*annotate_stopped_hook) (void);
+extern void (*annotate_signalled_hook) (void);
+extern void (*annotate_signal_hook) (void);
+extern void (*annotate_exited_hook) (void);

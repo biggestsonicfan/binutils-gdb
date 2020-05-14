@@ -1,7 +1,6 @@
 ; sCC
 
  .text
- .syntax no_register_prefix
 start:
  scc r1
  shs r0 ; same as scc

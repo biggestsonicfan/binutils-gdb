@@ -3,8 +3,7 @@
 
 /*
 
-@deftypefn Supplemental int memcmp (const void *@var{x}, const void *@var{y}, @
-  size_t @var{count})
+@deftypefn Supplemental int memcmp (const void *@var{x}, const void *@var{y}, size_t @var{count})
 
 Compares the first @var{count} bytes of two areas of memory.  Returns
 zero if they are the same, a value less than zero if @var{x} is
@@ -17,10 +16,15 @@ as if comparing unsigned char arrays.
 */
 
 #include <ansidecl.h>
+#ifdef __STDC__
 #include <stddef.h>
+#else
+#define size_t unsigned long
+#endif
 
 int
-memcmp (const PTR str1, const PTR str2, size_t count)
+DEFUN(memcmp, (str1, str2, count),
+      const PTR str1 AND const PTR str2 AND size_t count)
 {
   register const unsigned char *s1 = (const unsigned char*)str1;
   register const unsigned char *s2 = (const unsigned char*)str2;

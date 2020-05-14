@@ -1,11 +1,12 @@
 /* Include file for stabs debugging format support functions.
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995,
+   1996, 1997, 1999, 2000 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,44 +15,21 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
-
-#ifndef STABSREAD_H
-#define STABSREAD_H
-
-struct objfile;
-struct legacy_psymtab;
-enum language;
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 /* Definitions, prototypes, etc for stabs debugging format support
-   functions.  */
+   functions.
 
-#define HASHSIZE 127		/* Size of things hashed via
-				   hashname().  */
+   Variables declared in this file can be defined by #define-ing
+   the name EXTERN to null.  It is used to declare variables that
+   are normally extern, but which get defined in a single module
+   using this technique.  */
 
-/* Compute a small integer hash code for the given name.  */
-
-extern int hashname (const char *name);
-
-/* Count symbols as they are processed, for error messages.  */
-
-extern unsigned int symnum;
-
-#define next_symbol_text(objfile) (*next_symbol_text_func)(objfile)
-
-/* Function to invoke get the next symbol.  Return the symbol name.  */
-
-extern const char *(*next_symbol_text_func) (struct objfile *);
-
-/* Global variable which, when set, indicates that we are processing a
-   .o file compiled with gcc */
-
-extern unsigned char processing_gcc_compilation;
-
-/* Nonzero if within a function (so symbols should be local, if
-   nothing says specifically).  */
-
-extern int within_function;
+#ifndef EXTERN
+#define	EXTERN extern
+#endif
 
 /* Hash table of global symbols whose values are not known yet.
    They are chained thru the SYMBOL_VALUE_CHAIN, since we don't
@@ -61,9 +39,9 @@ extern int within_function;
    it refers to a FORTRAN common block rather than the usual meaning, and
    the such LOC_BLOCK symbols use their fields in nonstandard ways.  */
 
-extern struct symbol *global_sym_chain[HASHSIZE];
+EXTERN struct symbol *global_sym_chain[HASHSIZE];
 
-extern void common_block_start (const char *, struct objfile *);
+extern void common_block_start (char *, struct objfile *);
 extern void common_block_end (struct objfile *);
 
 /* Kludge for xcoffread.c */
@@ -75,14 +53,14 @@ struct pending_stabs
     char *stab[1];
   };
 
-extern struct pending_stabs *global_stabs;
+EXTERN struct pending_stabs *global_stabs;
 
 /* The type code that process_one_symbol saw on its previous invocation.
-   Used to detect pairs of N_SO symbols.  */
+   Used to detect pairs of N_SO symbols. */
 
-extern int previous_stab_code;
+EXTERN int previous_stab_code;
 
-/* Support for Sun changes to dbx symbol format.  */
+/* Support for Sun changes to dbx symbol format */
 
 /* For each identified header file, we have a table of types defined
    in that header file.
@@ -109,9 +87,8 @@ struct header_file
 
     char *name;
 
-    /* Numeric code distinguishing instances of one header file that
-       produced different results when included.  It comes from the
-       N_BINCL or N_EXCL.  */
+    /* Numeric code distinguishing instances of one header file that produced
+       different results when included.  It comes from the N_BINCL or N_EXCL. */
 
     int instance;
 
@@ -125,13 +102,13 @@ struct header_file
 
   };
 
-/* The table of header_files of this OBJFILE.  */
+/* The table of header_files of this OBJFILE. */
 #define HEADER_FILES(OBJFILE) (DBX_SYMFILE_INFO (OBJFILE)->header_files)
 
-/* The actual length of HEADER_FILES.  */
+/* The actual length of HEADER_FILES. */
 #define N_HEADER_FILES(OBJFILE) (DBX_SYMFILE_INFO (OBJFILE)->n_header_files)
 
-/* The allocated lengh of HEADER_FILES.  */
+/* The allocated lengh of HEADER_FILES. */
 #define N_ALLOCATED_HEADER_FILES(OBJFILE) \
   (DBX_SYMFILE_INFO (OBJFILE)->n_allocated_header_files)
 
@@ -145,17 +122,26 @@ struct header_file
    and not to any header file.  FILENUM != 1 is interpreted by looking it up
    in the following table, which contains indices in header_files.  */
 
-extern int *this_object_header_files;
+EXTERN int *this_object_header_files;
 
-extern int n_this_object_header_files;
+EXTERN int n_this_object_header_files;
 
-extern int n_allocated_this_object_header_files;
+EXTERN int n_allocated_this_object_header_files;
 
-extern void cleanup_undefined_stabs_types (struct objfile *);
+extern struct complaint unknown_symtype_complaint;
+extern struct complaint unknown_symchar_complaint;
+
+extern struct type *read_type (char **, struct objfile *);
+
+extern void cleanup_undefined_types (void);
+
+extern struct type **dbx_lookup_type (int[2]);
 
 extern long read_number (char **, int);
 
-extern struct symbol *define_symbol (CORE_ADDR, const char *, int, int,
+extern void add_undefined_type (struct type *);
+
+extern struct symbol *define_symbol (CORE_ADDR, char *, int, int,
 				     struct objfile *);
 
 extern void stabsread_init (void);
@@ -168,48 +154,73 @@ extern void end_stabs (void);
 
 extern void finish_global_stabs (struct objfile *objfile);
 
+#if 0 /* OBSOLETE OS9K */
+// OBSOLETE EXTERN int os9k_stabs;
+#endif /* OBSOLETE OS9K */
+
+/* COFF files can have multiple .stab sections, if they are linked
+   using --split-by-reloc.  This linked list is used to pass the
+   information into the functions in dbxread.c.  */
+struct stab_section_list
+  {
+    /* Next in list.  */
+    struct stab_section_list *next;
+
+    /* Stab section.  */
+    asection *section;
+  };
+
 /* Functions exported by dbxread.c.  These are not in stabsread.c because
    they are only used by some stabs readers.  */
 
-extern legacy_psymtab *dbx_end_psymtab
-  (struct objfile *objfile, legacy_psymtab *pst,
-   const char **include_list, int num_includes,
-   int capping_symbol_offset, CORE_ADDR capping_text,
-   legacy_psymtab **dependency_list, int number_dependencies,
-   int textlow_not_set);
+extern struct partial_symtab *end_psymtab (struct partial_symtab *pst,
+					   char **include_list,
+					   int num_includes,
+					   int capping_symbol_offset,
+					   CORE_ADDR capping_text,
+					   struct partial_symtab
+					   **dependency_list,
+					   int number_dependencies,
+					   int textlow_not_set);
 
-extern void process_one_symbol (int, int, CORE_ADDR, const char *,
-				const section_offsets &,
-				struct objfile *, enum language);
+extern void process_one_symbol (int, int, CORE_ADDR, char *,
+				struct section_offsets *, struct objfile *);
 
 extern void elfstab_build_psymtabs (struct objfile *objfile,
-				    asection *stabsect,
+				    int mainline,
+				    file_ptr staboff, unsigned int stabsize,
 				    file_ptr stabstroffset,
 				    unsigned int stabstrsize);
 
 extern void coffstab_build_psymtabs
   (struct objfile *objfile,
+   int mainline,
    CORE_ADDR textaddr, unsigned int textsize,
-   const std::vector<asection *> &stabs,
+   struct stab_section_list *stabs,
    file_ptr stabstroffset, unsigned int stabstrsize);
 
-extern void stabsect_build_psymtabs (struct objfile *objfile, char *stab_name,
-				     char *stabstr_name, char *text_name);
+extern void stabsect_build_psymtabs
+  (struct objfile *objfile,
+   int mainline, char *stab_name, char *stabstr_name, char *text_name);
 
-extern int symbol_reference_defined (const char **);
+extern void elfstab_offset_sections (struct objfile *,
+				     struct partial_symtab *);
 
-extern void ref_add (int, struct symbol *, const char *, CORE_ADDR);
+extern void process_later
+  (struct symbol *, char *,
+   int (*f) (struct objfile *, struct symbol *, char *));
+
+extern int symbol_reference_defined (char **);
+
+extern void ref_add (int, struct symbol *, char *, CORE_ADDR);
 
 extern struct symbol *ref_search (int);
+
+extern int resolve_cfront_continuation
+  (struct objfile *objfile, struct symbol *sym, char *p);
 
 extern void free_header_files (void);
 
 extern void init_header_files (void);
 
-/* Scan through all of the global symbols defined in the object file,
-   assigning values to the debugging symbols that need to be assigned
-   to.  Get these symbols from the minimal symbol table.  */
-
-extern void scan_file_globals (struct objfile *objfile);
-
-#endif /* STABSREAD_H */
+#undef EXTERN

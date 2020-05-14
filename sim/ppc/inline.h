@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -316,21 +317,21 @@
 #if defined(_INLINE_C_) && !defined(_SEMANTICS_C_) && (SEMANTICS_INLINE & INCLUDE_MODULE)
 # if (SEMANTICS_INLINE & INLINE_MODULE)
 #  define PSIM_INLINE_SEMANTICS(TYPE) static INLINE TYPE UNUSED
-#  define PSIM_EXTERN_SEMANTICS(TYPE) static TYPE UNUSED
+#  define PSIM_EXTERN_SEMANTICS(TYPE) static TYPE UNUSED REGPARM
 #else
-#  define PSIM_INLINE_SEMANTICS(TYPE) static TYPE UNUSED
-#  define PSIM_EXTERN_SEMANTICS(TYPE) static TYPE UNUSED
+#  define PSIM_INLINE_SEMANTICS(TYPE) static TYPE UNUSED REGPARM
+#  define PSIM_EXTERN_SEMANTICS(TYPE) static TYPE UNUSED REGPARM
 #endif
 #else
-# define PSIM_INLINE_SEMANTICS(TYPE) TYPE
-# define PSIM_EXTERN_SEMANTICS(TYPE) TYPE
+# define PSIM_INLINE_SEMANTICS(TYPE) TYPE REGPARM
+# define PSIM_EXTERN_SEMANTICS(TYPE) TYPE REGPARM
 #endif
 
 #if 0 /* this isn't used */
 #if (SEMANTICS_INLINE & PSIM_INLINE_LOCALS)
 # define STATIC_INLINE_SEMANTICS(TYPE) static INLINE TYPE
 #else
-# define STATIC_INLINE_SEMANTICS(TYPE) static TYPE
+# define STATIC_INLINE_SEMANTICS(TYPE) static TYPE REGPARM
 #endif
 #endif
 
@@ -340,21 +341,21 @@
 #if defined(_INLINE_C_) && !defined(_IDECODE_C_) && (IDECODE_INLINE & INCLUDE_MODULE)
 # if (IDECODE_INLINE & INLINE_MODULE)
 #  define PSIM_INLINE_IDECODE(TYPE) static INLINE TYPE UNUSED
-#  define EXTERN_IDECODE(TYPE) static TYPE UNUSED
+#  define EXTERN_IDECODE(TYPE) static TYPE UNUSED REGPARM
 #else
-#  define PSIM_INLINE_IDECODE(TYPE) static TYPE UNUSED
-#  define EXTERN_IDECODE(TYPE) static TYPE UNUSED
+#  define PSIM_INLINE_IDECODE(TYPE) static TYPE UNUSED REGPARM
+#  define EXTERN_IDECODE(TYPE) static TYPE UNUSED REGPARM
 #endif
 #else
-# define PSIM_INLINE_IDECODE(TYPE) TYPE
-# define EXTERN_IDECODE(TYPE) TYPE
+# define PSIM_INLINE_IDECODE(TYPE) TYPE REGPARM
+# define EXTERN_IDECODE(TYPE) TYPE REGPARM
 #endif
 
 #if 0 /* this isn't used */
 #if (IDECODE_INLINE & PSIM_INLINE_LOCALS)
 # define STATIC_INLINE_IDECODE(TYPE) static INLINE TYPE
 #else
-# define STATIC_INLINE_IDECODE(TYPE) static TYPE
+# define STATIC_INLINE_IDECODE(TYPE) static TYPE REGPARM
 #endif
 #endif
 
@@ -364,21 +365,21 @@
 #if defined(_INLINE_C_) && !defined(_ICACHE_C_) && (ICACHE_INLINE & INCLUDE_MODULE)
 # if (ICACHE_INLINE & INLINE_MODULE)
 #  define PSIM_INLINE_ICACHE(TYPE) static INLINE TYPE UNUSED
-#  define EXTERN_ICACHE(TYPE) static TYPE UNUSED
+#  define EXTERN_ICACHE(TYPE) static TYPE UNUSED REGPARM
 #else
-#  define PSIM_INLINE_ICACHE(TYPE) static TYPE UNUSED
-#  define EXTERN_ICACHE(TYPE) static TYPE UNUSED
+#  define PSIM_INLINE_ICACHE(TYPE) static TYPE UNUSED REGPARM
+#  define EXTERN_ICACHE(TYPE) static TYPE UNUSED REGPARM
 #endif
 #else
-# define PSIM_INLINE_ICACHE(TYPE) TYPE
-# define EXTERN_ICACHE(TYPE) TYPE
+# define PSIM_INLINE_ICACHE(TYPE) TYPE REGPARM
+# define EXTERN_ICACHE(TYPE) TYPE REGPARM
 #endif
 
 #if 0 /* this isn't used */
 #if (ICACHE_INLINE & PSIM_INLINE_LOCALS)
 # define STATIC_INLINE_ICACHE(TYPE) static INLINE TYPE
 #else
-# define STATIC_INLINE_ICACHE(TYPE) static TYPE
+# define STATIC_INLINE_ICACHE(TYPE) static TYPE REGPARM
 #endif
 #endif
 

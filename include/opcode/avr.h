@@ -1,11 +1,11 @@
 /* Opcode table for the Atmel AVR micro controllers.
 
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000 Free Software Foundation, Inc.
    Contributed by Denis Chertykov <denisc@overta.ru>
    
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,67 +15,32 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#define AVR_ISA_1200  0x0001 /* In the beginning there was ...  */
+#define AVR_ISA_1200  0x0001 /* in the beginning there was ... */
 #define AVR_ISA_LPM   0x0002 /* device has LPM */
 #define AVR_ISA_LPMX  0x0004 /* device has LPM Rd,Z[+] */
 #define AVR_ISA_SRAM  0x0008 /* device has SRAM (LD, ST, PUSH, POP, ...) */
-#define AVR_ISA_TINY  0x0010 /* device has Tiny core specific encodings */
 #define AVR_ISA_MEGA  0x0020 /* device has >8K program memory (JMP and CALL
 				supported, no 8K wrap on RJMP and RCALL) */
-#define AVR_ISA_MUL   0x0040 /* device has new core (MUL, FMUL, ...) */
+#define AVR_ISA_MUL   0x0040 /* device has new core (MUL, MOVW, ...) */
 #define AVR_ISA_ELPM  0x0080 /* device has >64K program memory (ELPM) */
 #define AVR_ISA_ELPMX 0x0100 /* device has ELPM Rd,Z[+] */
 #define AVR_ISA_SPM   0x0200 /* device can program itself */
 #define AVR_ISA_BRK   0x0400 /* device has BREAK (on-chip debug) */
 #define AVR_ISA_EIND  0x0800 /* device has >128K program memory (none yet) */
-#define AVR_ISA_MOVW  0x1000 /* device has MOVW */
-#define AVR_ISA_SPMX  0x2000 /* device has SPM Z[+] */
-#define AVR_ISA_DES   0x4000 /* device has DES */
-#define AVR_ISA_RMW   0x8000 /* device has RMW instructions XCH,LAC,LAS,LAT */
 
 #define AVR_ISA_TINY1 (AVR_ISA_1200 | AVR_ISA_LPM)
-#define AVR_ISA_2xxx  (AVR_ISA_TINY1 | AVR_ISA_SRAM)
-#define AVR_ISA_2xxxa (AVR_ISA_1200 | AVR_ISA_SRAM)
-/* For the attiny26 which is missing LPM Rd,Z+.  */
-#define AVR_ISA_2xxe  (AVR_ISA_2xxx | AVR_ISA_LPMX)
-#define AVR_ISA_RF401 (AVR_ISA_2xxx | AVR_ISA_MOVW | AVR_ISA_LPMX)
-#define AVR_ISA_TINY2 (AVR_ISA_2xxx | AVR_ISA_MOVW | AVR_ISA_LPMX | \
-                       AVR_ISA_SPM  | AVR_ISA_BRK)
-#define AVR_ISA_M603  (AVR_ISA_2xxx | AVR_ISA_MEGA)
-#define AVR_ISA_M103  (AVR_ISA_M603 | AVR_ISA_ELPM)
-#define AVR_ISA_M8    (AVR_ISA_2xxx | AVR_ISA_MUL | AVR_ISA_MOVW | \
-                       AVR_ISA_LPMX | AVR_ISA_SPM)
-#define AVR_ISA_PWMx  (AVR_ISA_M8   | AVR_ISA_BRK)
-#define AVR_ISA_M161  (AVR_ISA_M603 | AVR_ISA_MUL | AVR_ISA_MOVW | \
-                       AVR_ISA_LPMX | AVR_ISA_SPM)
-#define AVR_ISA_94K   (AVR_ISA_M603 | AVR_ISA_MUL | AVR_ISA_MOVW | AVR_ISA_LPMX)
-#define AVR_ISA_M323  (AVR_ISA_M161 | AVR_ISA_BRK)
-#define AVR_ISA_M128  (AVR_ISA_M323 | AVR_ISA_ELPM | AVR_ISA_ELPMX)
-#define AVR_ISA_M256  (AVR_ISA_M128 | AVR_ISA_EIND)
-#define AVR_ISA_XMEGA (AVR_ISA_M256 | AVR_ISA_SPMX | AVR_ISA_DES)
-#define AVR_ISA_XMEGAU (AVR_ISA_XMEGA | AVR_ISA_RMW)
+#define AVR_ISA_2xxx (AVR_ISA_TINY1 | AVR_ISA_SRAM)
+#define AVR_ISA_M8   (AVR_ISA_2xxx | AVR_ISA_MUL | AVR_ISA_LPMX | AVR_ISA_SPM)
+#define AVR_ISA_M603 (AVR_ISA_2xxx | AVR_ISA_MEGA)
+#define AVR_ISA_M103 (AVR_ISA_M603 | AVR_ISA_ELPM)
+#define AVR_ISA_M161 (AVR_ISA_M603 | AVR_ISA_MUL | AVR_ISA_LPMX | AVR_ISA_SPM)
+#define AVR_ISA_94K  (AVR_ISA_M603 | AVR_ISA_MUL | AVR_ISA_LPMX)
+#define AVR_ISA_M323 (AVR_ISA_M161 | AVR_ISA_BRK)
+#define AVR_ISA_M128 (AVR_ISA_M323 | AVR_ISA_ELPM | AVR_ISA_ELPMX)
 
-#define AVR_ISA_AVR1   AVR_ISA_TINY1
-#define AVR_ISA_AVR2   AVR_ISA_2xxx
-#define AVR_ISA_AVR25  AVR_ISA_TINY2
-#define AVR_ISA_AVR3   AVR_ISA_M603
-#define AVR_ISA_AVR31 	AVR_ISA_M103
-#define AVR_ISA_AVR35 	(AVR_ISA_AVR3 | AVR_ISA_MOVW | \
-                        AVR_ISA_LPMX | AVR_ISA_SPM | AVR_ISA_BRK)
-#define AVR_ISA_AVR3_ALL (AVR_ISA_AVR3 | AVR_ISA_AVR31 | AVR_ISA_AVR35)
-#define AVR_ISA_AVR4   AVR_ISA_PWMx
-#define AVR_ISA_AVR5   AVR_ISA_M323
-#define AVR_ISA_AVR51  AVR_ISA_M128
-#define AVR_ISA_AVR6   (AVR_ISA_1200 | AVR_ISA_LPM | AVR_ISA_LPMX | \
-                        AVR_ISA_SRAM | AVR_ISA_MEGA | AVR_ISA_MUL | \
-                        AVR_ISA_ELPM | AVR_ISA_ELPMX | AVR_ISA_SPM | \
-                        AVR_ISA_BRK | AVR_ISA_EIND | AVR_ISA_MOVW)
-
-#define AVR_ISA_AVRTINY (AVR_ISA_1200 | AVR_ISA_BRK | AVR_ISA_SRAM | \
-                         AVR_ISA_TINY)
+#define AVR_ISA_ALL   0xFFFF
 
 #define REGISTER_P(x) ((x) == 'r'		\
 		       || (x) == 'd'		\
@@ -99,7 +64,7 @@
    `ld r,b' or `st b,r' respectively - next opcode entry)?  */
 #define AVR_DISP0_P(x) (((x) & 0xFC07) == 0x8000)
 
-/* Constraint letters:
+/* constraint letters
    r - any register
    d - `ldi' register (r16-r31)
    v - `movw' even register (r0, r2, ..., r28, r30)
@@ -110,18 +75,15 @@
    z - Z pointer register (for [e]lpm Rd,Z[+])
    M - immediate value from 0 to 255
    n - immediate value from 0 to 255 ( n = ~M ). Relocation impossible
-   N - immediate value from 0 to 255. Relocation impossible
    s - immediate value from 0 to 7
    P - Port address value from 0 to 63. (in, out)
    p - Port address value from 0 to 31. (cbi, sbi, sbic, sbis)
    K - immediate value from 0 to 63 (used in `adiw', `sbiw')
    i - immediate value
-   j - 7 bit immediate value from 0x40 to 0xBF (for 16-bit 'lds'/'sts')
    l - signed pc relative offset from -64 to 63
    L - signed pc relative offset from -2048 to 2047
    h - absolute code address (call, jmp)
    S - immediate value from 0 to 7 (S = s << 4)
-   E - immediate value from 0 to 15, shifted left by 4 (des)
    ? - use this opcode entry if no parameters, else use next opcode entry
 
    Order is important - some binary opcodes have more than one name,
@@ -133,6 +95,7 @@
     0x0001...0x00ff    (255) (known to be decoded as `nop' by the old core)
    "100100xxxxxxx011"  (128) 0x9[0-3][0-9a-f][3b]
    "100100xxxxxx1000"   (64) 0x9[0-3][0-9a-f]8
+   "1001001xxxxx01xx"  (128) 0x9[23][0-9a-f][4-7]
    "1001010xxxxx0100"   (32) 0x9[45][0-9a-f]4
    "1001010x001x1001"    (4) 0x9[45][23]9
    "1001010x01xx1001"    (8) 0x9[45][4-7]9
@@ -163,12 +126,12 @@ AVR_INSN (set,  "",    "1001010001101000", 1, AVR_ISA_1200, 0x9468)
 AVR_INSN (sev,  "",    "1001010000111000", 1, AVR_ISA_1200, 0x9438)
 AVR_INSN (sez,  "",    "1001010000011000", 1, AVR_ISA_1200, 0x9418)
 
-/* Same as {cl,se}[chinstvz] above.  */
+   /* Same as {cl,se}[chinstvz] above.  */
 AVR_INSN (bclr, "S",   "100101001SSS1000", 1, AVR_ISA_1200, 0x9488)
 AVR_INSN (bset, "S",   "100101000SSS1000", 1, AVR_ISA_1200, 0x9408)
 
-AVR_INSN (icall,"",    "1001010100001001", 1, AVR_ISA_2xxxa,0x9509)
-AVR_INSN (ijmp, "",    "1001010000001001", 1, AVR_ISA_2xxxa,0x9409)
+AVR_INSN (icall,"",    "1001010100001001", 1, AVR_ISA_2xxx, 0x9509)
+AVR_INSN (ijmp, "",    "1001010000001001", 1, AVR_ISA_2xxx, 0x9409)
 
 AVR_INSN (lpm,  "?",   "1001010111001000", 1, AVR_ISA_TINY1,0x95c8)
 AVR_INSN (lpm,  "r,z", "1001000ddddd010+", 1, AVR_ISA_LPMX, 0x9004)
@@ -181,8 +144,7 @@ AVR_INSN (reti, "",    "1001010100011000", 1, AVR_ISA_1200, 0x9518)
 AVR_INSN (sleep,"",    "1001010110001000", 1, AVR_ISA_1200, 0x9588)
 AVR_INSN (break,"",    "1001010110011000", 1, AVR_ISA_BRK,  0x9598)
 AVR_INSN (wdr,  "",    "1001010110101000", 1, AVR_ISA_1200, 0x95a8)
-AVR_INSN (spm,  "?",   "1001010111101000", 1, AVR_ISA_SPM,  0x95e8)
-AVR_INSN (spm,  "z",   "10010101111+1000", 1, AVR_ISA_SPMX, 0x95e8)
+AVR_INSN (spm,  "",    "1001010111101000", 1, AVR_ISA_SPM,  0x95e8)
 
 AVR_INSN (adc,  "r,r", "000111rdddddrrrr", 1, AVR_ISA_1200, 0x1c00)
 AVR_INSN (add,  "r,r", "000011rdddddrrrr", 1, AVR_ISA_1200, 0x0c00)
@@ -197,7 +159,7 @@ AVR_INSN (or,   "r,r", "001010rdddddrrrr", 1, AVR_ISA_1200, 0x2800)
 AVR_INSN (sbc,  "r,r", "000010rdddddrrrr", 1, AVR_ISA_1200, 0x0800)
 AVR_INSN (sub,  "r,r", "000110rdddddrrrr", 1, AVR_ISA_1200, 0x1800)
 
-/* Shorthand for {eor,add,adc,and} r,r above.  */
+   /* Shorthand for {eor,add,adc,and} r,r above.  */
 AVR_INSN (clr,  "r=r", "001001rdddddrrrr", 1, AVR_ISA_1200, 0x2400)
 AVR_INSN (lsl,  "r=r", "000011rdddddrrrr", 1, AVR_ISA_1200, 0x0c00)
 AVR_INSN (rol,  "r=r", "000111rdddddrrrr", 1, AVR_ISA_1200, 0x1c00)
@@ -252,7 +214,7 @@ AVR_INSN (brts, "l",   "111100lllllll110", 1, AVR_ISA_1200, 0xf006)
 AVR_INSN (brvc, "l",   "111101lllllll011", 1, AVR_ISA_1200, 0xf403)
 AVR_INSN (brvs, "l",   "111100lllllll011", 1, AVR_ISA_1200, 0xf003)
 
-/* Same as br?? above.  */
+   /* Same as br?? above.  */
 AVR_INSN (brbc, "s,l", "111101lllllllsss", 1, AVR_ISA_1200, 0xf400)
 AVR_INSN (brbs, "s,l", "111100lllllllsss", 1, AVR_ISA_1200, 0xf000)
 
@@ -268,46 +230,31 @@ AVR_INSN (dec,  "r",   "1001010rrrrr1010", 1, AVR_ISA_1200, 0x940a)
 AVR_INSN (inc,  "r",   "1001010rrrrr0011", 1, AVR_ISA_1200, 0x9403)
 AVR_INSN (lsr,  "r",   "1001010rrrrr0110", 1, AVR_ISA_1200, 0x9406)
 AVR_INSN (neg,  "r",   "1001010rrrrr0001", 1, AVR_ISA_1200, 0x9401)
-AVR_INSN (pop,  "r",   "1001000rrrrr1111", 1, AVR_ISA_2xxxa,0x900f)
-AVR_INSN (push, "r",   "1001001rrrrr1111", 1, AVR_ISA_2xxxa,0x920f)
+AVR_INSN (pop,  "r",   "1001000rrrrr1111", 1, AVR_ISA_2xxx, 0x900f)
+AVR_INSN (push, "r",   "1001001rrrrr1111", 1, AVR_ISA_2xxx, 0x920f)
 AVR_INSN (ror,  "r",   "1001010rrrrr0111", 1, AVR_ISA_1200, 0x9407)
 AVR_INSN (swap, "r",   "1001010rrrrr0010", 1, AVR_ISA_1200, 0x9402)
 
-/* Atomic memory operations for XMEGA.  List before `sts'.  */
-AVR_INSN (xch,  "z,r",   "1001001rrrrr0100", 1, AVR_ISA_RMW, 0x9204)
-AVR_INSN (las,  "z,r",   "1001001rrrrr0101", 1, AVR_ISA_RMW, 0x9205)
-AVR_INSN (lac,  "z,r",   "1001001rrrrr0110", 1, AVR_ISA_RMW, 0x9206)
-AVR_INSN (lat,  "z,r",   "1001001rrrrr0111", 1, AVR_ISA_RMW, 0x9207)
-
-/* Known to be decoded as `nop' by the old core.  */
-AVR_INSN (movw, "v,v", "00000001ddddrrrr", 1, AVR_ISA_MOVW, 0x0100)
+   /* Known to be decoded as `nop' by the old core.  */
+AVR_INSN (movw, "v,v", "00000001ddddrrrr", 1, AVR_ISA_MUL,  0x0100)
 AVR_INSN (muls, "d,d", "00000010ddddrrrr", 1, AVR_ISA_MUL,  0x0200)
 AVR_INSN (mulsu,"a,a", "000000110ddd0rrr", 1, AVR_ISA_MUL,  0x0300)
 AVR_INSN (fmul, "a,a", "000000110ddd1rrr", 1, AVR_ISA_MUL,  0x0308)
 AVR_INSN (fmuls,"a,a", "000000111ddd0rrr", 1, AVR_ISA_MUL,  0x0380)
 AVR_INSN (fmulsu,"a,a","000000111ddd1rrr", 1, AVR_ISA_MUL,  0x0388)
 
-AVR_INSN (sts, "j,d", "10101kkkddddkkkk", 1, AVR_ISA_TINY, 0xA800)
-AVR_INSN (sts, "i,r", "1001001ddddd0000", 2, AVR_ISA_2xxx, 0x9200)
-AVR_INSN (lds, "d,j", "10100kkkddddkkkk", 1, AVR_ISA_TINY, 0xA000)
-AVR_INSN (lds, "r,i", "1001000ddddd0000", 2, AVR_ISA_2xxx, 0x9000)
+AVR_INSN (sts,  "i,r", "1001001ddddd0000", 2, AVR_ISA_2xxx, 0x9200)
+AVR_INSN (lds,  "r,i", "1001000ddddd0000", 2, AVR_ISA_2xxx, 0x9000)
 
-/* Special case for b+0, `e' must be next entry after `b',
-   b={Y=1,Z=0}, ee={X=11,Y=10,Z=00}, !=1 if -e or e+ or X.  */
+   /* Special case for b+0, `e' must be next entry after `b',
+      b={Y=1,Z=0}, ee={X=11,Y=10,Z=00}, !=1 if -e or e+ or X.  */
 AVR_INSN (ldd,  "r,b", "10o0oo0dddddbooo", 1, AVR_ISA_2xxx, 0x8000)
 AVR_INSN (ld,   "r,e", "100!000dddddee-+", 1, AVR_ISA_1200, 0x8000)
 AVR_INSN (std,  "b,r", "10o0oo1rrrrrbooo", 1, AVR_ISA_2xxx, 0x8200)
 AVR_INSN (st,   "e,r", "100!001rrrrree-+", 1, AVR_ISA_1200, 0x8200)
 
-/* These are for devices that don't exist yet
-   (>128K program memory, PC = EIND:Z).  */
+   /* These are for devices that don't exist yet
+      (>128K program memory, PC = EIND:Z).  */
 AVR_INSN (eicall, "",  "1001010100011001", 1, AVR_ISA_EIND, 0x9519)
 AVR_INSN (eijmp, "",   "1001010000011001", 1, AVR_ISA_EIND, 0x9419)
-
-/* DES instruction for encryption and decryption.  */
-AVR_INSN (des,  "E",   "10010100EEEE1011", 1, AVR_ISA_DES,  0x940B)
-
-/* Operands are evaluated by hand and won't pop new fux-ups.
-   The pseudo-insn is hidden behind NOP so that avr-dis.c don't see it. */
-AVR_INSN (__gcc_isr, "", "0000000000000000", 1, AVR_ISA_1200,  0x0)
 

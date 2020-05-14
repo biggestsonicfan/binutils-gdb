@@ -1,10 +1,10 @@
 /*  This file is part of the program psim.
 
-    Copyright 1994, 1995, 1996, 2003 Andrew Cagney
+    Copyright (C) 1994,1995,1996, Andrew Cagney <cagney@highland.com.au>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -118,8 +119,6 @@ typedef enum {
   insn_mnemonic,
   insn_name,
   insn_comment,
-  insn_field_6,
-  insn_field_7,
   nr_insn_table_fields
 } insn_table_fields;
 
@@ -139,13 +138,6 @@ typedef enum {
   include_flags = insn_flags,
   include_path = insn_name,
 } model_include_fields;
-
-typedef enum {
-  cache_type_def = insn_name,
-  cache_derived_name = insn_comment,
-  cache_name = insn_field_6,
-  cache_expression = insn_field_7,
-} cache_fields;
 
 typedef struct _insn insn;
 struct _insn {
@@ -197,8 +189,7 @@ extern insn_table *load_insn_table
 (const char *file_name,
  decode_table *decode_rules,
  filter *filters,
- table_include *includes,
- cache_table **cache_rules);
+ table_include *includes);
 
 model *models;
 model *last_model;

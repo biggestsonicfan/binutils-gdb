@@ -1,11 +1,11 @@
 /* Basic coff information for the PowerPC
    Based on coff/rs6000.h, coff/i386.h and others.
    
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright 2001 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
    
    This program is distributed in the hope that it will be useful,
@@ -15,8 +15,7 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
    Initial release: Kim Knuttila (krk@cygnus.com)  */
 #define L_LNNO_SIZE 2
@@ -37,6 +36,8 @@
 
 /* extra NT defines */
 #define PPCMAGIC       0760         /* peeked on aa PowerPC Windows NT box */
+#define DOSMAGIC       0x5a4d       /* from arm.h, i386.h */
+#define NT_SIGNATURE   0x00004550   /* from arm.h, i386.h */
 
 /* from winnt.h */
 #define IMAGE_NT_OPTIONAL_HDR_MAGIC        0x10b

@@ -1,21 +1,22 @@
 /* CPU support.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* This file is intended to be included by sim-base.h.
 
@@ -100,15 +101,17 @@ typedef struct {
   PROFILE_DATA profile_data;
 #define CPU_PROFILE_DATA(cpu) (& (cpu)->base.profile_data)
 
+#ifdef SIM_HAVE_MODEL
   /* Machine tables for this cpu.  See sim-model.h.  */
-  const SIM_MACH *mach;
+  const MACH *mach;
 #define CPU_MACH(cpu) ((cpu)->base.mach)
   /* The selected model.  */
-  const SIM_MODEL *model;
+  const MODEL *model;
 #define CPU_MODEL(cpu) ((cpu)->base.model)
   /* Model data (profiling state, etc.).  */
   void *model_data;
 #define CPU_MODEL_DATA(cpu) ((cpu)->base.model_data)
+#endif
 
   /* Routines to fetch/store registers.  */
   CPUREG_FETCH_FN *reg_fetch;

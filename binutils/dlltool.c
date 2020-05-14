@@ -1,11 +1,12 @@
 /* dlltool.c -- tool to generate stuff for PE style DLLs
-   Copyright (C) 1995-2020 Free Software Foundation, Inc.
+   Copyright 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002
+   Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,11 +16,12 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 
-/* This program allows you to build the files necessary to create
+/*
+   This program allows you to build the files necessary to create
    DLLs to run on a system which understands PE format image files.
    (eg, Windows NT)
 
@@ -48,7 +50,7 @@
 
    EXPORTS  ( (  ( <name1> [ = <name2> ] )
                | ( <name1> = <module-name> . <external-name>))
-            [ @ <integer> ] [ NONAME ] [CONSTANT] [DATA] [PRIVATE] ) *
+            [ @ <integer> ] [ NONAME ] [CONSTANT] [DATA] ) *
    Declares name1 as an exported symbol from the
    DLL, with optional ordinal number <integer>.
    Or declares name1 as an alias (forward) of the function <external-name>
@@ -56,10 +58,10 @@
 
    IMPORTS  (  (   <internal-name> =   <module-name> . <integer> )
              | ( [ <internal-name> = ] <module-name> . <external-name> )) *
-   Declares that <external-name> or the exported function whose ordinal number
+   Declares that <external-name> or the exported function whoes ordinal number
    is <integer> is to be imported from the file <module-name>.  If
    <internal-name> is specified then this is the name that the imported
-   function will be refereed to in the body of the DLL.
+   function will be refered to in the body of the DLL.
 
    DESCRIPTION <string>
    Puts <string> into output .exp file in the .rdata section
@@ -193,7 +195,8 @@
 
  # Build the dll with file1.o, file2.o and the export table
 
-   ld -o thedll.dll thedll.exp file1.o file2.o  */
+   ld -o thedll.dll thedll.exp file1.o file2.o
+ */
 
 /* .idata section description
 
@@ -229,50 +232,49 @@
    = Array of { short, asciz } entries, one for each imported function.
    The `short' is the function's ordinal number.
 
-   .idata$7 = dll name (eg: "kernel32.dll"). (.idata$6 for ppc).  */
+   .idata$7 = dll name (eg: "kernel32.dll"). (.idata$6 for ppc)
+*/
 
-#include "sysdep.h"
+/* AIX requires this to be the first thing in the file.  */
+#ifndef __GNUC__
+# ifdef _AIX
+ #pragma alloca
+#endif
+#endif
+
+#define show_allnames 0
+
+#define PAGE_SIZE 4096
+#define PAGE_MASK (-PAGE_SIZE)
 #include "bfd.h"
 #include "libiberty.h"
+#include "bucomm.h"
 #include "getopt.h"
 #include "demangle.h"
 #include "dyn-string.h"
-#include "bucomm.h"
 #include "dlltool.h"
 #include "safe-ctype.h"
-#include "coff-bfd.h"
 
 #include <time.h>
-#include <assert.h>
+#include <sys/stat.h>
+
+#ifdef ANSI_PROTOTYPES
+#include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 
 #ifdef DLLTOOL_ARM
 #include "coff/arm.h"
 #include "coff/internal.h"
 #endif
-#ifdef DLLTOOL_DEFAULT_MX86_64
-#include "coff/x86_64.h"
-#endif
-#ifdef DLLTOOL_DEFAULT_I386
-#include "coff/i386.h"
-#endif
-
-#ifndef COFF_PAGE_SIZE
-#define COFF_PAGE_SIZE ((bfd_vma) 4096)
-#endif
-
-#ifndef PAGE_MASK
-#define PAGE_MASK ((bfd_vma) (- COFF_PAGE_SIZE))
-#endif
-
-/* Get current BFD error message.  */
-#define bfd_get_errmsg() (bfd_errmsg (bfd_get_error ()))
 
 /* Forward references.  */
-static char *look_for_prog (const char *, const char *, int);
-static char *deduce_name (const char *);
+static char *look_for_prog PARAMS ((const char *, const char *, int));
+static char *deduce_name PARAMS ((const char *));
 
 #ifdef DLLTOOL_MCORE_ELF
-static void mcore_elf_cache_filename (const char *);
+static void mcore_elf_cache_filename (char *);
 static void mcore_elf_gen_out_file (void);
 #endif
 
@@ -281,10 +283,10 @@ static void mcore_elf_gen_out_file (void);
 #else /* ! HAVE_SYS_WAIT_H */
 #if ! defined (_WIN32) || defined (__CYGWIN32__)
 #ifndef WIFEXITED
-#define WIFEXITED(w)	(((w) & 0377) == 0)
+#define WIFEXITED(w)	(((w)&0377) == 0)
 #endif
 #ifndef WIFSIGNALED
-#define WIFSIGNALED(w)	(((w) & 0377) != 0177 && ((w) & ~0377) == 0)
+#define WIFSIGNALED(w)	(((w)&0377) != 0177 && ((w)&~0377) == 0)
 #endif
 #ifndef WTERMSIG
 #define WTERMSIG(w)	((w) & 0177)
@@ -308,8 +310,6 @@ static void mcore_elf_gen_out_file (void);
 #endif /* defined (_WIN32) && ! defined (__CYGWIN32__) */
 #endif /* ! HAVE_SYS_WAIT_H */
 
-#define show_allnames 0
-
 /* ifunc and ihead data structures: ttk@cygnus.com 1997
 
    When IMPORT declarations are encountered in a .def file the
@@ -327,99 +327,54 @@ static void mcore_elf_gen_out_file (void);
 
 typedef struct ifunct
 {
-  char *         name;   /* Name of function being imported.  */
-  char *     its_name;	 /* Optional import table symbol name.  */
-  int            ord;    /* Two-byte ordinal value associated with function.  */
+  char          *name;   /* name of function being imported */
+  int            ord;    /* two-byte ordinal value associated with function */
   struct ifunct *next;
 } ifunctype;
 
 typedef struct iheadt
 {
-  char *         dllname;  /* Name of dll file imported from.  */
-  long           nfuncs;   /* Number of functions in list.  */
-  struct ifunct *funchead; /* First function in list.  */
-  struct ifunct *functail; /* Last  function in list.  */
-  struct iheadt *next;     /* Next dll file in list.  */
+  char          *dllname;  /* name of dll file imported from */
+  long           nfuncs;   /* number of functions in list */
+  struct ifunct *funchead; /* first function in list */
+  struct ifunct *functail; /* last  function in list */
+  struct iheadt *next;     /* next dll file in list */
 } iheadtype;
 
 /* Structure containing all import information as defined in .def file
    (qv "ihead structure").  */
 
 static iheadtype *import_list = NULL;
+
 static char *as_name = NULL;
 static char * as_flags = "";
-static char *tmp_prefix;
+
 static int no_idata4;
 static int no_idata5;
 static char *exp_name;
 static char *imp_name;
-static char *delayimp_name;
-static char *identify_imp_name;
-static bfd_boolean identify_strict;
-
-/* Types used to implement a linked list of dllnames associated
-   with the specified import lib. Used by the identify_* code.
-   The head entry is acts as a sentinal node and is always empty
-   (head->dllname is NULL).  */
-typedef struct dll_name_list_node_t
-{
-  char *                        dllname;
-  struct dll_name_list_node_t * next;
-} dll_name_list_node_type;
-
-typedef struct dll_name_list_t
-{
-  dll_name_list_node_type * head;
-  dll_name_list_node_type * tail;
-} dll_name_list_type;
-
-/* Types used to pass data to iterator functions.  */
-typedef struct symname_search_data_t
-{
-  const char * symname;
-  bfd_boolean  found;
-} symname_search_data_type;
-
-typedef struct identify_data_t
-{
-   dll_name_list_type * list;
-   bfd_boolean          ms_style_implib;
-} identify_data_type;
-
-
 static char *head_label;
 static char *imp_name_lab;
 static char *dll_name;
-static int dll_name_set_by_exp_name;
+
 static int add_indirect = 0;
 static int add_underscore = 0;
-static int add_stdcall_underscore = 0;
-/* This variable can hold three different values. The value
-   -1 (default) means that default underscoring should be used,
-   zero means that no underscoring should be done, and one
-   indicates that underscoring should be done.  */
-static int leading_underscore = -1;
 static int dontdeltemps = 0;
 
-/* TRUE if we should export all symbols.  Otherwise, we only export
+/* True if we should export all symbols.  Otherwise, we only export
    symbols listed in .drectve sections or in the def file.  */
-static bfd_boolean export_all_symbols;
+static boolean export_all_symbols;
 
-/* TRUE if we should exclude the symbols in DEFAULT_EXCLUDES when
+/* True if we should exclude the symbols in DEFAULT_EXCLUDES when
    exporting all symbols.  */
-static bfd_boolean do_default_excludes = TRUE;
-
-static bfd_boolean use_nul_prefixed_import_tables = FALSE;
+static boolean do_default_excludes=true;
 
 /* Default symbols to exclude when exporting all the symbols.  */
 static const char *default_excludes = "DllMain@12,DllEntryPoint@0,impure_ptr";
 
-/* TRUE if we should add __imp_<SYMBOL> to import libraries for backward
+/* True if we should add __imp_<SYMBOL> to import libraries for backward
    compatibility to old Cygwin releases.  */
-static bfd_boolean create_compat_implib;
-
-/* TRUE if we have to write PE+ import libraries.  */
-static bfd_boolean create_for_pep;
+static boolean create_compat_implib;
 
 static char *def_file;
 
@@ -428,44 +383,39 @@ extern char * program_name;
 static int machine;
 static int killat;
 static int add_stdcall_alias;
-static const char *ext_prefix_alias;
 static int verbose;
 static FILE *output_def;
 static FILE *base_file;
 
-#ifdef DLLTOOL_DEFAULT_ARM
+#ifdef DLLTOOL_ARM
+#ifdef DLLTOOL_ARM_EPOC
+static const char *mname = "arm-epoc";
+#else
 static const char *mname = "arm";
 #endif
-
-#ifdef DLLTOOL_DEFAULT_ARM_WINCE
-static const char *mname = "arm-wince";
 #endif
 
-#ifdef DLLTOOL_DEFAULT_I386
+#ifdef DLLTOOL_I386
 static const char *mname = "i386";
 #endif
 
-#ifdef DLLTOOL_DEFAULT_MX86_64
-static const char *mname = "i386:x86-64";
-#endif
-
-#ifdef DLLTOOL_DEFAULT_PPC
+#ifdef DLLTOOL_PPC
 static const char *mname = "ppc";
 #endif
 
-#ifdef DLLTOOL_DEFAULT_SH
+#ifdef DLLTOOL_SH
 static const char *mname = "sh";
 #endif
 
-#ifdef DLLTOOL_DEFAULT_MIPS
+#ifdef DLLTOOL_MIPS
 static const char *mname = "mips";
 #endif
 
-#ifdef DLLTOOL_DEFAULT_MCORE
+#ifdef DLLTOOL_MCORE
 static const char * mname = "mcore-le";
 #endif
 
-#ifdef DLLTOOL_DEFAULT_MCORE_ELF
+#ifdef DLLTOOL_MCORE_ELF
 static const char * mname = "mcore-elf";
 static char * mcore_elf_out_file = NULL;
 static char * mcore_elf_linker   = NULL;
@@ -478,45 +428,19 @@ static char * mcore_elf_linker_flags = NULL;
 #define DRECTVE_SECTION_NAME ".drectve"
 #endif
 
-/* What's the right name for this ?  */
-#define PATHMAX 250
+#define PATHMAX 250		/* What's the right name for this ? */
 
-/* External name alias numbering starts here.  */
-#define PREFIX_ALIAS_BASE	20000
+#define TMP_ASM		"dc.s"
+#define TMP_HEAD_S	"dh.s"
+#define TMP_HEAD_O	"dh.o"
+#define TMP_TAIL_S	"dt.s"
+#define TMP_TAIL_O	"dt.o"
+#define TMP_STUB	"ds"
 
-char *tmp_asm_buf;
-char *tmp_head_s_buf;
-char *tmp_head_o_buf;
-char *tmp_tail_s_buf;
-char *tmp_tail_o_buf;
-char *tmp_stub_buf;
-
-#define TMP_ASM		dlltmp (&tmp_asm_buf, "%sc.s")
-#define TMP_HEAD_S	dlltmp (&tmp_head_s_buf, "%sh.s")
-#define TMP_HEAD_O	dlltmp (&tmp_head_o_buf, "%sh.o")
-#define TMP_TAIL_S	dlltmp (&tmp_tail_s_buf, "%st.s")
-#define TMP_TAIL_O	dlltmp (&tmp_tail_o_buf, "%st.o")
-#define TMP_STUB	dlltmp (&tmp_stub_buf, "%ss")
-
-/* This bit of assembly does jmp * ....  */
+/* This bit of assemly does jmp * ....  */
 static const unsigned char i386_jtab[] =
 {
   0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0x90, 0x90
-};
-
-static const unsigned char i386_dljtab[] =
-{
-  0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, /* jmp __imp__function             */
-  0xB8, 0x00, 0x00, 0x00, 0x00,       /* mov eax, offset __imp__function */
-  0xE9, 0x00, 0x00, 0x00, 0x00        /* jmp __tailMerge__dllname        */
-};
-
-static const unsigned char i386_x64_dljtab[] =
-{
-  0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, /* jmp __imp__function             */
-  0x48, 0x8d, 0x05,		      /* leaq rax, (__imp__function) */
-        0x00, 0x00, 0x00, 0x00,
-  0xE9, 0x00, 0x00, 0x00, 0x00        /* jmp __tailMerge__dllname        */
 };
 
 static const unsigned char arm_jtab[] =
@@ -563,11 +487,11 @@ static const unsigned char mcore_le_jtab[] =
   0x00, 0x00, 0x00, 0x00 /* <address>      */
 };
 
-/* This is the glue sequence for PowerPC PE. There is a
-   tocrel16-tocdefn reloc against the first instruction.
-   We also need a IMGLUE reloc against the glue function
-   to restore the toc saved by the third instruction in
-   the glue.  */
+/* This is the glue sequence for PowerPC PE. There is a  */
+/* tocrel16-tocdefn reloc against the first instruction.  */
+/* We also need a IMGLUE reloc against the glue function */
+/* to restore the toc saved by the third instruction in  */
+/* the glue.  */
 static const unsigned char ppc_jtab[] =
 {
   0x00, 0x00, 0x62, 0x81, /* lwz r11,0(r2)               */
@@ -580,63 +504,31 @@ static const unsigned char ppc_jtab[] =
 };
 
 #ifdef DLLTOOL_PPC
-/* The glue instruction, picks up the toc from the stw in
-   the above code: "lwz r2,4(r1)".  */
+/* the glue instruction, picks up the toc from the stw in */
+/* the above code: "lwz r2,4(r1)"                         */
 static bfd_vma ppc_glue_insn = 0x80410004;
 #endif
 
-static const char i386_trampoline[] =
-  "\tpushl %%ecx\n"
-  "\tpushl %%edx\n"
-  "\tpushl %%eax\n"
-  "\tpushl $__DELAY_IMPORT_DESCRIPTOR_%s\n"
-  "\tcall ___delayLoadHelper2@8\n"
-  "\tpopl %%edx\n"
-  "\tpopl %%ecx\n"
-  "\tjmp *%%eax\n";
-
-static const char i386_x64_trampoline[] =
-  "\tpushq %%rcx\n"
-  "\tpushq %%rdx\n"
-  "\tpushq %%r8\n"
-  "\tpushq %%r9\n"
-  "\tsubq  $40, %%rsp\n"
-  "\tmovq  %%rax, %%rdx\n"
-  "\tleaq  __DELAY_IMPORT_DESCRIPTOR_%s(%%rip), %%rcx\n"
-  "\tcall __delayLoadHelper2\n"
-  "\taddq  $40, %%rsp\n"
-  "\tpopq %%r9\n"
-  "\tpopq %%r8\n"
-  "\tpopq %%rdx\n"
-  "\tpopq %%rcx\n"
-  "\tjmp *%%rax\n";
-
 struct mac
-{
-  const char *type;
-  const char *how_byte;
-  const char *how_short;
-  const char *how_long;
-  const char *how_asciz;
-  const char *how_comment;
-  const char *how_jump;
-  const char *how_global;
-  const char *how_space;
-  const char *how_align_short;
-  const char *how_align_long;
-  const char *how_default_as_switches;
-  const char *how_bfd_target;
-  enum bfd_architecture how_bfd_arch;
-  const unsigned char *how_jtab;
-  int how_jtab_size; /* Size of the jtab entry.  */
-  int how_jtab_roff; /* Offset into it for the ind 32 reloc into idata 5.  */
-  const unsigned char *how_dljtab;
-  int how_dljtab_size; /* Size of the dljtab entry.  */
-  int how_dljtab_roff1; /* Offset for the ind 32 reloc into idata 5.  */
-  int how_dljtab_roff2; /* Offset for the ind 32 reloc into idata 5.  */
-  int how_dljtab_roff3; /* Offset for the ind 32 reloc into idata 5.  */
-  const char *trampoline;
-};
+  {
+    const char *type;
+    const char *how_byte;
+    const char *how_short;
+    const char *how_long;
+    const char *how_asciz;
+    const char *how_comment;
+    const char *how_jump;
+    const char *how_global;
+    const char *how_space;
+    const char *how_align_short;
+    const char *how_align_long;
+    const char *how_default_as_switches;
+    const char *how_bfd_target;
+    enum bfd_architecture how_bfd_arch;
+    const unsigned char *how_jtab;
+    int how_jtab_size; /* size of the jtab entry */
+    int how_jtab_roff; /* offset into it for the ind 32 reloc into idata 5 */
+  };
 
 static const struct mac
 mtable[] =
@@ -647,8 +539,7 @@ mtable[] =
     "ldr\tip,[pc]\n\tldr\tpc,[ip]\n\t.long",
     ".global", ".space", ".align\t2",".align\t4", "-mapcs-32",
     "pe-arm-little", bfd_arch_arm,
-    arm_jtab, sizeof (arm_jtab), 8,
-    0, 0, 0, 0, 0, 0
+    arm_jtab, sizeof (arm_jtab), 8
   }
   ,
   {
@@ -656,8 +547,7 @@ mtable[] =
     "i386", ".byte", ".short", ".long", ".asciz", "#",
     "jmp *", ".global", ".space", ".align\t2",".align\t4", "",
     "pe-i386",bfd_arch_i386,
-    i386_jtab, sizeof (i386_jtab), 2,
-    i386_dljtab, sizeof (i386_dljtab), 2, 7, 12, i386_trampoline
+    i386_jtab, sizeof (i386_jtab), 2
   }
   ,
   {
@@ -665,8 +555,7 @@ mtable[] =
     "ppc", ".byte", ".short", ".long", ".asciz", "#",
     "jmp *", ".global", ".space", ".align\t2",".align\t4", "",
     "pe-powerpcle",bfd_arch_powerpc,
-    ppc_jtab, sizeof (ppc_jtab), 0,
-    0, 0, 0, 0, 0, 0
+    ppc_jtab, sizeof (ppc_jtab), 0
   }
   ,
   {
@@ -675,8 +564,7 @@ mtable[] =
     "push\t{r6}\n\tldr\tr6, [pc, #8]\n\tldr\tr6, [r6]\n\tmov\tip, r6\n\tpop\t{r6}\n\tbx\tip",
     ".global", ".space", ".align\t2",".align\t4", "-mthumb-interwork",
     "pe-arm-little", bfd_arch_arm,
-    thumb_jtab, sizeof (thumb_jtab), 12,
-    0, 0, 0, 0, 0, 0
+    thumb_jtab, sizeof (thumb_jtab), 12
   }
   ,
 #define MARM_INTERWORK 4
@@ -685,8 +573,7 @@ mtable[] =
     "ldr\tip,[pc]\n\tldr\tip,[ip]\n\tbx\tip\n\t.long",
     ".global", ".space", ".align\t2",".align\t4", "-mthumb-interwork",
     "pe-arm-little", bfd_arch_arm,
-    arm_interwork_jtab, sizeof (arm_interwork_jtab), 12,
-    0, 0, 0, 0, 0, 0
+    arm_interwork_jtab, sizeof (arm_interwork_jtab), 12
   }
   ,
   {
@@ -695,8 +582,7 @@ mtable[] =
     "lrw r1,[1f]\n\tld.w r1,(r1,0)\n\tjmp r1\n\tnop\n1:.long",
     ".global", ".space", ".align\t2",".align\t4", "",
     "pe-mcore-big", bfd_arch_mcore,
-    mcore_be_jtab, sizeof (mcore_be_jtab), 8,
-    0, 0, 0, 0, 0, 0
+    mcore_be_jtab, sizeof (mcore_be_jtab), 8
   }
   ,
   {
@@ -705,8 +591,7 @@ mtable[] =
     "lrw r1,[1f]\n\tld.w r1,(r1,0)\n\tjmp r1\n\tnop\n1:.long",
     ".global", ".space", ".align\t2",".align\t4", "-EL",
     "pe-mcore-little", bfd_arch_mcore,
-    mcore_le_jtab, sizeof (mcore_le_jtab), 8,
-    0, 0, 0, 0, 0, 0
+    mcore_le_jtab, sizeof (mcore_le_jtab), 8
   }
   ,
   {
@@ -715,8 +600,7 @@ mtable[] =
     "lrw r1,[1f]\n\tld.w r1,(r1,0)\n\tjmp r1\n\tnop\n1:.long",
     ".global", ".space", ".align\t2",".align\t4", "",
     "elf32-mcore-big", bfd_arch_mcore,
-    mcore_be_jtab, sizeof (mcore_be_jtab), 8,
-    0, 0, 0, 0, 0, 0
+    mcore_be_jtab, sizeof (mcore_be_jtab), 8
   }
   ,
   {
@@ -725,30 +609,19 @@ mtable[] =
     "lrw r1,[1f]\n\tld.w r1,(r1,0)\n\tjmp r1\n\tnop\n1:.long",
     ".global", ".space", ".align\t2",".align\t4", "-EL",
     "elf32-mcore-little", bfd_arch_mcore,
-    mcore_le_jtab, sizeof (mcore_le_jtab), 8,
-    0, 0, 0, 0, 0, 0
+    mcore_le_jtab, sizeof (mcore_le_jtab), 8
   }
   ,
   {
-#define MARM_WINCE 9
-    "arm-wince", ".byte", ".short", ".long", ".asciz", "@",
+#define MARM_EPOC 9
+    "arm-epoc", ".byte", ".short", ".long", ".asciz", "@",
     "ldr\tip,[pc]\n\tldr\tpc,[ip]\n\t.long",
-    ".global", ".space", ".align\t2",".align\t4", "-mapcs-32",
-    "pe-arm-wince-little", bfd_arch_arm,
-    arm_jtab, sizeof (arm_jtab), 8,
-    0, 0, 0, 0, 0, 0
+    ".global", ".space", ".align\t2",".align\t4", "",
+    "epoc-pe-arm-little", bfd_arch_arm,
+    arm_jtab, sizeof (arm_jtab), 8
   }
   ,
-  {
-#define MX86 10
-    "i386:x86-64", ".byte", ".short", ".long", ".asciz", "#",
-    "jmp *", ".global", ".space", ".align\t2",".align\t4", "",
-    "pe-x86-64",bfd_arch_i386,
-    i386_jtab, sizeof (i386_jtab), 2,
-    i386_x64_dljtab, sizeof (i386_x64_dljtab), 2, 9, 14, i386_x64_trampoline
-  }
-  ,
-  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 typedef struct dlist
@@ -759,19 +632,17 @@ typedef struct dlist
 dlist_type;
 
 typedef struct export
-{
-  const char *name;
-  const char *internal_name;
-  const char *import_name;
-  const char *its_name;
-  int ordinal;
-  int constant;
-  int noname;		/* Don't put name in image file.  */
-  int private;		/* Don't put reference in import lib.  */
-  int data;
-  int forward;		/* Number of forward label, 0 means no forward.  */
-  struct export *next;
-}
+  {
+    const char *name;
+    const char *internal_name;
+    int ordinal;
+    int constant;
+    int noname;
+    int data;
+    int hint;
+    int forward;	/* number of forward label, 0 means no forward */
+    struct export *next;
+  }
 export_type;
 
 /* A list of symbols which we should not export.  */
@@ -784,110 +655,72 @@ struct string_list
 
 static struct string_list *excludes;
 
-static const char *rvaafter (int);
-static const char *rvabefore (int);
-static const char *asm_prefix (int, const char *);
-static void process_def_file (const char *);
-static void new_directive (char *);
-static void append_import (const char *, const char *, int, const char *);
-static void run (const char *, char *);
-static void scan_drectve_symbols (bfd *);
-static void scan_filtered_symbols (bfd *, void *, long, unsigned int);
-static void add_excludes (const char *);
-static bfd_boolean match_exclude (const char *);
-static void set_default_excludes (void);
-static long filter_symbols (bfd *, void *, long, unsigned int);
-static void scan_all_symbols (bfd *);
-static void scan_open_obj_file (bfd *);
-static void scan_obj_file (const char *);
-static void dump_def_info (FILE *);
-static int sfunc (const void *, const void *);
-static void flush_page (FILE *, bfd_vma *, bfd_vma, int);
-static void gen_def_file (void);
-static void generate_idata_ofile (FILE *);
-static void assemble_file (const char *, const char *);
-static void gen_exp_file (void);
-static const char *xlate (const char *);
-static char *make_label (const char *, const char *);
-static char *make_imp_label (const char *, const char *);
-static bfd *make_one_lib_file (export_type *, int, int);
-static bfd *make_head (void);
-static bfd *make_tail (void);
-static bfd *make_delay_head (void);
-static void gen_lib_file (int);
-static void dll_name_list_append (dll_name_list_type *, bfd_byte *);
-static int  dll_name_list_count (dll_name_list_type *);
-static void dll_name_list_print (dll_name_list_type *);
-static void dll_name_list_free_contents (dll_name_list_node_type *);
-static void dll_name_list_free (dll_name_list_type *);
-static dll_name_list_type * dll_name_list_create (void);
-static void identify_dll_for_implib (void);
-static void identify_search_archive
-  (bfd *, void (*) (bfd *, bfd *, void *),  void *);
-static void identify_search_member (bfd *, bfd *, void *);
-static bfd_boolean identify_process_section_p (asection *, bfd_boolean);
-static void identify_search_section (bfd *, asection *, void *);
-static void identify_member_contains_symname (bfd *, bfd  *, void *);
+static const char *rvaafter PARAMS ((int));
+static const char *rvabefore PARAMS ((int));
+static const char *asm_prefix PARAMS ((int));
+static void process_def_file PARAMS ((const char *));
+static void new_directive PARAMS ((char *));
+static void append_import PARAMS ((const char *, const char *, int));
+static void run PARAMS ((const char *, char *));
+static void scan_drectve_symbols PARAMS ((bfd *));
+static void scan_filtered_symbols PARAMS ((bfd *, PTR, long, unsigned int));
+static void add_excludes PARAMS ((const char *));
+static boolean match_exclude PARAMS ((const char *));
+static void set_default_excludes PARAMS ((void));
+static long filter_symbols PARAMS ((bfd *, PTR, long, unsigned int));
+static void scan_all_symbols PARAMS ((bfd *));
+static void scan_open_obj_file PARAMS ((bfd *));
+static void scan_obj_file PARAMS ((const char *));
+static void dump_def_info PARAMS ((FILE *));
+static int sfunc PARAMS ((const void *, const void *));
+static void flush_page PARAMS ((FILE *, long *, int, int));
+static void gen_def_file PARAMS ((void));
+static void generate_idata_ofile PARAMS ((FILE *));
+static void assemble_file PARAMS ((const char *, const char *));
+static void gen_exp_file PARAMS ((void));
+static const char *xlate PARAMS ((const char *));
+#if 0
+static void dump_iat PARAMS ((FILE *, export_type *));
+#endif
+static char *make_label PARAMS ((const char *, const char *));
+static bfd *make_one_lib_file PARAMS ((export_type *, int));
+static bfd *make_head PARAMS ((void));
+static bfd *make_tail PARAMS ((void));
+static void gen_lib_file PARAMS ((void));
+static int pfunc PARAMS ((const void *, const void *));
+static int nfunc PARAMS ((const void *, const void *));
+static void remove_null_names PARAMS ((export_type **));
+static void dtab PARAMS ((export_type **));
+static void process_duplicates PARAMS ((export_type **));
+static void fill_ordinals PARAMS ((export_type **));
+static int alphafunc PARAMS ((const void *, const void *));
+static void mangle_defs PARAMS ((void));
+static void usage PARAMS ((FILE *, int));
+static void inform PARAMS ((const char *, ...));
 
-static int pfunc (const void *, const void *);
-static int nfunc (const void *, const void *);
-static void remove_null_names (export_type **);
-static void process_duplicates (export_type **);
-static void fill_ordinals (export_type **);
-static void mangle_defs (void);
-static void usage (FILE *, int);
-static void inform (const char *, ...) ATTRIBUTE_PRINTF_1;
-static void set_dll_name_from_def (const char *name, char is_dll);
-
-static char *
-prefix_encode (char *start, unsigned code)
-{
-  static char alpha[26] = "abcdefghijklmnopqrstuvwxyz";
-  static char buf[32];
-  char *p;
-  strcpy (buf, start);
-  p = strchr (buf, '\0');
-  do
-    *p++ = alpha[code % sizeof (alpha)];
-  while ((code /= sizeof (alpha)) != 0);
-  *p = '\0';
-  return buf;
-}
-
-static char *
-dlltmp (char **buf, const char *fmt)
-{
-  if (!*buf)
-    {
-      *buf = malloc (strlen (tmp_prefix) + 64);
-      sprintf (*buf, fmt, tmp_prefix);
-    }
-  return *buf;
-}
 
 static void
-inform (const char * message, ...)
+inform VPARAMS ((const char *message, ...))
 {
-  va_list args;
-
-  va_start (args, message);
+  VA_OPEN (args, message);
+  VA_FIXEDARG (args, const char *, message);
 
   if (!verbose)
     return;
 
   report (message, args);
 
-  va_end (args);
+  VA_CLOSE (args);
 }
 
 static const char *
-rvaafter (int mach)
+rvaafter (machine)
+     int machine;
 {
-  switch (mach)
+  switch (machine)
     {
     case MARM:
     case M386:
-    case MX86:
     case MPPC:
     case MTHUMB:
     case MARM_INTERWORK:
@@ -895,24 +728,24 @@ rvaafter (int mach)
     case MMCORE_LE:
     case MMCORE_ELF:
     case MMCORE_ELF_LE:
-    case MARM_WINCE:
+    case MARM_EPOC:
       break;
     default:
       /* xgettext:c-format */
-      fatal (_("Internal error: Unknown machine type: %d"), mach);
+      fatal (_("Internal error: Unknown machine type: %d"), machine);
       break;
     }
   return "";
 }
 
 static const char *
-rvabefore (int mach)
+rvabefore (machine)
+     int machine;
 {
-  switch (mach)
+  switch (machine)
     {
     case MARM:
     case M386:
-    case MX86:
     case MPPC:
     case MTHUMB:
     case MARM_INTERWORK:
@@ -920,20 +753,21 @@ rvabefore (int mach)
     case MMCORE_LE:
     case MMCORE_ELF:
     case MMCORE_ELF_LE:
-    case MARM_WINCE:
+    case MARM_EPOC:
       return ".rva\t";
     default:
       /* xgettext:c-format */
-      fatal (_("Internal error: Unknown machine type: %d"), mach);
+      fatal (_("Internal error: Unknown machine type: %d"), machine);
       break;
     }
   return "";
 }
 
 static const char *
-asm_prefix (int mach, const char *name)
+asm_prefix (machine)
+     int machine;
 {
-  switch (mach)
+  switch (machine)
     {
     case MARM:
     case MPPC:
@@ -943,53 +777,44 @@ asm_prefix (int mach, const char *name)
     case MMCORE_LE:
     case MMCORE_ELF:
     case MMCORE_ELF_LE:
-    case MARM_WINCE:
+    case MARM_EPOC:
       break;
     case M386:
-    case MX86:
-      /* Symbol names starting with ? do not have a leading underscore. */
-      if ((name && *name == '?') || leading_underscore == 0)
-        break;
-      else
-        return "_";
+      return "_";
     default:
       /* xgettext:c-format */
-      fatal (_("Internal error: Unknown machine type: %d"), mach);
+      fatal (_("Internal error: Unknown machine type: %d"), machine);
       break;
     }
   return "";
 }
 
-#define ASM_BYTE		mtable[machine].how_byte
-#define ASM_SHORT		mtable[machine].how_short
-#define ASM_LONG		mtable[machine].how_long
-#define ASM_TEXT		mtable[machine].how_asciz
-#define ASM_C			mtable[machine].how_comment
-#define ASM_JUMP		mtable[machine].how_jump
-#define ASM_GLOBAL		mtable[machine].how_global
-#define ASM_SPACE		mtable[machine].how_space
-#define ASM_ALIGN_SHORT		mtable[machine].how_align_short
-#define ASM_RVA_BEFORE		rvabefore (machine)
-#define ASM_RVA_AFTER		rvaafter (machine)
-#define ASM_PREFIX(NAME)	asm_prefix (machine, (NAME))
-#define ASM_ALIGN_LONG  	mtable[machine].how_align_long
-#define HOW_BFD_READ_TARGET	0  /* Always default.  */
-#define HOW_BFD_WRITE_TARGET	mtable[machine].how_bfd_target
-#define HOW_BFD_ARCH		mtable[machine].how_bfd_arch
-#define HOW_JTAB		(delay ? mtable[machine].how_dljtab \
-					: mtable[machine].how_jtab)
-#define HOW_JTAB_SIZE		(delay ? mtable[machine].how_dljtab_size \
-					: mtable[machine].how_jtab_size)
-#define HOW_JTAB_ROFF		(delay ? mtable[machine].how_dljtab_roff1 \
-					: mtable[machine].how_jtab_roff)
-#define HOW_JTAB_ROFF2		(delay ? mtable[machine].how_dljtab_roff2 : 0)
-#define HOW_JTAB_ROFF3		(delay ? mtable[machine].how_dljtab_roff3 : 0)
-#define ASM_SWITCHES		mtable[machine].how_default_as_switches
+#define ASM_BYTE 	mtable[machine].how_byte
+#define ASM_SHORT 	mtable[machine].how_short
+#define ASM_LONG	mtable[machine].how_long
+#define ASM_TEXT	mtable[machine].how_asciz
+#define ASM_C 		mtable[machine].how_comment
+#define ASM_JUMP 	mtable[machine].how_jump
+#define ASM_GLOBAL	mtable[machine].how_global
+#define ASM_SPACE	mtable[machine].how_space
+#define ASM_ALIGN_SHORT mtable[machine].how_align_short
+#define ASM_RVA_BEFORE 	rvabefore(machine)
+#define ASM_RVA_AFTER  	rvaafter(machine)
+#define ASM_PREFIX	asm_prefix(machine)
+#define ASM_ALIGN_LONG  mtable[machine].how_align_long
+#define HOW_BFD_READ_TARGET  0  /* always default*/
+#define HOW_BFD_WRITE_TARGET mtable[machine].how_bfd_target
+#define HOW_BFD_ARCH    mtable[machine].how_bfd_arch
+#define HOW_JTAB        mtable[machine].how_jtab
+#define HOW_JTAB_SIZE   mtable[machine].how_jtab_size
+#define HOW_JTAB_ROFF   mtable[machine].how_jtab_roff
+#define ASM_SWITCHES    mtable[machine].how_default_as_switches
 
 static char **oav;
 
 static void
-process_def_file (const char *name)
+process_def_file (name)
+     const char *name;
 {
   FILE *f = fopen (name, FOPEN_RT);
 
@@ -1009,23 +834,25 @@ process_def_file (const char *name)
 
 /**********************************************************************/
 
-/* Communications with the parser.  */
+/* Communications with the parser */
 
-static int d_nfuncs;		/* Number of functions exported.  */
-static int d_named_nfuncs;	/* Number of named functions exported.  */
-static int d_low_ord;		/* Lowest ordinal index.  */
-static int d_high_ord;		/* Highest ordinal index.  */
-static export_type *d_exports;	/* List of exported functions.  */
-static export_type **d_exports_lexically;  /* Vector of exported functions in alpha order.  */
-static dlist_type *d_list;	/* Descriptions.  */
-static dlist_type *a_list;	/* Stuff to go in directives.  */
-static int d_nforwards = 0;	/* Number of forwarded exports.  */
+static const char *d_name;	/* Arg to NAME or LIBRARY */
+static int d_nfuncs;		/* Number of functions exported */
+static int d_named_nfuncs;	/* Number of named functions exported */
+static int d_low_ord;		/* Lowest ordinal index */
+static int d_high_ord;		/* Highest ordinal index */
+static export_type *d_exports;	/*list of exported functions */
+static export_type **d_exports_lexically;	/* vector of exported functions in alpha order */
+static dlist_type *d_list;	/* Descriptions */
+static dlist_type *a_list;	/* Stuff to go in directives */
+static int d_nforwards = 0;	/* Number of forwarded exports */
 
 static int d_is_dll;
 static int d_is_exe;
 
 int
-yyerror (const char * err ATTRIBUTE_UNUSED)
+yyerror (err)
+     const char * err ATTRIBUTE_UNUSED;
 {
   /* xgettext:c-format */
   non_fatal (_("Syntax error in def file %s:%d"), def_file, linenumber);
@@ -1034,20 +861,21 @@ yyerror (const char * err ATTRIBUTE_UNUSED)
 }
 
 void
-def_exports (const char *name, const char *internal_name, int ordinal,
-	     int noname, int constant, int data, int private,
-	     const char *its_name)
+def_exports (name, internal_name, ordinal, noname, constant, data)
+     const char *name;
+     const char *internal_name;
+     int ordinal;
+     int noname;
+     int constant;
+     int data;
 {
   struct export *p = (struct export *) xmalloc (sizeof (*p));
 
   p->name = name;
   p->internal_name = internal_name ? internal_name : name;
-  p->its_name = its_name;
-  p->import_name = name;
   p->ordinal = ordinal;
   p->constant = constant;
   p->noname = noname;
-  p->private = private;
   p->data = data;
   p->next = d_exports;
   d_exports = p;
@@ -1060,27 +888,10 @@ def_exports (const char *name, const char *internal_name, int ordinal,
     p->forward = 0; /* no forward */
 }
 
-static void
-set_dll_name_from_def (const char *name, char is_dll)
-{
-  const char *image_basename = lbasename (name);
-  if (image_basename != name)
-    non_fatal (_("%s: Path components stripped from image name, '%s'."),
-	      def_file, name);
-  /* Append the default suffix, if none specified.  */
-  if (strchr (image_basename, '.') == 0)
-    {
-      const char * suffix = is_dll ? ".dll" : ".exe";
-
-      dll_name = xmalloc (strlen (image_basename) + strlen (suffix) + 1);
-      sprintf (dll_name, "%s%s", image_basename, suffix);
-    }
-  else
-    dll_name = xstrdup (image_basename);
-}
-
 void
-def_name (const char *name, int base)
+def_name (name, base)
+     const char *name;
+     int base;
 {
   /* xgettext:c-format */
   inform (_("NAME: %s base: %x"), name, base);
@@ -1088,20 +899,18 @@ def_name (const char *name, int base)
   if (d_is_dll)
     non_fatal (_("Can't have LIBRARY and NAME"));
 
-  if (dll_name_set_by_exp_name && name && *name != 0)
-    {
-      dll_name = NULL;
-      dll_name_set_by_exp_name = 0;
-    }
-  /* If --dllname not provided, use the one in the DEF file.
-     FIXME: Is this appropriate for executables?  */
-  if (!dll_name)
-    set_dll_name_from_def (name, 0);
+  d_name = name;
+  /* if --dllname not provided, use the one in the DEF file.
+     FIXME: Is this appropriate for executables? */
+  if (! dll_name)
+    dll_name = xstrdup (name);
   d_is_exe = 1;
 }
 
 void
-def_library (const char *name, int base)
+def_library (name, base)
+     const char *name;
+     int base;
 {
   /* xgettext:c-format */
   inform (_("LIBRARY: %s base: %x"), name, base);
@@ -1109,20 +918,16 @@ def_library (const char *name, int base)
   if (d_is_exe)
     non_fatal (_("Can't have LIBRARY and NAME"));
 
-  if (dll_name_set_by_exp_name && name && *name != 0)
-    {
-      dll_name = NULL;
-      dll_name_set_by_exp_name = 0;
-    }
-
-  /* If --dllname not provided, use the one in the DEF file.  */
-  if (!dll_name)
-    set_dll_name_from_def (name, 1);
+  d_name = name;
+  /* if --dllname not provided, use the one in the DEF file.  */
+  if (! dll_name)
+    dll_name = xstrdup (name);
   d_is_dll = 1;
 }
 
 void
-def_description (const char *desc)
+def_description (desc)
+     const char *desc;
 {
   dlist_type *d = (dlist_type *) xmalloc (sizeof (dlist_type));
   d->text = xstrdup (desc);
@@ -1131,7 +936,8 @@ def_description (const char *desc)
 }
 
 static void
-new_directive (char *dir)
+new_directive (dir)
+     char *dir;
 {
   dlist_type *d = (dlist_type *) xmalloc (sizeof (dlist_type));
   d->text = xstrdup (dir);
@@ -1140,7 +946,9 @@ new_directive (char *dir)
 }
 
 void
-def_heapsize (int reserve, int commit)
+def_heapsize (reserve, commit)
+     int reserve;
+     int commit;
 {
   char b[200];
   if (commit > 0)
@@ -1151,7 +959,9 @@ def_heapsize (int reserve, int commit)
 }
 
 void
-def_stacksize (int reserve, int commit)
+def_stacksize (reserve, commit)
+     int reserve;
+     int commit;
 {
   char b[200];
   if (commit > 0)
@@ -1165,22 +975,23 @@ def_stacksize (int reserve, int commit)
    import_list.  It is used by def_import.  */
 
 static void
-append_import (const char *symbol_name, const char *dllname, int func_ordinal,
-	       const char *its_name)
+append_import (symbol_name, dll_name, func_ordinal)
+     const char *symbol_name;
+     const char *dll_name;
+     int func_ordinal;
 {
   iheadtype **pq;
   iheadtype *q;
 
   for (pq = &import_list; *pq != NULL; pq = &(*pq)->next)
     {
-      if (strcmp ((*pq)->dllname, dllname) == 0)
+      if (strcmp ((*pq)->dllname, dll_name) == 0)
 	{
 	  q = *pq;
 	  q->functail->next = xmalloc (sizeof (ifunctype));
 	  q->functail = q->functail->next;
 	  q->functail->ord  = func_ordinal;
 	  q->functail->name = xstrdup (symbol_name);
-	  q->functail->its_name = (its_name ? xstrdup (its_name) : NULL);
 	  q->functail->next = NULL;
 	  q->nfuncs++;
 	  return;
@@ -1188,13 +999,12 @@ append_import (const char *symbol_name, const char *dllname, int func_ordinal,
     }
 
   q = xmalloc (sizeof (iheadtype));
-  q->dllname = xstrdup (dllname);
+  q->dllname = xstrdup (dll_name);
   q->nfuncs = 1;
   q->funchead = xmalloc (sizeof (ifunctype));
   q->functail = q->funchead;
   q->next = NULL;
   q->functail->name = xstrdup (symbol_name);
-  q->functail->its_name = (its_name ? xstrdup (its_name) : NULL);
   q->functail->ord  = func_ordinal;
   q->functail->next = NULL;
 
@@ -1232,11 +1042,15 @@ append_import (const char *symbol_name, const char *dllname, int func_ordinal,
              present (i.e., not NULL).  */
 
 void
-def_import (const char *app_name, const char *module, const char *dllext,
-	    const char *entry, int ord_val, const char *its_name)
+def_import (app_name, module, dllext, entry, ord_val)
+     const char *app_name;
+     const char *module;
+     const char *dllext;
+     const char *entry;
+     int ord_val;
 {
   const char *application_name;
-  char *buf = NULL;
+  char *buf;
 
   if (entry != NULL)
     application_name = entry;
@@ -1249,22 +1063,27 @@ def_import (const char *app_name, const char *module, const char *dllext,
     }
 
   if (dllext != NULL)
-    module = buf = concat (module, ".", dllext, NULL);
+    {
+      buf = (char *) alloca (strlen (module) + strlen (dllext) + 2);
+      sprintf (buf, "%s.%s", module, dllext);
+      module = buf;
+    }
 
-  append_import (application_name, module, ord_val, its_name);
-
-  if (buf)
-    free (buf);
+  append_import (application_name, module, ord_val);
 }
 
 void
-def_version (int major, int minor)
+def_version (major, minor)
+     int major;
+     int minor;
 {
-  printf (_("VERSION %d.%d\n"), major, minor);
+  printf ("VERSION %d.%d\n", major, minor);
 }
 
 void
-def_section (const char *name, int attr)
+def_section (name, attr)
+     const char *name;
+     int attr;
 {
   char buf[200];
   char atts[5];
@@ -1284,14 +1103,16 @@ def_section (const char *name, int attr)
 }
 
 void
-def_code (int attr)
+def_code (attr)
+     int attr;
 {
 
   def_section ("CODE", attr);
 }
 
 void
-def_data (int attr)
+def_data (attr)
+     int attr;
 {
   def_section ("DATA", attr);
 }
@@ -1299,7 +1120,9 @@ def_data (int attr)
 /**********************************************************************/
 
 static void
-run (const char *what, char *args)
+run (what, args)
+     const char *what;
+     char *args;
 {
   char *s;
   int pid, wait_status;
@@ -1308,7 +1131,7 @@ run (const char *what, char *args)
   char *errmsg_fmt, *errmsg_arg;
   char *temp_base = choose_temp_base ();
 
-  inform (_("run: %s %s"), what, args);
+  inform ("run: %s %s", what, args);
 
   /* Count the args */
   i = 0;
@@ -1316,7 +1139,7 @@ run (const char *what, char *args)
     if (*s == ' ')
       i++;
   i++;
-  argv = xmalloc (sizeof (char *) * (i + 3));
+  argv = alloca (sizeof (char *) * (i + 3));
   i = 0;
   argv[i++] = what;
   s = args;
@@ -1335,11 +1158,10 @@ run (const char *what, char *args)
 
   pid = pexecute (argv[0], (char * const *) argv, program_name, temp_base,
 		  &errmsg_fmt, &errmsg_arg, PEXECUTE_ONE | PEXECUTE_SEARCH);
-  free(argv);
 
   if (pid == -1)
     {
-      inform ("%s", strerror (errno));
+      inform (strerror (errno));
 
       fatal (errmsg_fmt, errmsg_arg);
     }
@@ -1371,7 +1193,8 @@ run (const char *what, char *args)
    ABFD.  Pass each one to def_exports.  */
 
 static void
-scan_drectve_symbols (bfd *abfd)
+scan_drectve_symbols (abfd)
+     bfd *abfd;
 {
   asection * s;
   int        size;
@@ -1385,7 +1208,7 @@ scan_drectve_symbols (bfd *abfd)
   if (s == NULL)
     return;
 
-  size = bfd_section_size (s);
+  size = bfd_get_section_size_before_reloc (s);
   buf  = xmalloc (size);
 
   bfd_get_section_contents (abfd, s, buf, 0, size);
@@ -1402,55 +1225,40 @@ scan_drectve_symbols (bfd *abfd)
   while (p < e)
     {
       if (p[0] == '-'
-	  && CONST_STRNEQ (p, "-export:"))
+	  && strncmp (p, "-export:", 8) == 0)
 	{
 	  char * name;
 	  char * c;
 	  flagword flags = BSF_FUNCTION;
 
 	  p += 8;
-	  /* Do we have a quoted export?  */
-	  if (*p == '"')
-	    {
-	      p++;
-	      name = p;
-	      while (p < e && *p != '"')
-		++p;
-	    }
-	  else
-	    {
-	      name = p;
-	      while (p < e && *p != ',' && *p != ' ' && *p != '-')
-		p++;
-	    }
+	  name = p;
+	  while (p < e && *p != ',' && *p != ' ' && *p != '-')
+	    p++;
 	  c = xmalloc (p - name + 1);
 	  memcpy (c, name, p - name);
 	  c[p - name] = 0;
-	  /* Advance over trailing quote.  */
-	  if (p < e && *p == '"')
-	    ++p;
 	  if (p < e && *p == ',')       /* found type tag.  */
 	    {
 	      char *tag_start = ++p;
 	      while (p < e && *p != ' ' && *p != '-')
 		p++;
-	      if (CONST_STRNEQ (tag_start, "data"))
+	      if (strncmp (tag_start, "data", 4) == 0)
 		flags &= ~BSF_FUNCTION;
 	    }
 
 	  /* FIXME: The 5th arg is for the `constant' field.
 	     What should it be?  Not that it matters since it's not
 	     currently useful.  */
-	  def_exports (c, 0, -1, 0, 0, ! (flags & BSF_FUNCTION), 0, NULL);
+	  def_exports (c, 0, -1, 0, 0, ! (flags & BSF_FUNCTION));
 
 	  if (add_stdcall_alias && strchr (c, '@'))
 	    {
-	      int lead_at = (*c == '@') ;
-	      char *exported_name = xstrdup (c + lead_at);
+	      char *exported_name = xstrdup (c);
 	      char *atsym = strchr (exported_name, '@');
 	      *atsym = '\0';
 	      /* Note: stdcall alias symbols can never be data.  */
-	      def_exports (exported_name, xstrdup (c), -1, 0, 0, 0, 0, NULL);
+	      def_exports (exported_name, xstrdup (c), -1, 0, 0, 0);
 	    }
 	}
       else
@@ -1463,8 +1271,11 @@ scan_drectve_symbols (bfd *abfd)
    symbols to export.  */
 
 static void
-scan_filtered_symbols (bfd *abfd, void *minisyms, long symcount,
-		       unsigned int size)
+scan_filtered_symbols (abfd, minisyms, symcount, size)
+     bfd *abfd;
+     PTR minisyms;
+     long symcount;
+     unsigned int size;
 {
   asymbol *store;
   bfd_byte *from, *fromend;
@@ -1480,7 +1291,7 @@ scan_filtered_symbols (bfd *abfd, void *minisyms, long symcount,
       asymbol *sym;
       const char *symbol_name;
 
-      sym = bfd_minisymbol_to_symbol (abfd, FALSE, from, store);
+      sym = bfd_minisymbol_to_symbol (abfd, false, from, store);
       if (sym == NULL)
 	bfd_fatal (bfd_get_filename (abfd));
 
@@ -1489,16 +1300,15 @@ scan_filtered_symbols (bfd *abfd, void *minisyms, long symcount,
 	++symbol_name;
 
       def_exports (xstrdup (symbol_name) , 0, -1, 0, 0,
-		   ! (sym->flags & BSF_FUNCTION), 0, NULL);
+		   ! (sym->flags & BSF_FUNCTION));
 
       if (add_stdcall_alias && strchr (symbol_name, '@'))
         {
-	  int lead_at = (*symbol_name == '@');
-	  char *exported_name = xstrdup (symbol_name + lead_at);
+	  char *exported_name = xstrdup (symbol_name);
 	  char *atsym = strchr (exported_name, '@');
 	  *atsym = '\0';
 	  /* Note: stdcall alias symbols can never be data.  */
-	  def_exports (exported_name, xstrdup (symbol_name), -1, 0, 0, 0, 0, NULL);
+	  def_exports (exported_name, xstrdup (symbol_name), -1, 0, 0, 0);
 	}
     }
 }
@@ -1506,7 +1316,8 @@ scan_filtered_symbols (bfd *abfd, void *minisyms, long symcount,
 /* Add a list of symbols to exclude.  */
 
 static void
-add_excludes (const char *new_excludes)
+add_excludes (new_excludes)
+     const char *new_excludes;
 {
   char *local_copy;
   char *exclude_string;
@@ -1521,12 +1332,8 @@ add_excludes (const char *new_excludes)
       new_exclude = ((struct string_list *)
 		     xmalloc (sizeof (struct string_list)));
       new_exclude->string = (char *) xmalloc (strlen (exclude_string) + 2);
-      /* Don't add a leading underscore for fastcall symbols.  */
-      if (*exclude_string == '@')
-	sprintf (new_exclude->string, "%s", exclude_string);
-      else
-	sprintf (new_exclude->string, "%s%s", (!leading_underscore ? "" : "_"),
-		 exclude_string);
+      /* FIXME: Is it always right to add a leading underscore?  */
+      sprintf (new_exclude->string, "_%s", exclude_string);
       new_exclude->next = excludes;
       excludes = new_exclude;
 
@@ -1539,15 +1346,16 @@ add_excludes (const char *new_excludes)
 
 /* See if STRING is on the list of symbols to exclude.  */
 
-static bfd_boolean
-match_exclude (const char *string)
+static boolean
+match_exclude (string)
+     const char *string;
 {
   struct string_list *excl_item;
 
   for (excl_item = excludes; excl_item; excl_item = excl_item->next)
     if (strcmp (string, excl_item->string) == 0)
-      return TRUE;
-  return FALSE;
+      return true;
+  return false;
 }
 
 /* Add the default list of symbols to exclude.  */
@@ -1561,7 +1369,11 @@ set_default_excludes (void)
 /* Choose which symbols to export.  */
 
 static long
-filter_symbols (bfd *abfd, void *minisyms, long symcount, unsigned int size)
+filter_symbols (abfd, minisyms, symcount, size)
+     bfd *abfd;
+     PTR minisyms;
+     long symcount;
+     unsigned int size;
 {
   bfd_byte *from, *fromend, *to;
   asymbol *store;
@@ -1579,7 +1391,7 @@ filter_symbols (bfd *abfd, void *minisyms, long symcount, unsigned int size)
       int keep = 0;
       asymbol *sym;
 
-      sym = bfd_minisymbol_to_symbol (abfd, FALSE, (const void *) from, store);
+      sym = bfd_minisymbol_to_symbol (abfd, false, (const PTR) from, store);
       if (sym == NULL)
 	bfd_fatal (bfd_get_filename (abfd));
 
@@ -1605,10 +1417,11 @@ filter_symbols (bfd *abfd, void *minisyms, long symcount, unsigned int size)
    export.  */
 
 static void
-scan_all_symbols (bfd *abfd)
+scan_all_symbols (abfd)
+     bfd *abfd;
 {
   long symcount;
-  void *minisyms;
+  PTR minisyms;
   unsigned int size;
 
   /* Ignore bfds with an import descriptor table.  We assume that any
@@ -1624,7 +1437,7 @@ scan_all_symbols (bfd *abfd)
       return;
     }
 
-  symcount = bfd_read_minisymbols (abfd, FALSE, &minisyms, &size);
+  symcount = bfd_read_minisymbols (abfd, false, &minisyms, &size);
   if (symcount < 0)
     bfd_fatal (bfd_get_filename (abfd));
 
@@ -1647,27 +1460,29 @@ scan_all_symbols (bfd *abfd)
 /* Look at the object file to decide which symbols to export.  */
 
 static void
-scan_open_obj_file (bfd *abfd)
+scan_open_obj_file (abfd)
+     bfd *abfd;
 {
   if (export_all_symbols)
     scan_all_symbols (abfd);
   else
     scan_drectve_symbols (abfd);
 
-  /* FIXME: we ought to read in and block out the base relocations.  */
+  /* FIXME: we ought to read in and block out the base relocations */
 
   /* xgettext:c-format */
   inform (_("Done reading %s"), bfd_get_filename (abfd));
 }
 
 static void
-scan_obj_file (const char *filename)
+scan_obj_file (filename)
+     const char *filename;
 {
   bfd * f = bfd_openr (filename, 0);
 
   if (!f)
     /* xgettext:c-format */
-    fatal (_("Unable to open object file: %s: %s"), filename, bfd_get_errmsg ());
+    fatal (_("Unable to open object file: %s"), filename);
 
   /* xgettext:c-format */
   inform (_("Scanning object file %s"), filename);
@@ -1677,15 +1492,10 @@ scan_obj_file (const char *filename)
       bfd *arfile = bfd_openr_next_archived_file (f, 0);
       while (arfile)
 	{
-	  bfd *next;
 	  if (bfd_check_format (arfile, bfd_object))
 	    scan_open_obj_file (arfile);
-	  next = bfd_openr_next_archived_file (f, arfile);
 	  bfd_close (arfile);
-	  /* PR 17512: file: 58715298.  */
-	  if (next == arfile)
-	    break;
-	  arfile = next;
+	  arfile = bfd_openr_next_archived_file (f, arfile);
 	}
 
 #ifdef DLLTOOL_MCORE_ELF
@@ -1699,17 +1509,18 @@ scan_obj_file (const char *filename)
 
 #ifdef DLLTOOL_MCORE_ELF
       if (mcore_elf_out_file)
-	mcore_elf_cache_filename (filename);
+	mcore_elf_cache_filename ((char *) filename);
 #endif
     }
 
   bfd_close (f);
 }
 
-
+/**********************************************************************/
 
 static void
-dump_def_info (FILE *f)
+dump_def_info (f)
+     FILE *f;
 {
   int i;
   export_type *exp;
@@ -1719,41 +1530,41 @@ dump_def_info (FILE *f)
   fprintf (f, "\n");
   for (i = 0, exp = d_exports; exp; i++, exp = exp->next)
     {
-      fprintf (f, "%s  %d = %s %s @ %d %s%s%s%s%s%s\n",
+      fprintf (f, "%s  %d = %s %s @ %d %s%s%s\n",
 	       ASM_C,
 	       i,
 	       exp->name,
 	       exp->internal_name,
 	       exp->ordinal,
 	       exp->noname ? "NONAME " : "",
-	       exp->private ? "PRIVATE " : "",
 	       exp->constant ? "CONSTANT" : "",
-	       exp->data ? "DATA" : "",
-	       exp->its_name ? " ==" : "",
-	       exp->its_name ? exp->its_name : "");
+	       exp->data ? "DATA" : "");
     }
 }
 
-/* Generate the .exp file.  */
+/* Generate the .exp file */
 
 static int
-sfunc (const void *a, const void *b)
+sfunc (a, b)
+     const void *a;
+     const void *b;
 {
-  if (*(const bfd_vma *) a == *(const bfd_vma *) b)
-    return 0;
-
-  return ((*(const bfd_vma *) a > *(const bfd_vma *) b) ? 1 : -1);
+  return *(const long *) a - *(const long *) b;
 }
 
 static void
-flush_page (FILE *f, bfd_vma *need, bfd_vma page_addr, int on_page)
+flush_page (f, need, page_addr, on_page)
+     FILE *f;
+     long *need;
+     int page_addr;
+     int on_page;
 {
   int i;
 
-  /* Flush this page.  */
+  /* Flush this page */
   fprintf (f, "\t%s\t0x%08x\t%s Starting RVA for chunk\n",
 	   ASM_LONG,
-	   (int) page_addr,
+	   page_addr,
 	   ASM_C);
   fprintf (f, "\t%s\t0x%x\t%s Size of block\n",
 	   ASM_LONG,
@@ -1762,23 +1573,12 @@ flush_page (FILE *f, bfd_vma *need, bfd_vma page_addr, int on_page)
 
   for (i = 0; i < on_page; i++)
     {
-      bfd_vma needed = need[i];
+      long needed = need[i];
 
       if (needed)
-        {
-	  if (!create_for_pep)
-	    {
-	      /* Relocation via HIGHLOW.  */
-	      needed = ((needed - page_addr) | 0x3000) & 0xffff;
-	    }
-	  else
-	    {
-	      /* Relocation via DIR64.  */
-	      needed = ((needed - page_addr) | 0xa000) & 0xffff;
-	    }
-	}
+	needed = ((needed - page_addr) | 0x3000) & 0xffff;
 
-      fprintf (f, "\t%s\t0x%lx\n", ASM_SHORT, (long) needed);
+      fprintf (f, "\t%s\t0x%lx\n", ASM_SHORT, needed);
     }
 
   /* And padding */
@@ -1787,7 +1587,7 @@ flush_page (FILE *f, bfd_vma *need, bfd_vma page_addr, int on_page)
 }
 
 static void
-gen_def_file (void)
+gen_def_file ()
 {
   int i;
   export_type *exp;
@@ -1805,30 +1605,23 @@ gen_def_file (void)
       char *quote = strchr (exp->name, '.') ? "\"" : "";
       char *res = cplus_demangle (exp->internal_name, DMGL_ANSI | DMGL_PARAMS);
 
-      if (res)
-	{
-	  fprintf (output_def,";\t%s\n", res);
-	  free (res);
-	}
-
       if (strcmp (exp->name, exp->internal_name) == 0)
 	{
-	  fprintf (output_def, "\t%s%s%s @ %d%s%s%s%s%s\n",
+
+	  fprintf (output_def, "\t%s%s%s @ %d%s%s ; %s\n",
 		   quote,
 		   exp->name,
 		   quote,
 		   exp->ordinal,
 		   exp->noname ? " NONAME" : "",
-		   exp->private ? "PRIVATE " : "",
 		   exp->data ? " DATA" : "",
-		   exp->its_name ? " ==" : "",
-		   exp->its_name ? exp->its_name : "");
+		   res ? res : "");
 	}
       else
 	{
-	  char * quote1 = strchr (exp->internal_name, '.') ? "\"" : "";
+	  char *quote1 = strchr (exp->internal_name, '.') ? "\"" : "";
 	  /* char *alias =  */
-	  fprintf (output_def, "\t%s%s%s = %s%s%s @ %d%s%s%s%s%s\n",
+	  fprintf (output_def, "\t%s%s%s = %s%s%s @ %d%s%s ; %s\n",
 		   quote,
 		   exp->name,
 		   quote,
@@ -1837,11 +1630,11 @@ gen_def_file (void)
 		   quote1,
 		   exp->ordinal,
 		   exp->noname ? " NONAME" : "",
-		   exp->private ? "PRIVATE " : "",
 		   exp->data ? " DATA" : "",
-		   exp->its_name ? " ==" : "",
-		   exp->its_name ? exp->its_name : "");
+		   res ? res : "");
 	}
+      if (res)
+	free (res);
     }
 
   inform (_("Added exports to output file"));
@@ -1852,7 +1645,8 @@ gen_def_file (void)
    the file.  */
 
 static void
-generate_idata_ofile (FILE *filvar)
+generate_idata_ofile (filvar)
+     FILE *filvar;
 {
   iheadtype *headptr;
   ifunctype *funcptr;
@@ -1894,20 +1688,10 @@ generate_idata_ofile (FILE *filvar)
   for (headptr = import_list; headptr != NULL; headptr = headptr->next)
     {
       fprintf (filvar, "listone%d:\n", headindex);
-      for (funcindex = 0; funcindex < headptr->nfuncs; funcindex++)
-        {
-	  if (create_for_pep)
-	    fprintf (filvar, "\t%sfuncptr%d_%d%s\n%s\t0\n",
-		     ASM_RVA_BEFORE, headindex, funcindex, ASM_RVA_AFTER,
-		     ASM_LONG);
-	  else
-	    fprintf (filvar, "\t%sfuncptr%d_%d%s\n",
-		     ASM_RVA_BEFORE, headindex, funcindex, ASM_RVA_AFTER);
-        }
-      if (create_for_pep)
-	fprintf (filvar, "\t%s\t0\n\t%s\t0\n", ASM_LONG, ASM_LONG);
-      else
-	fprintf (filvar, "\t%s\t0\n", ASM_LONG); /* NULL terminating list.  */
+      for ( funcindex = 0; funcindex < headptr->nfuncs; funcindex++ )
+	fprintf (filvar, "\t%sfuncptr%d_%d%s\n",
+		 ASM_RVA_BEFORE, headindex, funcindex, ASM_RVA_AFTER);
+      fprintf (filvar,"\t%s\t0\n", ASM_LONG); /* NULL terminating list */
       headindex++;
     }
 
@@ -1916,20 +1700,10 @@ generate_idata_ofile (FILE *filvar)
   for (headptr = import_list; headptr != NULL; headptr = headptr->next)
     {
       fprintf (filvar, "listtwo%d:\n", headindex);
-      for (funcindex = 0; funcindex < headptr->nfuncs; funcindex++)
-        {
-	  if (create_for_pep)
-	    fprintf (filvar, "\t%sfuncptr%d_%d%s\n%s\t0\n",
-		     ASM_RVA_BEFORE, headindex, funcindex, ASM_RVA_AFTER,
-		     ASM_LONG);
-	  else
-	    fprintf (filvar, "\t%sfuncptr%d_%d%s\n",
-		     ASM_RVA_BEFORE, headindex, funcindex, ASM_RVA_AFTER);
-        }
-      if (create_for_pep)
-	fprintf (filvar, "\t%s\t0\n\t%s\t0\n", ASM_LONG, ASM_LONG);
-      else
-	fprintf (filvar, "\t%s\t0\n", ASM_LONG); /* NULL terminating list.  */
+      for ( funcindex = 0; funcindex < headptr->nfuncs; funcindex++ )
+	fprintf (filvar, "\t%sfuncptr%d_%d%s\n",
+		 ASM_RVA_BEFORE, headindex, funcindex, ASM_RVA_AFTER);
+      fprintf (filvar, "\t%s\t0\n", ASM_LONG); /* NULL terminating list */
       headindex++;
     }
 
@@ -1944,8 +1718,7 @@ generate_idata_ofile (FILE *filvar)
 	  fprintf (filvar,"funcptr%d_%d:\n", headindex, funcindex);
 	  fprintf (filvar,"\t%s\t%d\n", ASM_SHORT,
 		   ((funcptr->ord) & 0xFFFF));
-	  fprintf (filvar,"\t%s\t\"%s\"\n", ASM_TEXT,
-	    (funcptr->its_name ? funcptr->its_name : funcptr->name));
+	  fprintf (filvar,"\t%s\t\"%s\"\n", ASM_TEXT, funcptr->name);
 	  fprintf (filvar,"\t%s\t0\n", ASM_BYTE);
 	  funcindex++;
 	}
@@ -1965,46 +1738,22 @@ generate_idata_ofile (FILE *filvar)
 
 /* Assemble the specified file.  */
 static void
-assemble_file (const char * source, const char * dest)
+assemble_file (source, dest)
+     const char * source;
+     const char * dest;
 {
   char * cmd;
 
-  cmd = xmalloc (strlen (ASM_SWITCHES) + strlen (as_flags)
-		 + strlen (source) + strlen (dest) + 50);
+  cmd = (char *) alloca (strlen (ASM_SWITCHES) + strlen (as_flags)
+			 + strlen (source) + strlen (dest) + 50);
 
   sprintf (cmd, "%s %s -o %s %s", ASM_SWITCHES, as_flags, dest, source);
 
   run (as_name, cmd);
-  free (cmd);
-}
-
-static const char * temp_file_to_remove[5];
-#define TEMP_EXPORT_FILE 0
-#define TEMP_HEAD_FILE   1
-#define TEMP_TAIL_FILE   2
-#define TEMP_HEAD_O_FILE 3
-#define TEMP_TAIL_O_FILE 4
-
-static void
-unlink_temp_files (void)
-{
-  unsigned i;
-
-  if (dontdeltemps > 0)
-    return;
-
-  for (i = 0; i < ARRAY_SIZE (temp_file_to_remove); i++)
-    {
-      if (temp_file_to_remove[i])
-	{
-	  unlink (temp_file_to_remove[i]);
-	  temp_file_to_remove[i] = NULL;
-	}
-    }
 }
 
 static void
-gen_exp_file (void)
+gen_exp_file ()
 {
   FILE *f;
   int i;
@@ -2019,8 +1768,6 @@ gen_exp_file (void)
     /* xgettext:c-format */
     fatal (_("Unable to open temporary assembler file: %s"), TMP_ASM);
 
-  temp_file_to_remove[TEMP_EXPORT_FILE] = TMP_ASM;
-
   /* xgettext:c-format */
   inform (_("Opened temporary file: %s"), TMP_ASM);
 
@@ -2030,8 +1777,8 @@ gen_exp_file (void)
     {
       fprintf (f, "\t.section	.edata\n\n");
       fprintf (f, "\t%s	0	%s Allways 0\n", ASM_LONG, ASM_C);
-      fprintf (f, "\t%s	0x%lx	%s Time and date\n", ASM_LONG,
-	       (unsigned long) time(0), ASM_C);
+      fprintf (f, "\t%s	0x%lx	%s Time and date\n", ASM_LONG, (long) time(0),
+	       ASM_C);
       fprintf (f, "\t%s	0	%s Major and Minor version\n", ASM_LONG, ASM_C);
       fprintf (f, "\t%sname%s	%s Ptr to name of dll\n", ASM_RVA_BEFORE, ASM_RVA_AFTER, ASM_C);
       fprintf (f, "\t%s	%d	%s Starting ordinal of exports\n", ASM_LONG, d_low_ord, ASM_C);
@@ -2062,6 +1809,14 @@ gen_exp_file (void)
 	{
 	  if (exp->ordinal != i)
 	    {
+#if 0
+	      fprintf (f, "\t%s\t%d\t%s %d..%d missing\n",
+		       ASM_SPACE,
+		       (exp->ordinal - i) * 4,
+		       ASM_C,
+		       i, exp->ordinal - 1);
+	      i = exp->ordinal;
+#endif
 	      while (i < exp->ordinal)
 		{
 		  fprintf(f,"\t%s\t0\n", ASM_LONG);
@@ -2070,15 +1825,9 @@ gen_exp_file (void)
 	    }
 
 	  if (exp->forward == 0)
-	    {
-	      if (exp->internal_name[0] == '@')
-		fprintf (f, "\t%s%s%s\t%s %d\n", ASM_RVA_BEFORE,
-			 exp->internal_name, ASM_RVA_AFTER, ASM_C, exp->ordinal);
-	      else
-		fprintf (f, "\t%s%s%s%s\t%s %d\n", ASM_RVA_BEFORE,
-			 ASM_PREFIX (exp->internal_name),
-			 exp->internal_name, ASM_RVA_AFTER, ASM_C, exp->ordinal);
-	    }
+	    fprintf (f, "\t%s%s%s%s\t%s %d\n", ASM_RVA_BEFORE,
+		     ASM_PREFIX,
+		     exp->internal_name, ASM_RVA_AFTER, ASM_C, exp->ordinal);
 	  else
 	    fprintf (f, "\t%sf%d%s\t%s %d\n", ASM_RVA_BEFORE,
 		     exp->forward, ASM_RVA_AFTER, ASM_C, exp->ordinal);
@@ -2095,7 +1844,7 @@ gen_exp_file (void)
 		     ASM_RVA_BEFORE, exp->ordinal, ASM_RVA_AFTER);
 	}
 
-      fprintf (f,"%s Export Ordinal Table\n", ASM_C);
+      fprintf (f,"%s Export Oridinal Table\n", ASM_C);
       fprintf (f, "anords:\n");
       for (i = 0; (exp = d_exports_lexically[i]); i++)
 	{
@@ -2105,15 +1854,14 @@ gen_exp_file (void)
 
       fprintf(f,"%s Export Name Table\n", ASM_C);
       for (i = 0; (exp = d_exports_lexically[i]); i++)
-	{
-	  if (!exp->noname || show_allnames)
+	if (!exp->noname || show_allnames)
+	  {
 	    fprintf (f, "n%d:	%s	\"%s\"\n",
-		     exp->ordinal, ASM_TEXT,
-		     (exp->its_name ? exp->its_name : xlate (exp->name)));
-	  if (exp->forward != 0)
-	    fprintf (f, "f%d:	%s	\"%s\"\n",
-		     exp->forward, ASM_TEXT, exp->internal_name);
-	}
+		     exp->ordinal, ASM_TEXT, xlate (exp->name));
+	    if (exp->forward != 0)
+	      fprintf (f, "f%d:	%s	\"%s\"\n",
+		       exp->forward, ASM_TEXT, exp->internal_name);
+	  }
 
       if (a_list)
 	{
@@ -2157,6 +1905,7 @@ gen_exp_file (void)
 	}
     }
 
+
   /* Add to the output file a way of getting to the exported names
      without using the import library.  */
   if (add_indirect)
@@ -2170,24 +1919,23 @@ gen_exp_file (void)
                cygwin releases.  */
 	    if (create_compat_implib)
 	      fprintf (f, "\t%s\t__imp_%s\n", ASM_GLOBAL, exp->name);
-	    fprintf (f, "\t%s\t_imp_%s%s\n", ASM_GLOBAL,
-	    	     (!leading_underscore ? "" : "_"), exp->name);
+	    fprintf (f, "\t%s\t_imp__%s\n", ASM_GLOBAL, exp->name);
 	    if (create_compat_implib)
 	      fprintf (f, "__imp_%s:\n", exp->name);
-	    fprintf (f, "_imp_%s%s:\n", (!leading_underscore ? "" : "_"), exp->name);
+	    fprintf (f, "_imp__%s:\n", exp->name);
 	    fprintf (f, "\t%s\t%s\n", ASM_LONG, exp->name);
 	  }
     }
 
-  /* Dump the reloc section if a base file is provided.  */
+  /* Dump the reloc section if a base file is provided */
   if (base_file)
     {
-      bfd_vma addr;
-      bfd_vma need[COFF_PAGE_SIZE];
-      bfd_vma page_addr;
-      bfd_size_type numbytes;
+      int addr;
+      long need[PAGE_SIZE];
+      long page_addr;
+      int numbytes;
       int num_entries;
-      bfd_vma *copy;
+      long *copy;
       int j;
       int on_page;
       fprintf (f, "\t.section\t.init\n");
@@ -2197,9 +1945,8 @@ gen_exp_file (void)
       numbytes = ftell (base_file);
       fseek (base_file, 0, SEEK_SET);
       copy = xmalloc (numbytes);
-      if (fread (copy, 1, numbytes, base_file) < numbytes)
-	fatal (_("failed to read the number of entries from base file"));
-      num_entries = numbytes / sizeof (bfd_vma);
+      fread (copy, 1, numbytes, base_file);
+      num_entries = numbytes / sizeof (long);
 
 
       fprintf (f, "\t.section\t.reloc\n");
@@ -2207,9 +1954,9 @@ gen_exp_file (void)
 	{
 	  int src;
 	  int dst = 0;
-	  bfd_vma last = (bfd_vma) -1;
-	  qsort (copy, num_entries, sizeof (bfd_vma), sfunc);
-	  /* Delete duplicates */
+	  int last = -1;
+	  qsort (copy, num_entries, sizeof (long), sfunc);
+	  /* Delete duplcates */
 	  for (src = 0; src < num_entries; src++)
 	    {
 	      if (last != copy[src])
@@ -2240,29 +1987,22 @@ gen_exp_file (void)
 
   fclose (f);
 
-  /* Assemble the file.  */
+  /* assemble the file */
   assemble_file (TMP_ASM, exp_name);
 
   if (dontdeltemps == 0)
-    {
-      temp_file_to_remove[TEMP_EXPORT_FILE] = NULL;
-      unlink (TMP_ASM);
-    }
+    unlink (TMP_ASM);
 
   inform (_("Generated exports file"));
 }
 
 static const char *
-xlate (const char *name)
+xlate (name)
+     const char *name;
 {
-  int lead_at = (*name == '@');
-  int is_stdcall = (!lead_at && strchr (name, '@') != NULL);
-
-  if (!lead_at && (add_underscore
-		   || (add_stdcall_underscore && is_stdcall)))
+  if (add_underscore)
     {
       char *copy = xmalloc (strlen (name) + 2);
-
       copy[0] = '_';
       strcpy (copy + 1, name);
       name = copy;
@@ -2271,15 +2011,37 @@ xlate (const char *name)
   if (killat)
     {
       char *p;
-
-      name += lead_at;
-      /* PR 9766: Look for the last @ sign in the name.  */
-      p = strrchr (name, '@');
-      if (p && ISDIGIT (p[1]))
+      p = strchr (name, '@');
+      if (p)
 	*p = 0;
     }
   return name;
 }
+
+/**********************************************************************/
+
+#if 0
+
+static void
+dump_iat (f, exp)
+     FILE *f;
+     export_type *exp;
+{
+  if (exp->noname && !show_allnames )
+    {
+      fprintf (f, "\t%s\t0x%08x\n",
+	       ASM_LONG,
+	       exp->ordinal | 0x80000000); /* hint or orindal ?? */
+    }
+  else
+    {
+      fprintf (f, "\t%sID%d%s\n", ASM_RVA_BEFORE,
+	       exp->ordinal,
+	       ASM_RVA_AFTER);
+    }
+}
+
+#endif
 
 typedef struct
 {
@@ -2291,11 +2053,8 @@ typedef struct
   asymbol *sym;
   asymbol **sympp;
   int size;
-  unsigned char *data;
+  unsigned   char *data;
 } sinfo;
-
-#define INIT_SEC_DATA(id, name, flags, align) \
-        { id, name, flags, align, NULL, NULL, NULL, 0, NULL }
 
 #ifndef DLLTOOL_PPC
 
@@ -2314,6 +2073,8 @@ typedef struct
 #define DATA_SEC_FLAGS   (SEC_ALLOC | SEC_LOAD | SEC_DATA)
 #define BSS_SEC_FLAGS     SEC_ALLOC
 
+#define INIT_SEC_DATA(id, name, flags, align) \
+        { id, name, flags, align, NULL, NULL, NULL, 0, NULL }
 static sinfo secdata[NSECS] =
 {
   INIT_SEC_DATA (TEXT,   ".text",    TEXT_SEC_FLAGS,   2),
@@ -2327,8 +2088,8 @@ static sinfo secdata[NSECS] =
 
 #else
 
-/* Sections numbered to make the order the same as other PowerPC NT
-   compilers. This also keeps funny alignment thingies from happening.  */
+/* Sections numbered to make the order the same as other PowerPC NT    */
+/* compilers. This also keeps funny alignment thingies from happening.  */
 #define TEXT   0
 #define PDATA  1
 #define RDATA  2
@@ -2343,21 +2104,22 @@ static sinfo secdata[NSECS] =
 
 static sinfo secdata[NSECS] =
 {
-  INIT_SEC_DATA (TEXT,   ".text",    SEC_CODE | SEC_HAS_CONTENTS, 3),
-  INIT_SEC_DATA (PDATA,  ".pdata",   SEC_HAS_CONTENTS,            2),
-  INIT_SEC_DATA (RDATA,  ".reldata", SEC_HAS_CONTENTS,            2),
-  INIT_SEC_DATA (IDATA5, ".idata$5", SEC_HAS_CONTENTS,            2),
-  INIT_SEC_DATA (IDATA4, ".idata$4", SEC_HAS_CONTENTS,            2),
-  INIT_SEC_DATA (IDATA6, ".idata$6", SEC_HAS_CONTENTS,            1),
-  INIT_SEC_DATA (IDATA7, ".idata$7", SEC_HAS_CONTENTS,            2),
-  INIT_SEC_DATA (DATA,   ".data",    SEC_DATA,                    2),
-  INIT_SEC_DATA (BSS,    ".bss",     0,                           2)
+  { TEXT,   ".text",    SEC_CODE | SEC_HAS_CONTENTS, 3},
+  { PDATA,  ".pdata",   SEC_HAS_CONTENTS,            2},
+  { RDATA,  ".reldata", SEC_HAS_CONTENTS,            2},
+  { IDATA5, ".idata$5", SEC_HAS_CONTENTS,            2},
+  { IDATA4, ".idata$4", SEC_HAS_CONTENTS,            2},
+  { IDATA6, ".idata$6", SEC_HAS_CONTENTS,            1},
+  { IDATA7, ".idata$7", SEC_HAS_CONTENTS,            2},
+  { DATA,   ".data",    SEC_DATA,                    2},
+  { BSS,    ".bss",     0,                           2}
 };
 
 #endif
 
-/* This is what we're trying to make.  We generate the imp symbols with
-   both single and double underscores, for compatibility.
+/*
+This is what we're trying to make.  We generate the imp symbols with
+both single and double underscores, for compatibility.
 
 	.text
 	.global	_GetFileVersionInfoSizeW@8
@@ -2380,7 +2142,7 @@ ID2:	.short	2
 	.asciz	"GetFileVersionInfoSizeW"
 
 
-   For the PowerPC, here's the variation on the above scheme:
+For the PowerPC, here's the variation on the above scheme:
 
 # Rather than a simple "jmp *", the code to get to the dll function
 # looks like:
@@ -2391,354 +2153,299 @@ ID2:	.short	2
 	 stw	r2,4(r1)
 	 mtctr	r12
 	 lwz	r2,4(r11)
-	 bctr  */
+	 bctr
+*/
 
 static char *
-make_label (const char *prefix, const char *name)
+make_label (prefix, name)
+     const char *prefix;
+     const char *name;
 {
-  int len = strlen (ASM_PREFIX (name)) + strlen (prefix) + strlen (name);
-  char *copy = xmalloc (len + 1);
-
-  strcpy (copy, ASM_PREFIX (name));
+  int len = strlen (ASM_PREFIX) + strlen (prefix) + strlen (name);
+  char *copy = xmalloc (len +1 );
+  strcpy (copy, ASM_PREFIX);
   strcat (copy, prefix);
   strcat (copy, name);
   return copy;
 }
 
-static char *
-make_imp_label (const char *prefix, const char *name)
-{
-  int len;
-  char *copy;
-
-  if (name[0] == '@')
-    {
-      len = strlen (prefix) + strlen (name);
-      copy = xmalloc (len + 1);
-      strcpy (copy, prefix);
-      strcat (copy, name);
-    }
-  else
-    {
-      len = strlen (ASM_PREFIX (name)) + strlen (prefix) + strlen (name);
-      copy = xmalloc (len + 1);
-      strcpy (copy, prefix);
-      strcat (copy, ASM_PREFIX (name));
-      strcat (copy, name);
-    }
-  return copy;
-}
-
 static bfd *
-make_one_lib_file (export_type *exp, int i, int delay)
+make_one_lib_file (exp, i)
+     export_type *exp;
+     int i;
 {
-  bfd *      abfd;
-  asymbol *  exp_label;
-  asymbol *  iname = 0;
-  asymbol *  iname2;
-  asymbol *  iname_lab;
-  asymbol ** iname_lab_pp;
-  asymbol ** iname_pp;
+#if 0
+    {
+      char *name;
+      FILE *f;
+      const char *prefix = "d";
+      char *dest;
+
+      name = (char *) alloca (strlen (prefix) + 10);
+      sprintf (name, "%ss%05d.s", prefix, i);
+      f = fopen (name, FOPEN_WT);
+      fprintf (f, "\t.text\n");
+      fprintf (f, "\t%s\t%s%s\n", ASM_GLOBAL, ASM_PREFIX, exp->name);
+      if (create_compat_implib)
+	fprintf (f, "\t%s\t__imp_%s\n", ASM_GLOBAL, exp->name);
+      fprintf (f, "\t%s\t_imp__%s\n", ASM_GLOBAL, exp->name);
+      if (create_compat_implib)
+	fprintf (f, "%s%s:\n\t%s\t__imp_%s\n", ASM_PREFIX,
+		 exp->name, ASM_JUMP, exp->name);
+
+      fprintf (f, "\t.section\t.idata$7\t%s To force loading of head\n", ASM_C);
+      fprintf (f, "\t%s\t%s\n", ASM_LONG, head_label);
+
+
+      fprintf (f,"%s Import Address Table\n", ASM_C);
+
+      fprintf (f, "\t.section	.idata$5\n");
+      if (create_compat_implib)
+	fprintf (f, "__imp_%s:\n", exp->name);
+      fprintf (f, "_imp__%s:\n", exp->name);
+
+      dump_iat (f, exp);
+
+      fprintf (f, "\n%s Import Lookup Table\n", ASM_C);
+      fprintf (f, "\t.section	.idata$4\n");
+
+      dump_iat (f, exp);
+
+      if(!exp->noname || show_allnames)
+	{
+	  fprintf (f, "%s Hint/Name table\n", ASM_C);
+	  fprintf (f, "\t.section	.idata$6\n");
+	  fprintf (f, "ID%d:\t%s\t%d\n", exp->ordinal, ASM_SHORT, exp->hint);
+	  fprintf (f, "\t%s\t\"%s\"\n", ASM_TEXT, xlate (exp->name));
+	}
+
+      fclose (f);
+
+      dest = (char *) alloca (strlen (prefix) + 10);
+      sprintf (dest, "%ss%05d.o", prefix, i);
+      assemble_file (name, dest);
+    }
+#else /* if 0 */
+    {
+      bfd *      abfd;
+      asymbol *  exp_label;
+      asymbol *  iname = 0;
+      asymbol *  iname2;
+      asymbol *  iname_lab;
+      asymbol ** iname_lab_pp;
+      asymbol ** iname_pp;
 #ifdef DLLTOOL_PPC
-  asymbol ** fn_pp;
-  asymbol ** toc_pp;
+      asymbol ** fn_pp;
+      asymbol ** toc_pp;
 #define EXTRA	 2
 #endif
 #ifndef EXTRA
 #define EXTRA    0
 #endif
-  asymbol *  ptrs[NSECS + 4 + EXTRA + 1];
-  flagword   applicable;
-  char *     outname = xmalloc (strlen (TMP_STUB) + 10);
-  int        oidx = 0;
+      asymbol *  ptrs[NSECS + 4 + EXTRA + 1];
+      flagword   applicable;
+
+      char *     outname = xmalloc (10);
+      int        oidx = 0;
 
 
-  sprintf (outname, "%s%05d.o", TMP_STUB, i);
+      sprintf (outname, "%s%05d.o", TMP_STUB, i);
 
-  abfd = bfd_openw (outname, HOW_BFD_WRITE_TARGET);
+      abfd = bfd_openw (outname, HOW_BFD_WRITE_TARGET);
 
-  if (!abfd)
-    /* xgettext:c-format */
-    fatal (_("bfd_open failed open stub file: %s: %s"),
-	   outname, bfd_get_errmsg ());
+      if (!abfd)
+	/* xgettext:c-format */
+	fatal (_("bfd_open failed open stub file: %s"), outname);
 
-  /* xgettext:c-format */
-  inform (_("Creating stub file: %s"), outname);
+      /* xgettext:c-format */
+      inform (_("Creating stub file: %s"), outname);
 
-  bfd_set_format (abfd, bfd_object);
-  bfd_set_arch_mach (abfd, HOW_BFD_ARCH, 0);
-
-#ifdef DLLTOOL_ARM
-  if (machine == MARM_INTERWORK || machine == MTHUMB)
-    bfd_set_private_flags (abfd, F_INTERWORK);
-#endif
-
-  applicable = bfd_applicable_section_flags (abfd);
-
-  /* First make symbols for the sections.  */
-  for (i = 0; i < NSECS; i++)
-    {
-      sinfo *si = secdata + i;
-
-      if (si->id != i)
-	abort ();
-      si->sec = bfd_make_section_old_way (abfd, si->name);
-      bfd_set_section_flags (si->sec, si->flags & applicable);
-
-      bfd_set_section_alignment (si->sec, si->align);
-      si->sec->output_section = si->sec;
-      si->sym = bfd_make_empty_symbol(abfd);
-      si->sym->name = si->sec->name;
-      si->sym->section = si->sec;
-      si->sym->flags = BSF_LOCAL;
-      si->sym->value = 0;
-      ptrs[oidx] = si->sym;
-      si->sympp = ptrs + oidx;
-      si->size = 0;
-      si->data = NULL;
-
-      oidx++;
-    }
-
-  if (! exp->data)
-    {
-      exp_label = bfd_make_empty_symbol (abfd);
-      exp_label->name = make_imp_label ("", exp->name);
-
-      /* On PowerPC, the function name points to a descriptor in
-	 the rdata section, the first element of which is a
-	 pointer to the code (..function_name), and the second
-	 points to the .toc.  */
-#ifdef DLLTOOL_PPC
-      if (machine == MPPC)
-	exp_label->section = secdata[RDATA].sec;
-      else
-#endif
-	exp_label->section = secdata[TEXT].sec;
-
-      exp_label->flags = BSF_GLOBAL;
-      exp_label->value = 0;
+      bfd_set_format (abfd, bfd_object);
+      bfd_set_arch_mach (abfd, HOW_BFD_ARCH, 0);
 
 #ifdef DLLTOOL_ARM
-      if (machine == MTHUMB)
-	bfd_coff_set_symbol_class (abfd, exp_label, C_THUMBEXTFUNC);
-#endif
-      ptrs[oidx++] = exp_label;
-    }
-
-  /* Generate imp symbols with one underscore for Microsoft
-     compatibility, and with two underscores for backward
-     compatibility with old versions of cygwin.  */
-  if (create_compat_implib)
-    {
-      iname = bfd_make_empty_symbol (abfd);
-      iname->name = make_imp_label ("___imp", exp->name);
-      iname->section = secdata[IDATA5].sec;
-      iname->flags = BSF_GLOBAL;
-      iname->value = 0;
-    }
-
-  iname2 = bfd_make_empty_symbol (abfd);
-  iname2->name = make_imp_label ("__imp_", exp->name);
-  iname2->section = secdata[IDATA5].sec;
-  iname2->flags = BSF_GLOBAL;
-  iname2->value = 0;
-
-  iname_lab = bfd_make_empty_symbol (abfd);
-
-  iname_lab->name = head_label;
-  iname_lab->section = bfd_und_section_ptr;
-  iname_lab->flags = 0;
-  iname_lab->value = 0;
-
-  iname_pp = ptrs + oidx;
-  if (create_compat_implib)
-    ptrs[oidx++] = iname;
-  ptrs[oidx++] = iname2;
-
-  iname_lab_pp = ptrs + oidx;
-  ptrs[oidx++] = iname_lab;
-
-#ifdef DLLTOOL_PPC
-  /* The symbol referring to the code (.text).  */
-  {
-    asymbol *function_name;
-
-    function_name = bfd_make_empty_symbol(abfd);
-    function_name->name = make_label ("..", exp->name);
-    function_name->section = secdata[TEXT].sec;
-    function_name->flags = BSF_GLOBAL;
-    function_name->value = 0;
-
-    fn_pp = ptrs + oidx;
-    ptrs[oidx++] = function_name;
-  }
-
-  /* The .toc symbol.  */
-  {
-    asymbol *toc_symbol;
-
-    toc_symbol = bfd_make_empty_symbol (abfd);
-    toc_symbol->name = make_label (".", "toc");
-    toc_symbol->section = bfd_und_section_ptr;
-    toc_symbol->flags = BSF_GLOBAL;
-    toc_symbol->value = 0;
-
-    toc_pp = ptrs + oidx;
-    ptrs[oidx++] = toc_symbol;
-  }
+      if (machine == MARM_INTERWORK || machine == MTHUMB)
+	bfd_set_private_flags (abfd, F_INTERWORK);
 #endif
 
-  ptrs[oidx] = 0;
+      applicable = bfd_applicable_section_flags (abfd);
 
-  for (i = 0; i < NSECS; i++)
-    {
-      sinfo *si = secdata + i;
-      asection *sec = si->sec;
-      arelent *rel, *rel2 = 0, *rel3 = 0;
-      arelent **rpp;
-
-      switch (i)
+      /* First make symbols for the sections */
+      for (i = 0; i < NSECS; i++)
 	{
-	case TEXT:
-	  if (! exp->data)
+	  sinfo *si = secdata + i;
+	  if (si->id != i)
+	    abort();
+	  si->sec = bfd_make_section_old_way (abfd, si->name);
+	  bfd_set_section_flags (abfd,
+				 si->sec,
+				 si->flags & applicable);
+
+	  bfd_set_section_alignment(abfd, si->sec, si->align);
+	  si->sec->output_section = si->sec;
+	  si->sym = bfd_make_empty_symbol(abfd);
+	  si->sym->name = si->sec->name;
+	  si->sym->section = si->sec;
+	  si->sym->flags = BSF_LOCAL;
+	  si->sym->value = 0;
+	  ptrs[oidx] = si->sym;
+	  si->sympp = ptrs + oidx;
+	  si->size = 0;
+	  si->data = NULL;
+
+	  oidx++;
+	}
+
+      if (! exp->data)
+	{
+	  exp_label = bfd_make_empty_symbol (abfd);
+	  exp_label->name = make_label ("", exp->name);
+
+	  /* On PowerPC, the function name points to a descriptor in
+	     the rdata section, the first element of which is a
+	     pointer to the code (..function_name), and the second
+	     points to the .toc */
+#ifdef DLLTOOL_PPC
+	  if (machine == MPPC)
+	    exp_label->section = secdata[RDATA].sec;
+	  else
+#endif
+	    exp_label->section = secdata[TEXT].sec;
+
+	  exp_label->flags = BSF_GLOBAL;
+	  exp_label->value = 0;
+
+#ifdef DLLTOOL_ARM
+	  if (machine == MTHUMB)
+	    bfd_coff_set_symbol_class (abfd, exp_label, C_THUMBEXTFUNC);
+#endif
+	  ptrs[oidx++] = exp_label;
+	}
+
+      /* Generate imp symbols with one underscore for Microsoft
+         compatibility, and with two underscores for backward
+         compatibility with old versions of cygwin.  */
+      if (create_compat_implib)
+	{
+	  iname = bfd_make_empty_symbol (abfd);
+	  iname->name = make_label ("__imp_", exp->name);
+	  iname->section = secdata[IDATA5].sec;
+	  iname->flags = BSF_GLOBAL;
+	  iname->value = 0;
+	}
+
+      iname2 = bfd_make_empty_symbol (abfd);
+      iname2->name = make_label ("_imp__", exp->name);
+      iname2->section = secdata[IDATA5].sec;
+      iname2->flags = BSF_GLOBAL;
+      iname2->value = 0;
+
+      iname_lab = bfd_make_empty_symbol(abfd);
+
+      iname_lab->name = head_label;
+      iname_lab->section = (asection *)&bfd_und_section;
+      iname_lab->flags = 0;
+      iname_lab->value = 0;
+
+
+      iname_pp = ptrs + oidx;
+      if (create_compat_implib)
+	ptrs[oidx++] = iname;
+      ptrs[oidx++] = iname2;
+
+      iname_lab_pp = ptrs + oidx;
+      ptrs[oidx++] = iname_lab;
+
+#ifdef DLLTOOL_PPC
+      /* The symbol refering to the code (.text) */
+      {
+	asymbol *function_name;
+
+	function_name = bfd_make_empty_symbol(abfd);
+	function_name->name = make_label ("..", exp->name);
+	function_name->section = secdata[TEXT].sec;
+	function_name->flags = BSF_GLOBAL;
+	function_name->value = 0;
+
+	fn_pp = ptrs + oidx;
+	ptrs[oidx++] = function_name;
+      }
+
+      /* The .toc symbol */
+      {
+	asymbol *toc_symbol;    /* The .toc symbol */
+
+	toc_symbol = bfd_make_empty_symbol (abfd);
+	toc_symbol->name = make_label (".", "toc");
+	toc_symbol->section = (asection *)&bfd_und_section;
+	toc_symbol->flags = BSF_GLOBAL;
+	toc_symbol->value = 0;
+
+	toc_pp = ptrs + oidx;
+	ptrs[oidx++] = toc_symbol;
+      }
+#endif
+
+      ptrs[oidx] = 0;
+
+      for (i = 0; i < NSECS; i++)
+	{
+	  sinfo *si = secdata + i;
+	  asection *sec = si->sec;
+	  arelent *rel;
+	  arelent **rpp;
+
+	  switch (i)
 	    {
-	      si->size = HOW_JTAB_SIZE;
-	      si->data = xmalloc (HOW_JTAB_SIZE);
-	      memcpy (si->data, HOW_JTAB, HOW_JTAB_SIZE);
-
-	      /* Add the reloc into idata$5.  */
-	      rel = xmalloc (sizeof (arelent));
-
-	      rpp = xmalloc (sizeof (arelent *) * (delay ? 4 : 2));
-	      rpp[0] = rel;
-	      rpp[1] = 0;
-
-	      rel->address = HOW_JTAB_ROFF;
-	      rel->addend = 0;
-
-	      if (delay)
-	        {
-	          rel2 = xmalloc (sizeof (arelent));
-	          rpp[1] = rel2;
-	          rel2->address = HOW_JTAB_ROFF2;
-	          rel2->addend = 0;
-	          rel3 = xmalloc (sizeof (arelent));
-	          rpp[2] = rel3;
-	          rel3->address = HOW_JTAB_ROFF3;
-	          rel3->addend = 0;
-	          rpp[3] = 0;
-	        }
-
-	      if (machine == MPPC)
+	    case TEXT:
+	      if (! exp->data)
 		{
-		  rel->howto = bfd_reloc_type_lookup (abfd,
-						      BFD_RELOC_16_GOTOFF);
-		  rel->sym_ptr_ptr = iname_pp;
-		}
-	      else if (machine == MX86)
-		{
-		  rel->howto = bfd_reloc_type_lookup (abfd,
-						      BFD_RELOC_32_PCREL);
-		  rel->sym_ptr_ptr = iname_pp;
-		}
-	      else
-		{
-		  rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-		  rel->sym_ptr_ptr = secdata[IDATA5].sympp;
-		}
+		  si->size = HOW_JTAB_SIZE;
+		  si->data = xmalloc (HOW_JTAB_SIZE);
+		  memcpy (si->data, HOW_JTAB, HOW_JTAB_SIZE);
 
-	      if (delay)
-	        {
-		  if (machine == MX86)
-		   rel2->howto = bfd_reloc_type_lookup (abfd,
-							BFD_RELOC_32_PCREL);
-	          else
-	            rel2->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-	          rel2->sym_ptr_ptr = rel->sym_ptr_ptr;
-	          rel3->howto = bfd_reloc_type_lookup (abfd,
-						       BFD_RELOC_32_PCREL);
-	          rel3->sym_ptr_ptr = iname_lab_pp;
-	        }
-
-	      sec->orelocation = rpp;
-	      sec->reloc_count = delay ? 3 : 1;
-	    }
-	  break;
-
-	case IDATA5:
-	  if (delay)
-	    {
-	      si->size = create_for_pep ? 8 : 4;
-	      si->data = xmalloc (si->size);
-	      sec->reloc_count = 1;
-	      memset (si->data, 0, si->size);
-	      /* Point after jmp [__imp_...] instruction.  */
-	      si->data[0] = 6;
-	      rel = xmalloc (sizeof (arelent));
-	      rpp = xmalloc (sizeof (arelent *) * 2);
-	      rpp[0] = rel;
-	      rpp[1] = 0;
-	      rel->address = 0;
-	      rel->addend = 0;
-	      if (create_for_pep)
-	        rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_64);
-	      else
-	        rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-	      rel->sym_ptr_ptr = secdata[TEXT].sympp;
-	      sec->orelocation = rpp;
-	      break;
-	    }
-	  /* Fall through.  */
-
-	case IDATA4:
-	  /* An idata$4 or idata$5 is one word long, and has an
-	     rva to idata$6.  */
-
-	  if (create_for_pep)
-	    {
-	      si->data = xmalloc (8);
-	      si->size = 8;
-	      if (exp->noname)
-	        {
-		  si->data[0] = exp->ordinal ;
-		  si->data[1] = exp->ordinal >> 8;
-		  si->data[2] = exp->ordinal >> 16;
-		  si->data[3] = exp->ordinal >> 24;
-		  si->data[4] = 0;
-		  si->data[5] = 0;
-		  si->data[6] = 0;
-		  si->data[7] = 0x80;
-	        }
-	      else
-	        {
-		  sec->reloc_count = 1;
-		  memset (si->data, 0, si->size);
+		  /* add the reloc into idata$5 */
 		  rel = xmalloc (sizeof (arelent));
+
 		  rpp = xmalloc (sizeof (arelent *) * 2);
 		  rpp[0] = rel;
 		  rpp[1] = 0;
-		  rel->address = 0;
+
+		  rel->address = HOW_JTAB_ROFF;
 		  rel->addend = 0;
-		  rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_RVA);
-		  rel->sym_ptr_ptr = secdata[IDATA6].sympp;
+
+		  if (machine == MPPC)
+		    {
+		      rel->howto = bfd_reloc_type_lookup (abfd,
+							  BFD_RELOC_16_GOTOFF);
+		      rel->sym_ptr_ptr = iname_pp;
+		    }
+		  else
+		    {
+		      rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
+		      rel->sym_ptr_ptr = secdata[IDATA5].sympp;
+		    }
 		  sec->orelocation = rpp;
-	        }
-	    }
-	  else
-	    {
+		  sec->reloc_count = 1;
+		}
+	      break;
+	    case IDATA4:
+	    case IDATA5:
+	      /* An idata$4 or idata$5 is one word long, and has an
+		 rva to idata$6 */
+
 	      si->data = xmalloc (4);
 	      si->size = 4;
 
 	      if (exp->noname)
-	        {
+		{
 		  si->data[0] = exp->ordinal ;
 		  si->data[1] = exp->ordinal >> 8;
 		  si->data[2] = exp->ordinal >> 16;
 		  si->data[3] = 0x80;
-	        }
+		}
 	      else
-	        {
+		{
 		  sec->reloc_count = 1;
 		  memset (si->data, 0, si->size);
 		  rel = xmalloc (sizeof (arelent));
@@ -2750,199 +2457,193 @@ make_one_lib_file (export_type *exp, int i, int delay)
 		  rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_RVA);
 		  rel->sym_ptr_ptr = secdata[IDATA6].sympp;
 		  sec->orelocation = rpp;
-	      }
-	    }
-	  break;
+		}
 
-	case IDATA6:
-	  if (!exp->noname)
-	    {
-	      int idx = exp->ordinal;
+	      break;
 
-	      if (exp->its_name)
-	        si->size = strlen (exp->its_name) + 3;
-	      else
-	        si->size = strlen (xlate (exp->import_name)) + 3;
-	      si->data = xmalloc (si->size);
+	    case IDATA6:
+	      if (!exp->noname)
+		{
+		  /* This used to add 1 to exp->hint.  I don't know
+                     why it did that, and it does not match what I see
+                     in programs compiled with the MS tools.  */
+		  int idx = exp->hint;
+		  si->size = strlen (xlate (exp->name)) + 3;
+		  si->data = xmalloc (si->size);
+		  si->data[0] = idx & 0xff;
+		  si->data[1] = idx >> 8;
+		  strcpy (si->data + 2, xlate (exp->name));
+		}
+	      break;
+	    case IDATA7:
+	      si->size = 4;
+	      si->data =xmalloc(4);
 	      memset (si->data, 0, si->size);
-	      si->data[0] = idx & 0xff;
-	      si->data[1] = idx >> 8;
-	      if (exp->its_name)
-		strcpy ((char *) si->data + 2, exp->its_name);
-	      else
-		strcpy ((char *) si->data + 2, xlate (exp->import_name));
-	    }
-	  break;
-	case IDATA7:
-	  if (delay)
-	    break;
-	  si->size = 4;
-	  si->data = xmalloc (4);
-	  memset (si->data, 0, si->size);
-	  rel = xmalloc (sizeof (arelent));
-	  rpp = xmalloc (sizeof (arelent *) * 2);
-	  rpp[0] = rel;
-	  rel->address = 0;
-	  rel->addend = 0;
-	  rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_RVA);
-	  rel->sym_ptr_ptr = iname_lab_pp;
-	  sec->orelocation = rpp;
-	  sec->reloc_count = 1;
-	  break;
+	      rel = xmalloc (sizeof (arelent));
+	      rpp = xmalloc (sizeof (arelent *) * 2);
+	      rpp[0] = rel;
+	      rel->address = 0;
+	      rel->addend = 0;
+	      rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_RVA);
+	      rel->sym_ptr_ptr = iname_lab_pp;
+	      sec->orelocation = rpp;
+	      sec->reloc_count = 1;
+	      break;
 
 #ifdef DLLTOOL_PPC
-	case PDATA:
-	  {
-	    /* The .pdata section is 5 words long.
-	       Think of it as:
-	       struct
-	       {
-	       bfd_vma BeginAddress,     [0x00]
-	       EndAddress,       [0x04]
-	       ExceptionHandler, [0x08]
-	       HandlerData,      [0x0c]
-	       PrologEndAddress; [0x10]
-	       };  */
+	    case PDATA:
+	      {
+		/* The .pdata section is 5 words long.  */
+		/* Think of it as:                     */
+		/* struct                              */
+		/* {                                   */
+		/*   bfd_vma BeginAddress,     [0x00]  */
+		/*           EndAddress,       [0x04]  */
+		/*	     ExceptionHandler, [0x08]  */
+		/*	     HandlerData,      [0x0c]  */
+		/*	     PrologEndAddress; [0x10]  */
+		/* };                                  */
 
-	    /* So this pdata section setups up this as a glue linkage to
-	       a dll routine. There are a number of house keeping things
-	       we need to do:
+		/* So this pdata section setups up this as a glue linkage to
+		   a dll routine. There are a number of house keeping things
+		   we need to do:
 
-	       1. In the name of glue trickery, the ADDR32 relocs for 0,
-	       4, and 0x10 are set to point to the same place:
-	       "..function_name".
-	       2. There is one more reloc needed in the pdata section.
-	       The actual glue instruction to restore the toc on
-	       return is saved as the offset in an IMGLUE reloc.
-	       So we need a total of four relocs for this section.
+		   1. In the name of glue trickery, the ADDR32 relocs for 0,
+		      4, and 0x10 are set to point to the same place:
+		      "..function_name".
+		   2. There is one more reloc needed in the pdata section.
+		      The actual glue instruction to restore the toc on
+		      return is saved as the offset in an IMGLUE reloc.
+		      So we need a total of four relocs for this section.
 
-	       3. Lastly, the HandlerData field is set to 0x03, to indicate
-	       that this is a glue routine.  */
-	    arelent *imglue, *ba_rel, *ea_rel, *pea_rel;
+		   3. Lastly, the HandlerData field is set to 0x03, to indicate
+		      that this is a glue routine.
+		*/
+		arelent *imglue, *ba_rel, *ea_rel, *pea_rel;
 
-	    /* Alignment must be set to 2**2 or you get extra stuff.  */
-	    bfd_set_section_alignment (sec, 2);
+		/* alignment must be set to 2**2 or you get extra stuff */
+		bfd_set_section_alignment(abfd, sec, 2);
 
-	    si->size = 4 * 5;
-	    si->data = xmalloc (si->size);
-	    memset (si->data, 0, si->size);
-	    rpp = xmalloc (sizeof (arelent *) * 5);
-	    rpp[0] = imglue  = xmalloc (sizeof (arelent));
-	    rpp[1] = ba_rel  = xmalloc (sizeof (arelent));
-	    rpp[2] = ea_rel  = xmalloc (sizeof (arelent));
-	    rpp[3] = pea_rel = xmalloc (sizeof (arelent));
-	    rpp[4] = 0;
+		si->size = 4 * 5;
+		si->data =xmalloc(4 * 5);
+		memset (si->data, 0, si->size);
+		rpp = xmalloc (sizeof (arelent *) * 5);
+		rpp[0] = imglue  = xmalloc (sizeof (arelent));
+		rpp[1] = ba_rel  = xmalloc (sizeof (arelent));
+		rpp[2] = ea_rel  = xmalloc (sizeof (arelent));
+		rpp[3] = pea_rel = xmalloc (sizeof (arelent));
+		rpp[4] = 0;
 
-	    /* Stick the toc reload instruction in the glue reloc.  */
-	    bfd_put_32(abfd, ppc_glue_insn, (char *) &imglue->address);
+		/* stick the toc reload instruction in the glue reloc */
+		bfd_put_32(abfd, ppc_glue_insn, (char *) &imglue->address);
 
-	    imglue->addend = 0;
-	    imglue->howto = bfd_reloc_type_lookup (abfd,
-						   BFD_RELOC_32_GOTOFF);
-	    imglue->sym_ptr_ptr = fn_pp;
+		imglue->addend = 0;
+		imglue->howto = bfd_reloc_type_lookup (abfd,
+						       BFD_RELOC_32_GOTOFF);
+		imglue->sym_ptr_ptr = fn_pp;
 
-	    ba_rel->address = 0;
-	    ba_rel->addend = 0;
-	    ba_rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-	    ba_rel->sym_ptr_ptr = fn_pp;
+		ba_rel->address = 0;
+		ba_rel->addend = 0;
+		ba_rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
+		ba_rel->sym_ptr_ptr = fn_pp;
 
-	    bfd_put_32 (abfd, 0x18, si->data + 0x04);
-	    ea_rel->address = 4;
-	    ea_rel->addend = 0;
-	    ea_rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-	    ea_rel->sym_ptr_ptr = fn_pp;
+		bfd_put_32(abfd, 0x18, si->data + 0x04);
+		ea_rel->address = 4;
+		ea_rel->addend = 0;
+		ea_rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
+		ea_rel->sym_ptr_ptr = fn_pp;
 
-	    /* Mark it as glue.  */
-	    bfd_put_32 (abfd, 0x03, si->data + 0x0c);
+		/* mark it as glue */
+		bfd_put_32(abfd, 0x03, si->data + 0x0c);
 
-	    /* Mark the prolog end address.  */
-	    bfd_put_32 (abfd, 0x0D, si->data + 0x10);
-	    pea_rel->address = 0x10;
-	    pea_rel->addend = 0;
-	    pea_rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-	    pea_rel->sym_ptr_ptr = fn_pp;
+		/* mark the prolog end address */
+		bfd_put_32(abfd, 0x0D, si->data + 0x10);
+		pea_rel->address = 0x10;
+		pea_rel->addend = 0;
+		pea_rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
+		pea_rel->sym_ptr_ptr = fn_pp;
 
-	    sec->orelocation = rpp;
-	    sec->reloc_count = 4;
-	    break;
-	  }
-	case RDATA:
-	  /* Each external function in a PowerPC PE file has a two word
-	     descriptor consisting of:
-	     1. The address of the code.
-	     2. The address of the appropriate .toc
-	     We use relocs to build this.  */
-	  si->size = 8;
-	  si->data = xmalloc (8);
-	  memset (si->data, 0, si->size);
+		sec->orelocation = rpp;
+		sec->reloc_count = 4;
+		break;
+	      }
+	    case RDATA:
+	      /* Each external function in a PowerPC PE file has a two word
+		 descriptor consisting of:
+		 1. The address of the code.
+		 2. The address of the appropriate .toc
+	         We use relocs to build this.
+	      */
 
-	  rpp = xmalloc (sizeof (arelent *) * 3);
-	  rpp[0] = rel = xmalloc (sizeof (arelent));
-	  rpp[1] = xmalloc (sizeof (arelent));
-	  rpp[2] = 0;
+	      si->size = 8;
+	      si->data = xmalloc (8);
+	      memset (si->data, 0, si->size);
 
-	  rel->address = 0;
-	  rel->addend = 0;
-	  rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-	  rel->sym_ptr_ptr = fn_pp;
+	      rpp = xmalloc (sizeof (arelent *) * 3);
+	      rpp[0] = rel = xmalloc (sizeof (arelent));
+	      rpp[1] = xmalloc (sizeof (arelent));
+	      rpp[2] = 0;
 
-	  rel = rpp[1];
+	      rel->address = 0;
+	      rel->addend = 0;
+	      rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
+	      rel->sym_ptr_ptr = fn_pp;
 
-	  rel->address = 4;
-	  rel->addend = 0;
-	  rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
-	  rel->sym_ptr_ptr = toc_pp;
+	      rel = rpp[1];
 
-	  sec->orelocation = rpp;
-	  sec->reloc_count = 2;
-	  break;
+	      rel->address = 4;
+	      rel->addend = 0;
+	      rel->howto = bfd_reloc_type_lookup (abfd, BFD_RELOC_32);
+	      rel->sym_ptr_ptr = toc_pp;
+
+	      sec->orelocation = rpp;
+	      sec->reloc_count = 2;
+	      break;
 #endif /* DLLTOOL_PPC */
+	    }
 	}
-    }
 
-  {
-    bfd_vma vma = 0;
-    /* Size up all the sections.  */
-    for (i = 0; i < NSECS; i++)
       {
-	sinfo *si = secdata + i;
+	bfd_vma vma = 0;
+	/* Size up all the sections */
+	for (i = 0; i < NSECS; i++)
+	  {
+	    sinfo *si = secdata + i;
 
-	bfd_set_section_size (si->sec, si->size);
-	bfd_set_section_vma (si->sec, vma);
+	    bfd_set_section_size (abfd, si->sec, si->size);
+	    bfd_set_section_vma (abfd, si->sec, vma);
+
+/*	    vma += si->size;*/
+	  }
       }
-  }
-  /* Write them out.  */
-  for (i = 0; i < NSECS; i++)
-    {
-      sinfo *si = secdata + i;
+      /* Write them out */
+      for (i = 0; i < NSECS; i++)
+	{
+	  sinfo *si = secdata + i;
 
-      if (i == IDATA5 && no_idata5)
-	continue;
+	  if (i == IDATA5 && no_idata5)
+	    continue;
 
-      if (i == IDATA4 && no_idata4)
-	continue;
+	  if (i == IDATA4 && no_idata4)
+	    continue;
 
-      bfd_set_section_contents (abfd, si->sec,
-				si->data, 0,
-				si->size);
+	  bfd_set_section_contents (abfd, si->sec,
+				    si->data, 0,
+				    si->size);
+	}
+
+      bfd_set_symtab (abfd, ptrs, oidx);
+      bfd_close (abfd);
+      abfd = bfd_openr (outname, HOW_BFD_READ_TARGET);
+      return abfd;
     }
-
-  bfd_set_symtab (abfd, ptrs, oidx);
-  bfd_close (abfd);
-  abfd = bfd_openr (outname, HOW_BFD_READ_TARGET);
-  if (!abfd)
-    /* xgettext:c-format */
-    fatal (_("bfd_open failed reopen stub file: %s: %s"),
-	   outname, bfd_get_errmsg ());
-
-  return abfd;
+#endif
 }
 
 static bfd *
-make_head (void)
+make_head ()
 {
   FILE *f = fopen (TMP_HEAD_S, FOPEN_WT);
-  bfd *abfd;
 
   if (f == NULL)
     {
@@ -2950,12 +2651,10 @@ make_head (void)
       return NULL;
     }
 
-  temp_file_to_remove[TEMP_HEAD_FILE] = TMP_HEAD_S;
-
   fprintf (f, "%s IMAGE_IMPORT_DESCRIPTOR\n", ASM_C);
-  fprintf (f, "\t.section\t.idata$2\n");
+  fprintf (f, "\t.section	.idata$2\n");
 
-  fprintf (f,"\t%s\t%s\n", ASM_GLOBAL, head_label);
+  fprintf(f,"\t%s\t%s\n", ASM_GLOBAL,head_label);
 
   fprintf (f, "%s:\n", head_label);
 
@@ -2980,26 +2679,16 @@ make_head (void)
   if (!no_idata5)
     {
       fprintf (f, "\t.section\t.idata$5\n");
-      if (use_nul_prefixed_import_tables)
-        {
-	  if (create_for_pep)
-	    fprintf (f,"\t%s\t0\n\t%s\t0\n", ASM_LONG, ASM_LONG);
-	  else
-	    fprintf (f,"\t%s\t0\n", ASM_LONG);
-        }
+      fprintf (f, "\t%s\t0\n", ASM_LONG);
       fprintf (f, "fthunk:\n");
     }
 
   if (!no_idata4)
     {
       fprintf (f, "\t.section\t.idata$4\n");
-      if (use_nul_prefixed_import_tables)
-        {
-	  if (create_for_pep)
-	    fprintf (f,"\t%s\t0\n\t%s\t0\n", ASM_LONG, ASM_LONG);
-	  else
-	    fprintf (f,"\t%s\t0\n", ASM_LONG);
-        }
+
+      fprintf (f, "\t%s\t0\n", ASM_LONG);
+      fprintf (f, "\t.section	.idata$4\n");
       fprintf (f, "hname:\n");
     }
 
@@ -3007,107 +2696,13 @@ make_head (void)
 
   assemble_file (TMP_HEAD_S, TMP_HEAD_O);
 
-  abfd = bfd_openr (TMP_HEAD_O, HOW_BFD_READ_TARGET);
-  if (abfd == NULL)
-    /* xgettext:c-format */
-    fatal (_("failed to open temporary head file: %s: %s"),
-	   TMP_HEAD_O, bfd_get_errmsg ());
-
-  temp_file_to_remove[TEMP_HEAD_O_FILE] = TMP_HEAD_O;
-  return abfd;
-}
-
-bfd *
-make_delay_head (void)
-{
-  FILE *f = fopen (TMP_HEAD_S, FOPEN_WT);
-  bfd *abfd;
-
-  if (f == NULL)
-    {
-      fatal (_("failed to open temporary head file: %s"), TMP_HEAD_S);
-      return NULL;
-    }
-
-  temp_file_to_remove[TEMP_HEAD_FILE] = TMP_HEAD_S;
-
-  /* Output the __tailMerge__xxx function */
-  fprintf (f, "%s Import trampoline\n", ASM_C);
-  fprintf (f, "\t.section\t.text\n");
-  fprintf(f,"\t%s\t%s\n", ASM_GLOBAL, head_label);
-  fprintf (f, "%s:\n", head_label);
-  fprintf (f, mtable[machine].trampoline, imp_name_lab);
-
-  /* Output the delay import descriptor */
-  fprintf (f, "\n%s DELAY_IMPORT_DESCRIPTOR\n", ASM_C);
-  fprintf (f, ".section\t.text$2\n");
-  fprintf (f,"%s __DELAY_IMPORT_DESCRIPTOR_%s\n", ASM_GLOBAL,imp_name_lab);
-  fprintf (f, "__DELAY_IMPORT_DESCRIPTOR_%s:\n", imp_name_lab);
-  fprintf (f, "\t%s 1\t%s grAttrs\n", ASM_LONG, ASM_C);
-  fprintf (f, "\t%s__%s_iname%s\t%s rvaDLLName\n",
-	   ASM_RVA_BEFORE, imp_name_lab, ASM_RVA_AFTER, ASM_C);
-  fprintf (f, "\t%s__DLL_HANDLE_%s%s\t%s rvaHmod\n",
-	   ASM_RVA_BEFORE, imp_name_lab, ASM_RVA_AFTER, ASM_C);
-  fprintf (f, "\t%s__IAT_%s%s\t%s rvaIAT\n",
-	   ASM_RVA_BEFORE, imp_name_lab, ASM_RVA_AFTER, ASM_C);
-  fprintf (f, "\t%s__INT_%s%s\t%s rvaINT\n",
-	   ASM_RVA_BEFORE, imp_name_lab, ASM_RVA_AFTER, ASM_C);
-  fprintf (f, "\t%s\t0\t%s rvaBoundIAT\n", ASM_LONG, ASM_C);
-  fprintf (f, "\t%s\t0\t%s rvaUnloadIAT\n", ASM_LONG, ASM_C);
-  fprintf (f, "\t%s\t0\t%s dwTimeStamp\n", ASM_LONG, ASM_C);
-
-  /* Output the dll_handle */
-  fprintf (f, "\n.section .data\n");
-  fprintf (f, "__DLL_HANDLE_%s:\n", imp_name_lab);
-  fprintf (f, "\t%s\t0\t%s Handle\n", ASM_LONG, ASM_C);
-  if (create_for_pep)
-    fprintf (f, "\t%s\t0\n", ASM_LONG);
-  fprintf (f, "\n");
-
-  fprintf (f, "%sStuff for compatibility\n", ASM_C);
-
-  if (!no_idata5)
-    {
-      fprintf (f, "\t.section\t.idata$5\n");
-      /* NULL terminating list.  */
-      if (create_for_pep)
-        fprintf (f,"\t%s\t0\n\t%s\t0\n", ASM_LONG, ASM_LONG);
-      else
-        fprintf (f,"\t%s\t0\n", ASM_LONG);
-      fprintf (f, "__IAT_%s:\n", imp_name_lab);
-    }
-
-  if (!no_idata4)
-    {
-      fprintf (f, "\t.section\t.idata$4\n");
-      fprintf (f, "\t%s\t0\n", ASM_LONG);
-      if (create_for_pep)
-        fprintf (f, "\t%s\t0\n", ASM_LONG);
-      fprintf (f, "\t.section\t.idata$4\n");
-      fprintf (f, "__INT_%s:\n", imp_name_lab);
-    }
-
-  fprintf (f, "\t.section\t.idata$2\n");
-
-  fclose (f);
-
-  assemble_file (TMP_HEAD_S, TMP_HEAD_O);
-
-  abfd = bfd_openr (TMP_HEAD_O, HOW_BFD_READ_TARGET);
-  if (abfd == NULL)
-    /* xgettext:c-format */
-    fatal (_("failed to open temporary head file: %s: %s"),
-	   TMP_HEAD_O, bfd_get_errmsg ());
-
-  temp_file_to_remove[TEMP_HEAD_O_FILE] = TMP_HEAD_O;
-  return abfd;
+  return bfd_openr (TMP_HEAD_O, HOW_BFD_READ_TARGET);
 }
 
 static bfd *
-make_tail (void)
+make_tail ()
 {
   FILE *f = fopen (TMP_TAIL_S, FOPEN_WT);
-  bfd *abfd;
 
   if (f == NULL)
     {
@@ -3115,24 +2710,16 @@ make_tail (void)
       return NULL;
     }
 
-  temp_file_to_remove[TEMP_TAIL_FILE] = TMP_TAIL_S;
-
   if (!no_idata4)
     {
-      fprintf (f, "\t.section\t.idata$4\n");
-      if (create_for_pep)
-	fprintf (f,"\t%s\t0\n\t%s\t0\n", ASM_LONG, ASM_LONG);
-      else
-	fprintf (f,"\t%s\t0\n", ASM_LONG); /* NULL terminating list.  */
+      fprintf (f, "\t.section	.idata$4\n");
+      fprintf (f, "\t%s\t0\n", ASM_LONG);
     }
 
   if (!no_idata5)
     {
-      fprintf (f, "\t.section\t.idata$5\n");
-      if (create_for_pep)
-	fprintf (f,"\t%s\t0\n\t%s\t0\n", ASM_LONG, ASM_LONG);
-      else
-	fprintf (f,"\t%s\t0\n", ASM_LONG); /* NULL terminating list.  */
+      fprintf (f, "\t.section	.idata$5\n");
+      fprintf (f, "\t%s\t0\n", ASM_LONG);
     }
 
 #ifdef DLLTOOL_PPC
@@ -3141,9 +2728,10 @@ make_tail (void)
      would be to mark this section as a comdat type 2 section, so
      only one would appear in the final .exe (if our linker supported
      comdat, that is) or cause it to be inserted by something else (say
-     crt0).  */
+     crt0)
+  */
 
-  fprintf (f, "\t.section\t.idata$3\n");
+  fprintf (f, "\t.section	.idata$3\n");
   fprintf (f, "\t%s\t0\n", ASM_LONG);
   fprintf (f, "\t%s\t0\n", ASM_LONG);
   fprintf (f, "\t%s\t0\n", ASM_LONG);
@@ -3153,10 +2741,10 @@ make_tail (void)
 
 #ifdef DLLTOOL_PPC
   /* Other PowerPC NT compilers use idata$6 for the dllname, so I
-     do too. Original, huh?  */
-  fprintf (f, "\t.section\t.idata$6\n");
+     do too. Original, huh? */
+  fprintf (f, "\t.section	.idata$6\n");
 #else
-  fprintf (f, "\t.section\t.idata$7\n");
+  fprintf (f, "\t.section	.idata$7\n");
 #endif
 
   fprintf (f, "\t%s\t__%s_iname\n", ASM_GLOBAL, imp_name_lab);
@@ -3167,18 +2755,11 @@ make_tail (void)
 
   assemble_file (TMP_TAIL_S, TMP_TAIL_O);
 
-  abfd = bfd_openr (TMP_TAIL_O, HOW_BFD_READ_TARGET);
-  if (abfd == NULL)
-    /* xgettext:c-format */
-    fatal (_("failed to open temporary tail file: %s: %s"),
-	   TMP_TAIL_O, bfd_get_errmsg ());
-
-  temp_file_to_remove[TEMP_TAIL_O_FILE] = TMP_TAIL_O;
-  return abfd;
+  return  bfd_openr (TMP_TAIL_O, HOW_BFD_READ_TARGET);
 }
 
 static void
-gen_lib_file (int delay)
+gen_lib_file ()
 {
   int i;
   export_type *exp;
@@ -3193,27 +2774,17 @@ gen_lib_file (int delay)
 
   if (!outarch)
     /* xgettext:c-format */
-    fatal (_("Can't create .lib file: %s: %s"),
-	   imp_name, bfd_get_errmsg ());
+    fatal (_("Can't open .lib file: %s"), imp_name);
 
   /* xgettext:c-format */
   inform (_("Creating library file: %s"), imp_name);
 
-  xatexit (unlink_temp_files);
-
   bfd_set_format (outarch, bfd_archive);
   outarch->has_armap = 1;
-  outarch->is_thin_archive = 0;
 
   /* Work out a reasonable size of things to put onto one line.  */
-  if (delay)
-    {
-      ar_head = make_delay_head ();
-    }
-  else
-    {
-      ar_head = make_head ();
-    }
+
+  ar_head = make_head ();
   ar_tail = make_tail();
 
   if (ar_head == NULL || ar_tail == NULL)
@@ -3221,38 +2792,15 @@ gen_lib_file (int delay)
 
   for (i = 0; (exp = d_exports_lexically[i]); i++)
     {
-      bfd *n;
-      /* Don't add PRIVATE entries to import lib.  */
-      if (exp->private)
-	continue;
-      n = make_one_lib_file (exp, i, delay);
-      n->archive_next = head;
+      bfd *n = make_one_lib_file (exp, i);
+      n->next = head;
       head = n;
-      if (ext_prefix_alias)
-	{
-	  export_type alias_exp;
-
-	  assert (i < PREFIX_ALIAS_BASE);
-	  alias_exp.name = make_imp_label (ext_prefix_alias, exp->name);
-	  alias_exp.internal_name = exp->internal_name;
-	  alias_exp.its_name = exp->its_name;
-	  alias_exp.import_name = exp->name;
-	  alias_exp.ordinal = exp->ordinal;
-	  alias_exp.constant = exp->constant;
-	  alias_exp.noname = exp->noname;
-	  alias_exp.private = exp->private;
-	  alias_exp.data = exp->data;
-	  alias_exp.forward = exp->forward;
-	  alias_exp.next = exp->next;
-	  n = make_one_lib_file (&alias_exp, i + PREFIX_ALIAS_BASE, delay);
-	  n->archive_next = head;
-	  head = n;
-	}
     }
 
-  /* Now stick them all into the archive.  */
-  ar_head->archive_next = head;
-  ar_tail->archive_next = ar_head;
+  /* Now stick them all into the archive */
+
+  ar_head->next = head;
+  ar_tail->next = ar_head;
   head = ar_tail;
 
   if (! bfd_set_archive_head (outarch, head))
@@ -3263,476 +2811,53 @@ gen_lib_file (int delay)
 
   while (head != NULL)
     {
-      bfd *n = head->archive_next;
+      bfd *n = head->next;
       bfd_close (head);
       head = n;
     }
 
-  /* Delete all the temp files.  */
-  unlink_temp_files ();
+  /* Delete all the temp files */
+
+  if (dontdeltemps == 0)
+    {
+      unlink (TMP_HEAD_O);
+      unlink (TMP_HEAD_S);
+      unlink (TMP_TAIL_O);
+      unlink (TMP_TAIL_S);
+    }
 
   if (dontdeltemps < 2)
     {
       char *name;
 
-      name = xmalloc (strlen (TMP_STUB) + 10);
-      for (i = 0; (exp = d_exports_lexically[i]); i++)
+      name = (char *) alloca (sizeof TMP_STUB + 10);
+      for (i = 0, exp = d_exports; exp; i++, exp = exp->next)
 	{
-	  /* Don't delete non-existent stubs for PRIVATE entries.  */
-          if (exp->private)
-	    continue;
 	  sprintf (name, "%s%05d.o", TMP_STUB, i);
 	  if (unlink (name) < 0)
 	    /* xgettext:c-format */
 	    non_fatal (_("cannot delete %s: %s"), name, strerror (errno));
-	  if (ext_prefix_alias)
-	    {
-	      sprintf (name, "%s%05d.o", TMP_STUB, i + PREFIX_ALIAS_BASE);
-	      if (unlink (name) < 0)
-		/* xgettext:c-format */
-		non_fatal (_("cannot delete %s: %s"), name, strerror (errno));
-	    }
 	}
-      free (name);
     }
 
   inform (_("Created lib file"));
 }
 
-/* Append a copy of data (cast to char *) to list.  */
-
-static void
-dll_name_list_append (dll_name_list_type * list, bfd_byte * data)
-{
-  dll_name_list_node_type * entry;
-
-  /* Error checking.  */
-  if (! list || ! list->tail)
-    return;
-
-  /* Allocate new node.  */
-  entry = ((dll_name_list_node_type *)
-	   xmalloc (sizeof (dll_name_list_node_type)));
-
-  /* Initialize its values.  */
-  entry->dllname = xstrdup ((char *) data);
-  entry->next = NULL;
-
-  /* Add to tail, and move tail.  */
-  list->tail->next = entry;
-  list->tail = entry;
-}
-
-/* Count the number of entries in list.  */
-
-static int
-dll_name_list_count (dll_name_list_type * list)
-{
-  dll_name_list_node_type * p;
-  int count = 0;
-
-  /* Error checking.  */
-  if (! list || ! list->head)
-    return 0;
-
-  p = list->head;
-
-  while (p && p->next)
-    {
-      count++;
-      p = p->next;
-    }
-  return count;
-}
-
-/* Print each entry in list to stdout.  */
-
-static void
-dll_name_list_print (dll_name_list_type * list)
-{
-  dll_name_list_node_type * p;
-
-  /* Error checking.  */
-  if (! list || ! list->head)
-    return;
-
-  p = list->head;
-
-  while (p && p->next && p->next->dllname && *(p->next->dllname))
-    {
-      printf ("%s\n", p->next->dllname);
-      p = p->next;
-    }
-}
-
-/* Free all entries in list, and list itself.  */
-
-static void
-dll_name_list_free (dll_name_list_type * list)
-{
-  if (list)
-    {
-      dll_name_list_free_contents (list->head);
-      list->head = NULL;
-      list->tail = NULL;
-      free (list);
-    }
-}
-
-/* Recursive function to free all nodes entry->next->next...
-   as well as entry itself.  */
-
-static void
-dll_name_list_free_contents (dll_name_list_node_type * entry)
-{
-  if (entry)
-    {
-      if (entry->next)
-        {
-          dll_name_list_free_contents (entry->next);
-          entry->next = NULL;
-        }
-      if (entry->dllname)
-        {
-          free (entry->dllname);
-          entry->dllname = NULL;
-        }
-      free (entry);
-    }
-}
-
-/* Allocate and initialize a dll_name_list_type object,
-   including its sentinel node.  Caller is responsible
-   for calling dll_name_list_free when finished with
-   the list.  */
-
-static dll_name_list_type *
-dll_name_list_create (void)
-{
-  /* Allocate list.  */
-  dll_name_list_type * list = xmalloc (sizeof (dll_name_list_type));
-
-  /* Allocate and initialize sentinel node.  */
-  list->head = xmalloc (sizeof (dll_name_list_node_type));
-  list->head->dllname = NULL;
-  list->head->next = NULL;
-
-  /* Bookkeeping for empty list.  */
-  list->tail = list->head;
-
-  return list;
-}
-
-/* Search the symbol table of the suppled BFD for a symbol whose name matches
-   OBJ (where obj is cast to const char *).  If found, set global variable
-   identify_member_contains_symname_result TRUE.  It is the caller's
-   responsibility to set the result variable FALSE before iterating with
-   this function.  */
-
-static void
-identify_member_contains_symname (bfd  * abfd,
-				  bfd  * archive_bfd ATTRIBUTE_UNUSED,
-				  void * obj)
-{
-  long storage_needed;
-  asymbol ** symbol_table;
-  long number_of_symbols;
-  long i;
-  symname_search_data_type * search_data = (symname_search_data_type *) obj;
-
-  /* If we already found the symbol in a different member,
-     short circuit.  */
-  if (search_data->found)
-    return;
-
-  storage_needed = bfd_get_symtab_upper_bound (abfd);
-  if (storage_needed <= 0)
-    return;
-
-  symbol_table = xmalloc (storage_needed);
-  number_of_symbols = bfd_canonicalize_symtab (abfd, symbol_table);
-  if (number_of_symbols < 0)
-    {
-      free (symbol_table);
-      return;
-    }
-
-  for (i = 0; i < number_of_symbols; i++)
-    {
-      if (strncmp (symbol_table[i]->name,
-                   search_data->symname,
-                   strlen (search_data->symname)) == 0)
-	{
-	  search_data->found = TRUE;
-	  break;
-	}
-    }
-  free (symbol_table);
-}
-
-/* This is the main implementation for the --identify option.
-   Given the name of an import library in identify_imp_name, first determine
-   if the import library is a GNU binutils-style one (where the DLL name is
-   stored in an .idata$7 (.idata$6 on PPC) section, or if it is a MS-style
-   one (where the DLL name, along with much other data, is stored in the
-   .idata$6 section). We determine the style of import library by searching
-   for the DLL-structure symbol inserted by MS tools:
-   __NULL_IMPORT_DESCRIPTOR.
-
-   Once we know which section to search, evaluate each section for the
-   appropriate properties that indicate it may contain the name of the
-   associated DLL (this differs depending on the style).  Add the contents
-   of all sections which meet the criteria to a linked list of dll names.
-
-   Finally, print them all to stdout. (If --identify-strict, an error is
-   reported if more than one match was found).  */
-
-static void
-identify_dll_for_implib (void)
-{
-  bfd * abfd = NULL;
-  int count = 0;
-  identify_data_type identify_data;
-  symname_search_data_type search_data;
-
-  /* Initialize identify_data.  */
-  identify_data.list = dll_name_list_create ();
-  identify_data.ms_style_implib = FALSE;
-
-  /* Initialize search_data.  */
-  search_data.symname = "__NULL_IMPORT_DESCRIPTOR";
-  search_data.found = FALSE;
-
-  if (bfd_init () != BFD_INIT_MAGIC)
-    fatal (_("fatal error: libbfd ABI mismatch"));
-
-  abfd = bfd_openr (identify_imp_name, 0);
-  if (abfd == NULL)
-    /* xgettext:c-format */
-    fatal (_("Can't open .lib file: %s: %s"),
-	   identify_imp_name, bfd_get_errmsg ());
-
-  if (! bfd_check_format (abfd, bfd_archive))
-    {
-      if (! bfd_close (abfd))
-        bfd_fatal (identify_imp_name);
-
-      fatal (_("%s is not a library"), identify_imp_name);
-    }
-
-  /* Detect if this a Microsoft import library.  */
-  identify_search_archive (abfd,
-			   identify_member_contains_symname,
-			   (void *)(& search_data));
-  if (search_data.found)
-    identify_data.ms_style_implib = TRUE;
-
-  /* Rewind the bfd.  */
-  if (! bfd_close (abfd))
-    bfd_fatal (identify_imp_name);
-  abfd = bfd_openr (identify_imp_name, 0);
-  if (abfd == NULL)
-    bfd_fatal (identify_imp_name);
-
-  if (!bfd_check_format (abfd, bfd_archive))
-    {
-      if (!bfd_close (abfd))
-        bfd_fatal (identify_imp_name);
-
-      fatal (_("%s is not a library"), identify_imp_name);
-    }
-
-  /* Now search for the dll name.  */
-  identify_search_archive (abfd,
-			   identify_search_member,
-			   (void *)(& identify_data));
-
-  if (! bfd_close (abfd))
-    bfd_fatal (identify_imp_name);
-
-  count = dll_name_list_count (identify_data.list);
-  if (count > 0)
-    {
-      if (identify_strict && count > 1)
-        {
-          dll_name_list_free (identify_data.list);
-          identify_data.list = NULL;
-          fatal (_("Import library `%s' specifies two or more dlls"),
-		 identify_imp_name);
-        }
-      dll_name_list_print (identify_data.list);
-      dll_name_list_free (identify_data.list);
-      identify_data.list = NULL;
-    }
-  else
-    {
-      dll_name_list_free (identify_data.list);
-      identify_data.list = NULL;
-      fatal (_("Unable to determine dll name for `%s' (not an import library?)"),
-	     identify_imp_name);
-    }
-}
-
-/* Loop over all members of the archive, applying the supplied function to
-   each member that is a bfd_object.  The function will be called as if:
-      func (member_bfd, abfd, user_storage)  */
-
-static void
-identify_search_archive (bfd * abfd,
-			 void (* operation) (bfd *, bfd *, void *),
-			 void * user_storage)
-{
-  bfd *   arfile = NULL;
-  bfd *   last_arfile = NULL;
-  char ** matching;
-
-  while (1)
-    {
-      arfile = bfd_openr_next_archived_file (abfd, arfile);
-
-      if (arfile == NULL)
-        {
-          if (bfd_get_error () != bfd_error_no_more_archived_files)
-            bfd_fatal (bfd_get_filename (abfd));
-          break;
-        }
-
-      if (bfd_check_format_matches (arfile, bfd_object, &matching))
-	(*operation) (arfile, abfd, user_storage);
-      else
-        {
-          bfd_nonfatal (bfd_get_filename (arfile));
-          free (matching);
-        }
-
-      if (last_arfile != NULL)
-	{
-	  bfd_close (last_arfile);
-	  /* PR 17512: file: 8b2168d4.  */
-	  if (last_arfile == arfile)
-	    {
-	      last_arfile = NULL;
-	      break;
-	    }
-	}
-
-      last_arfile = arfile;
-    }
-
-  if (last_arfile != NULL)
-    {
-      bfd_close (last_arfile);
-    }
-}
-
-/* Call the identify_search_section() function for each section of this
-   archive member.  */
-
-static void
-identify_search_member (bfd  *abfd,
-			bfd  *archive_bfd ATTRIBUTE_UNUSED,
-			void *obj)
-{
-  bfd_map_over_sections (abfd, identify_search_section, obj);
-}
-
-/* This predicate returns true if section->name matches the desired value.
-   By default, this is .idata$7 (.idata$6 on PPC, or if the import
-   library is ms-style).  */
-
-static bfd_boolean
-identify_process_section_p (asection * section, bfd_boolean ms_style_implib)
-{
-  static const char * SECTION_NAME =
-#ifdef DLLTOOL_PPC
-  /* dllname is stored in idata$6 on PPC */
-  ".idata$6";
-#else
-  ".idata$7";
-#endif
-  static const char * MS_SECTION_NAME = ".idata$6";
-
-  const char * section_name =
-    (ms_style_implib ? MS_SECTION_NAME : SECTION_NAME);
-
-  if (strcmp (section_name, section->name) == 0)
-    return TRUE;
-  return FALSE;
-}
-
-/* If *section has contents and its name is .idata$7 (.data$6 on PPC or if
-   import lib ms-generated) -- and it satisfies several other constraints
-   -- then add the contents of the section to obj->list.  */
-
-static void
-identify_search_section (bfd * abfd, asection * section, void * obj)
-{
-  bfd_byte *data = 0;
-  bfd_size_type datasize;
-  identify_data_type * identify_data = (identify_data_type *)obj;
-  bfd_boolean ms_style = identify_data->ms_style_implib;
-
-  if ((section->flags & SEC_HAS_CONTENTS) == 0)
-    return;
-
-  if (! identify_process_section_p (section, ms_style))
-    return;
-
-  /* Binutils import libs seem distinguish the .idata$7 section that contains
-     the DLL name from other .idata$7 sections by the absence of the
-     SEC_RELOC flag.  */
-  if (!ms_style && ((section->flags & SEC_RELOC) == SEC_RELOC))
-    return;
-
-  /* MS import libs seem to distinguish the .idata$6 section
-     that contains the DLL name from other .idata$6 sections
-     by the presence of the SEC_DATA flag.  */
-  if (ms_style && ((section->flags & SEC_DATA) == 0))
-    return;
-
-  if ((datasize = bfd_section_size (section)) == 0)
-    return;
-
-  data = (bfd_byte *) xmalloc (datasize + 1);
-  data[0] = '\0';
-
-  bfd_get_section_contents (abfd, section, data, 0, datasize);
-  data[datasize] = '\0';
-
-  /* Use a heuristic to determine if data is a dll name.
-     Possible to defeat this if (a) the library has MANY
-     (more than 0x302f) imports, (b) it is an ms-style
-     import library, but (c) it is buggy, in that the SEC_DATA
-     flag is set on the "wrong" sections.  This heuristic might
-     also fail to record a valid dll name if the dllname uses
-     a multibyte or unicode character set (is that valid?).
-
-     This heuristic is based on the fact that symbols names in
-     the chosen section -- as opposed to the dll name -- begin
-     at offset 2 in the data. The first two bytes are a 16bit
-     little-endian count, and start at 0x0000. However, the dll
-     name begins at offset 0 in the data. We assume that the
-     dll name does not contain unprintable characters.   */
-  if (data[0] != '\0' && ISPRINT (data[0])
-      && ((datasize < 2) || ISPRINT (data[1])))
-    dll_name_list_append (identify_data->list, data);
-
-  free (data);
-}
+/**********************************************************************/
 
 /* Run through the information gathered from the .o files and the
-   .def file and work out the best stuff.  */
-
+   .def file and work out the best stuff */
 static int
-pfunc (const void *a, const void *b)
+pfunc (a, b)
+     const void *a;
+     const void *b;
 {
   export_type *ap = *(export_type **) a;
   export_type *bp = *(export_type **) b;
-
   if (ap->ordinal == bp->ordinal)
     return 0;
 
-  /* Unset ordinals go to the bottom.  */
+  /* unset ordinals go to the bottom */
   if (ap->ordinal == -1)
     return 1;
   if (bp->ordinal == -1)
@@ -3741,31 +2866,22 @@ pfunc (const void *a, const void *b)
 }
 
 static int
-nfunc (const void *a, const void *b)
+nfunc (a, b)
+     const void *a;
+     const void *b;
 {
   export_type *ap = *(export_type **) a;
   export_type *bp = *(export_type **) b;
-  const char *an = ap->name;
-  const char *bn = bp->name;
-  if (ap->its_name)
-    an = ap->its_name;
-  if (bp->its_name)
-    an = bp->its_name;
-  if (killat)
-    {
-      an = (an[0] == '@') ? an + 1 : an;
-      bn = (bn[0] == '@') ? bn + 1 : bn;
-    }
 
-  return (strcmp (an, bn));
+  return (strcmp (ap->name, bp->name));
 }
 
 static void
-remove_null_names (export_type **ptr)
+remove_null_names (ptr)
+     export_type **ptr;
 {
   int src;
   int dst;
-
   for (dst = src = 0; src < d_nfuncs; src++)
     {
       if (ptr[src])
@@ -3778,22 +2894,51 @@ remove_null_names (export_type **ptr)
 }
 
 static void
-process_duplicates (export_type **d_export_vec)
+dtab (ptr)
+     export_type ** ptr
+#ifndef SACDEBUG
+ATTRIBUTE_UNUSED
+#endif
+     ;
+{
+#ifdef SACDEBUG
+  int i;
+  for (i = 0; i < d_nfuncs; i++)
+    {
+      if (ptr[i])
+	{
+	  printf ("%d %s @ %d %s%s%s\n",
+		  i, ptr[i]->name, ptr[i]->ordinal,
+		  ptr[i]->noname ? "NONAME " : "",
+		  ptr[i]->constant ? "CONSTANT" : "",
+		  ptr[i]->data ? "DATA" : "");
+	}
+      else
+	printf ("empty\n");
+    }
+#endif
+}
+
+static void
+process_duplicates (d_export_vec)
+     export_type **d_export_vec;
 {
   int more = 1;
   int i;
-
   while (more)
     {
+
       more = 0;
-      /* Remove duplicates.  */
+      /* Remove duplicates */
       qsort (d_export_vec, d_nfuncs, sizeof (export_type *), nfunc);
 
+      dtab (d_export_vec);
       for (i = 0; i < d_nfuncs - 1; i++)
 	{
 	  if (strcmp (d_export_vec[i]->name,
 		      d_export_vec[i + 1]->name) == 0)
 	    {
+
 	      export_type *a = d_export_vec[i];
 	      export_type *b = d_export_vec[i + 1];
 
@@ -3806,10 +2951,10 @@ process_duplicates (export_type **d_export_vec)
 	      if (a->ordinal != -1
 		  && b->ordinal != -1)
 		/* xgettext:c-format */
-		fatal (_("Error, duplicate EXPORT with ordinals: %s"),
+		fatal (_("Error, duplicate EXPORT with oridinals: %s"),
 		      a->name);
 
-	      /* Merge attributes.  */
+	      /* Merge attributes */
 	      b->ordinal = a->ordinal > 0 ? a->ordinal : b->ordinal;
 	      b->constant |= a->constant;
 	      b->noname |= a->noname;
@@ -3817,18 +2962,24 @@ process_duplicates (export_type **d_export_vec)
 	      d_export_vec[i] = 0;
 	    }
 
+	  dtab (d_export_vec);
 	  remove_null_names (d_export_vec);
+	  dtab (d_export_vec);
 	}
     }
 
-  /* Count the names.  */
+
+  /* Count the names */
   for (i = 0; i < d_nfuncs; i++)
-    if (!d_export_vec[i]->noname)
-      d_named_nfuncs++;
+    {
+      if (!d_export_vec[i]->noname)
+	d_named_nfuncs++;
+    }
 }
 
 static void
-fill_ordinals (export_type **d_export_vec)
+fill_ordinals (d_export_vec)
+     export_type **d_export_vec;
 {
   int lowest = -1;
   int i;
@@ -3837,20 +2988,22 @@ fill_ordinals (export_type **d_export_vec)
 
   qsort (d_export_vec, d_nfuncs, sizeof (export_type *), pfunc);
 
-  /* Fill in the unset ordinals with ones from our range.  */
+  /* fill in the unset ordinals with ones from our range */
+
   ptr = (char *) xmalloc (size);
 
   memset (ptr, 0, size);
 
-  /* Mark in our large vector all the numbers that are taken.  */
+  /* Mark in our large vector all the numbers that are taken */
   for (i = 0; i < d_nfuncs; i++)
     {
       if (d_export_vec[i]->ordinal != -1)
 	{
 	  ptr[d_export_vec[i]->ordinal] = 1;
-
 	  if (lowest == -1 || d_export_vec[i]->ordinal < lowest)
-	    lowest = d_export_vec[i]->ordinal;
+	    {
+	      lowest = d_export_vec[i]->ordinal;
+	    }
 	}
     }
 
@@ -3863,7 +3016,7 @@ fill_ordinals (export_type **d_export_vec)
     {
       if (d_export_vec[i]->ordinal == -1)
 	{
-	  int j;
+	  register int j;
 
 	  /* First try within or after any user supplied range.  */
 	  for (j = lowest; j < size; j++)
@@ -3888,7 +3041,8 @@ fill_ordinals (export_type **d_export_vec)
 
   free (ptr);
 
-  /* And resort.  */
+  /* And resort */
+
   qsort (d_export_vec, d_nfuncs, sizeof (export_type *), pfunc);
 
   /* Work out the lowest and highest ordinal numbers.  */
@@ -3901,23 +3055,40 @@ fill_ordinals (export_type **d_export_vec)
     }
 }
 
-static void
-mangle_defs (void)
+static int
+alphafunc (av,bv)
+     const void *av;
+     const void *bv;
 {
-  /* First work out the minimum ordinal chosen.  */
+  const export_type **a = (const export_type **) av;
+  const export_type **b = (const export_type **) bv;
+
+  return strcmp ((*a)->name, (*b)->name);
+}
+
+static void
+mangle_defs ()
+{
+  /* First work out the minimum ordinal chosen */
+
   export_type *exp;
-  export_type **d_export_vec = xmalloc (sizeof (export_type *) * d_nfuncs);
+
   int i;
+  int hint = 0;
+  export_type **d_export_vec
+  = (export_type **) xmalloc (sizeof (export_type *) * d_nfuncs);
 
   inform (_("Processing definitions"));
 
   for (i = 0, exp = d_exports; exp; i++, exp = exp->next)
-    d_export_vec[i] = exp;
+    {
+      d_export_vec[i] = exp;
+    }
 
   process_duplicates (d_export_vec);
   fill_ordinals (d_export_vec);
 
-  /* Put back the list in the new order.  */
+  /* Put back the list in the new order */
   d_exports = 0;
   for (i = d_nfuncs - 1; i >= 0; i--)
     {
@@ -3925,22 +3096,35 @@ mangle_defs (void)
       d_exports = d_export_vec[i];
     }
 
-  /* Build list in alpha order.  */
+  /* Build list in alpha order */
   d_exports_lexically = (export_type **)
     xmalloc (sizeof (export_type *) * (d_nfuncs + 1));
 
   for (i = 0, exp = d_exports; exp; i++, exp = exp->next)
-    d_exports_lexically[i] = exp;
-
+    {
+      d_exports_lexically[i] = exp;
+    }
   d_exports_lexically[i] = 0;
 
-  qsort (d_exports_lexically, i, sizeof (export_type *), nfunc);
+  qsort (d_exports_lexically, i, sizeof (export_type *), alphafunc);
+
+  /* Fill exp entries with their hint values */
+
+  for (i = 0; i < d_nfuncs; i++)
+    {
+      if (!d_exports_lexically[i]->noname || show_allnames)
+	d_exports_lexically[i]->hint = hint++;
+    }
 
   inform (_("Processed definitions"));
 }
 
+/**********************************************************************/
+
 static void
-usage (FILE *file, int status)
+usage (file, status)
+     FILE *file;
+     int status;
 {
   /* xgetext:c-format */
   fprintf (file, _("Usage %s <option(s)> <object-file(s)>\n"), program_name);
@@ -3949,7 +3133,6 @@ usage (FILE *file, int status)
   fprintf (file, _("        possible <machine>: arm[_interwork], i386, mcore[-elf]{-le|-be}, ppc, thumb\n"));
   fprintf (file, _("   -e --output-exp <outname> Generate an export file.\n"));
   fprintf (file, _("   -l --output-lib <outname> Generate an interface library.\n"));
-  fprintf (file, _("   -y --output-delaylib <outname> Create a delay-import library.\n"));
   fprintf (file, _("   -a --add-indirect         Add dll indirects to export file.\n"));
   fprintf (file, _("   -D --dllname <name>       Name of input dll to put into interface lib.\n"));
   fprintf (file, _("   -d --input-def <deffile>  Name of .def file to be read in.\n"));
@@ -3961,32 +3144,21 @@ usage (FILE *file, int status)
   fprintf (file, _("   -b --base-file <basefile> Read linker generated base file.\n"));
   fprintf (file, _("   -x --no-idata4            Don't generate idata$4 section.\n"));
   fprintf (file, _("   -c --no-idata5            Don't generate idata$5 section.\n"));
-  fprintf (file, _("      --use-nul-prefixed-import-tables Use zero prefixed idata$4 and idata$5.\n"));
-  fprintf (file, _("   -U --add-underscore       Add underscores to all symbols in interface library.\n"));
-  fprintf (file, _("      --add-stdcall-underscore Add underscores to stdcall symbols in interface library.\n"));
-  fprintf (file, _("      --no-leading-underscore All symbols shouldn't be prefixed by an underscore.\n"));
-  fprintf (file, _("      --leading-underscore   All symbols should be prefixed by an underscore.\n"));
+  fprintf (file, _("   -U --add-underscore       Add underscores to symbols in interface library.\n"));
   fprintf (file, _("   -k --kill-at              Kill @<n> from exported names.\n"));
   fprintf (file, _("   -A --add-stdcall-alias    Add aliases without @<n>.\n"));
-  fprintf (file, _("   -p --ext-prefix-alias <prefix> Add aliases with <prefix>.\n"));
   fprintf (file, _("   -S --as <name>            Use <name> for assembler.\n"));
   fprintf (file, _("   -f --as-flags <flags>     Pass <flags> to the assembler.\n"));
   fprintf (file, _("   -C --compat-implib        Create backward compatible import library.\n"));
   fprintf (file, _("   -n --no-delete            Keep temp files (repeat for extra preservation).\n"));
-  fprintf (file, _("   -t --temp-prefix <prefix> Use <prefix> to construct temp file names.\n"));
-  fprintf (file, _("   -I --identify <implib>    Report the name of the DLL associated with <implib>.\n"));
-  fprintf (file, _("      --identify-strict      Causes --identify to report error when multiple DLLs.\n"));
   fprintf (file, _("   -v --verbose              Be verbose.\n"));
   fprintf (file, _("   -V --version              Display the program version.\n"));
   fprintf (file, _("   -h --help                 Display this information.\n"));
-  fprintf (file, _("   @<file>                   Read options from <file>.\n"));
 #ifdef DLLTOOL_MCORE_ELF
   fprintf (file, _("   -M --mcore-elf <outname>  Process mcore-elf object files into <outname>.\n"));
   fprintf (file, _("   -L --linker <name>        Use <name> as the linker.\n"));
   fprintf (file, _("   -F --linker-flags <flags> Pass <flags> to the linker.\n"));
 #endif
-  if (REPORT_BUGS_TO[0] && status == 0)
-    fprintf (file, _("Report bugs to %s\n"), REPORT_BUGS_TO);
   exit (status);
 }
 
@@ -3994,12 +3166,6 @@ usage (FILE *file, int status)
 #define OPTION_NO_EXPORT_ALL_SYMS	(OPTION_EXPORT_ALL_SYMS + 1)
 #define OPTION_EXCLUDE_SYMS		(OPTION_NO_EXPORT_ALL_SYMS + 1)
 #define OPTION_NO_DEFAULT_EXCLUDES	(OPTION_EXCLUDE_SYMS + 1)
-#define OPTION_ADD_STDCALL_UNDERSCORE	(OPTION_NO_DEFAULT_EXCLUDES + 1)
-#define OPTION_USE_NUL_PREFIXED_IMPORT_TABLES \
-  (OPTION_ADD_STDCALL_UNDERSCORE + 1)
-#define OPTION_IDENTIFY_STRICT		(OPTION_USE_NUL_PREFIXED_IMPORT_TABLES + 1)
-#define OPTION_NO_LEADING_UNDERSCORE	(OPTION_IDENTIFY_STRICT + 1)
-#define OPTION_LEADING_UNDERSCORE	(OPTION_NO_LEADING_UNDERSCORE + 1)
 
 static const struct option long_options[] =
 {
@@ -4007,8 +3173,6 @@ static const struct option long_options[] =
   {"dllname", required_argument, NULL, 'D'},
   {"no-idata4", no_argument, NULL, 'x'},
   {"no-idata5", no_argument, NULL, 'c'},
-  {"use-nul-prefixed-import-tables", no_argument, NULL,
-   OPTION_USE_NUL_PREFIXED_IMPORT_TABLES},
   {"output-exp", required_argument, NULL, 'e'},
   {"output-def", required_argument, NULL, 'z'},
   {"export-all-symbols", no_argument, NULL, OPTION_EXPORT_ALL_SYMS},
@@ -4016,17 +3180,11 @@ static const struct option long_options[] =
   {"exclude-symbols", required_argument, NULL, OPTION_EXCLUDE_SYMS},
   {"no-default-excludes", no_argument, NULL, OPTION_NO_DEFAULT_EXCLUDES},
   {"output-lib", required_argument, NULL, 'l'},
-  {"def", required_argument, NULL, 'd'}, /* for compatibility with older versions */
+  {"def", required_argument, NULL, 'd'}, /* for compatiblity with older versions */
   {"input-def", required_argument, NULL, 'd'},
   {"add-underscore", no_argument, NULL, 'U'},
-  {"add-stdcall-underscore", no_argument, NULL, OPTION_ADD_STDCALL_UNDERSCORE},
-  {"no-leading-underscore", no_argument, NULL, OPTION_NO_LEADING_UNDERSCORE},
-  {"leading-underscore", no_argument, NULL, OPTION_LEADING_UNDERSCORE},
   {"kill-at", no_argument, NULL, 'k'},
   {"add-stdcall-alias", no_argument, NULL, 'A'},
-  {"ext-prefix-alias", required_argument, NULL, 'p'},
-  {"identify", required_argument, NULL, 'I'},
-  {"identify-strict", no_argument, NULL, OPTION_IDENTIFY_STRICT},
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {"help", no_argument, NULL, 'h'},
@@ -4037,15 +3195,15 @@ static const struct option long_options[] =
   {"as-flags", required_argument, NULL, 'f'},
   {"mcore-elf", required_argument, NULL, 'M'},
   {"compat-implib", no_argument, NULL, 'C'},
-  {"temp-prefix", required_argument, NULL, 't'},
-  {"output-delaylib", required_argument, NULL, 'y'},
   {NULL,0,NULL,0}
 };
 
-int main (int, char **);
+int main PARAMS ((int, char **));
 
 int
-main (int ac, char **av)
+main (ac, av)
+     int ac;
+     char **av;
 {
   int c;
   int i;
@@ -4062,14 +3220,11 @@ main (int ac, char **av)
   bindtextdomain (PACKAGE, LOCALEDIR);
   textdomain (PACKAGE);
 
-  bfd_set_error_program_name (program_name);
-  expandargv (&ac, &av);
-
   while ((c = getopt_long (ac, av,
 #ifdef DLLTOOL_MCORE_ELF
-                           "m:e:l:aD:d:z:b:xp:cCuUkAS:t:f:nI:vVHhM:L:F:",
+			   "m:e:l:aD:d:z:b:xcCuUkAS:f:nvVHhM:L:F:",
 #else
-                           "m:e:l:y:aD:d:z:b:xp:cCuUkAS:t:f:nI:vVHh",
+			   "m:e:l:aD:d:z:b:xcCuUkAS:f:nvVHh",
 #endif
 			   long_options, 0))
 	 != EOF)
@@ -4077,31 +3232,16 @@ main (int ac, char **av)
       switch (c)
 	{
 	case OPTION_EXPORT_ALL_SYMS:
-	  export_all_symbols = TRUE;
+	  export_all_symbols = true;
 	  break;
 	case OPTION_NO_EXPORT_ALL_SYMS:
-	  export_all_symbols = FALSE;
+	  export_all_symbols = false;
 	  break;
 	case OPTION_EXCLUDE_SYMS:
 	  add_excludes (optarg);
 	  break;
 	case OPTION_NO_DEFAULT_EXCLUDES:
-	  do_default_excludes = FALSE;
-	  break;
-	case OPTION_USE_NUL_PREFIXED_IMPORT_TABLES:
-	  use_nul_prefixed_import_tables = TRUE;
-	  break;
-	case OPTION_ADD_STDCALL_UNDERSCORE:
-	  add_stdcall_underscore = 1;
-	  break;
-	case OPTION_NO_LEADING_UNDERSCORE:
-	  leading_underscore = 0;
-	  break;
-	case OPTION_LEADING_UNDERSCORE:
-	  leading_underscore = 1;
-	  break;
-	case OPTION_IDENTIFY_STRICT:
-	  identify_strict = 1;
+	  do_default_excludes = false;
 	  break;
 	case 'x':
 	  no_idata4 = 1;
@@ -4112,14 +3252,11 @@ main (int ac, char **av)
 	case 'S':
 	  as_name = optarg;
 	  break;
-	case 't':
-	  tmp_prefix = optarg;
-	  break;
 	case 'f':
 	  as_flags = optarg;
 	  break;
 
-	  /* Ignored for compatibility.  */
+	  /* ignored for compatibility */
 	case 'u':
 	  break;
 	case 'a':
@@ -4127,15 +3264,9 @@ main (int ac, char **av)
 	  break;
 	case 'z':
 	  output_def = fopen (optarg, FOPEN_WT);
-	  if (!output_def)
-	    /* xgettext:c-format */
-	    fatal (_("Unable to open def-file: %s"), optarg);
 	  break;
 	case 'D':
-	  dll_name = (char*) lbasename (optarg);
-	  if (dll_name != optarg)
-	    non_fatal (_("Path components stripped from dllname, '%s'."),
-	      		 optarg);
+	  dll_name = optarg;
 	  break;
 	case 'l':
 	  imp_name = optarg;
@@ -4149,9 +3280,6 @@ main (int ac, char **av)
 	  break;
 	case 'm':
 	  mname = optarg;
-	  break;
-	case 'I':
-	  identify_imp_name = optarg;
 	  break;
 	case 'v':
 	  verbose = 1;
@@ -4167,9 +3295,6 @@ main (int ac, char **av)
 	  break;
 	case 'A':
 	  add_stdcall_alias = 1;
-	  break;
-	case 'p':
-	  ext_prefix_alias = optarg;
 	  break;
 	case 'd':
 	  def_file = optarg;
@@ -4199,17 +3324,11 @@ main (int ac, char **av)
 	case 'C':
 	  create_compat_implib = 1;
 	  break;
-	case 'y':
-	  delayimp_name = optarg;
-	  break;
 	default:
 	  usage (stderr, 1);
 	  break;
 	}
     }
-
-  if (!tmp_prefix)
-    tmp_prefix = prefix_encode ("d", getpid ());
 
   for (i = 0; mtable[i].type; i++)
     if (strcmp (mtable[i].type, mname) == 0)
@@ -4221,30 +3340,12 @@ main (int ac, char **av)
 
   machine = i;
 
-  /* Check if we generated PE+.  */
-  create_for_pep = strcmp (mname, "i386:x86-64") == 0;
-
-  {
-    /* Check the default underscore */
-    int u = leading_underscore; /* Underscoring mode. -1 for use default.  */
-    if (u == -1)
-      bfd_get_target_info (mtable[machine].how_bfd_target, NULL,
-                           NULL, &u, NULL);
-    if (u != -1)
-      leading_underscore = (u != 0 ? TRUE : FALSE);
-  }
-
   if (!dll_name && exp_name)
     {
-      /* If we are inferring dll_name from exp_name,
-         strip off any path components, without emitting
-         a warning.  */
-      const char* exp_basename = lbasename (exp_name);
-      const int len = strlen (exp_basename) + 5;
+      int len = strlen (exp_name) + 5;
       dll_name = xmalloc (len);
-      strcpy (dll_name, exp_basename);
+      strcpy (dll_name, exp_name);
       strcat (dll_name, ".dll");
-      dll_name_set_by_exp_name = 1;
     }
 
   if (as_name == NULL)
@@ -4254,7 +3355,7 @@ main (int ac, char **av)
      symbols in the .drectve section.  The default excludes are meant
      to avoid exporting DLL entry point and Cygwin32 impure_ptr.  */
   if (! export_all_symbols)
-    do_default_excludes = FALSE;
+    do_default_excludes = false;
 
   if (do_default_excludes)
     set_default_excludes ();
@@ -4287,41 +3388,11 @@ main (int ac, char **av)
 	    *p = '_';
 	}
       head_label = make_label("_head_", imp_name_lab);
-      gen_lib_file (0);
-    }
-
-  if (delayimp_name)
-    {
-      /* Make delayimp_name safe for use as a label.  */
-      char *p;
-
-      if (mtable[machine].how_dljtab == 0)
-        {
-          inform (_("Warning, machine type (%d) not supported for "
-			"delayimport."), machine);
-        }
-      else
-        {
-          killat = 1;
-          imp_name = delayimp_name;
-          imp_name_lab = xstrdup (imp_name);
-          for (p = imp_name_lab; *p; p++)
-            {
-              if (!ISALNUM (*p))
-                *p = '_';
-            }
-          head_label = make_label("__tailMerge_", imp_name_lab);
-          gen_lib_file (1);
-        }
+      gen_lib_file ();
     }
 
   if (output_def)
     gen_def_file ();
-
-  if (identify_imp_name)
-    {
-      identify_dll_for_implib ();
-    }
 
 #ifdef DLLTOOL_MCORE_ELF
   if (mcore_elf_out_file)
@@ -4337,7 +3408,10 @@ main (int ac, char **av)
    appropriate.  */
 
 static char *
-look_for_prog (const char *prog_name, const char *prefix, int end_prefix)
+look_for_prog (prog_name, prefix, end_prefix)
+     const char *prog_name;
+     const char *prefix;
+     int end_prefix;
 {
   struct stat s;
   char *cmd;
@@ -4403,7 +3477,8 @@ look_for_prog (const char *prog_name, const char *prefix, int end_prefix)
    Returns a dynamically allocated string.  */
 
 static char *
-deduce_name (const char *prog_name)
+deduce_name (prog_name)
+     const char *prog_name;
 {
   char *cmd;
   char *dash, *slash, *cp;
@@ -4453,7 +3528,7 @@ deduce_name (const char *prog_name)
 #ifdef DLLTOOL_MCORE_ELF
 typedef struct fname_cache
 {
-  const char *         filename;
+  char *               filename;
   struct fname_cache * next;
 }
 fname_cache;
@@ -4461,7 +3536,7 @@ fname_cache;
 static fname_cache fnames;
 
 static void
-mcore_elf_cache_filename (const char * filename)
+mcore_elf_cache_filename (char * filename)
 {
   fname_cache * ptr;
 
@@ -4491,21 +3566,21 @@ mcore_elf_gen_out_file (void)
   ptr = & fnames;
 
   ds = dyn_string_new (100);
-  dyn_string_append_cstr (ds, "-r ");
+  dyn_string_append (ds, "-r ");
 
   if (mcore_elf_linker_flags != NULL)
-    dyn_string_append_cstr (ds, mcore_elf_linker_flags);
+    dyn_string_append (ds, mcore_elf_linker_flags);
 
   while (ptr->next != NULL)
     {
-      dyn_string_append_cstr (ds, ptr->filename);
-      dyn_string_append_cstr (ds, " ");
+      dyn_string_append (ds, ptr->filename);
+      dyn_string_append (ds, " ");
 
       ptr = ptr->next;
     }
 
-  dyn_string_append_cstr (ds, "-o ");
-  dyn_string_append_cstr (ds, MCORE_ELF_TMP_OBJ);
+  dyn_string_append (ds, "-o ");
+  dyn_string_append (ds, MCORE_ELF_TMP_OBJ);
 
   if (mcore_elf_linker == NULL)
     mcore_elf_linker = deduce_name ("ld");
@@ -4515,31 +3590,32 @@ mcore_elf_gen_out_file (void)
   dyn_string_delete (ds);
 
   /* Step two. Create a .exp file and a .lib file from the temporary file.
-     Do this by recursively invoking dlltool...  */
+     Do this by recursively invoking dlltool....*/
   ds = dyn_string_new (100);
 
-  dyn_string_append_cstr (ds, "-S ");
-  dyn_string_append_cstr (ds, as_name);
+  dyn_string_append (ds, "-S ");
+  dyn_string_append (ds, as_name);
 
-  dyn_string_append_cstr (ds, " -e ");
-  dyn_string_append_cstr (ds, MCORE_ELF_TMP_EXP);
-  dyn_string_append_cstr (ds, " -l ");
-  dyn_string_append_cstr (ds, MCORE_ELF_TMP_LIB);
-  dyn_string_append_cstr (ds, " " );
-  dyn_string_append_cstr (ds, MCORE_ELF_TMP_OBJ);
+  dyn_string_append (ds, " -e ");
+  dyn_string_append (ds, MCORE_ELF_TMP_EXP);
+  dyn_string_append (ds, " -l ");
+  dyn_string_append (ds, MCORE_ELF_TMP_LIB);
+  dyn_string_append (ds, " " );
+  dyn_string_append (ds, MCORE_ELF_TMP_OBJ);
 
   if (verbose)
-    dyn_string_append_cstr (ds, " -v");
+    dyn_string_append (ds, " -v");
 
   if (dontdeltemps)
     {
-      dyn_string_append_cstr (ds, " -n");
+      dyn_string_append (ds, " -n");
 
       if (dontdeltemps > 1)
-	dyn_string_append_cstr (ds, " -n");
+	dyn_string_append (ds, " -n");
     }
 
   /* XXX - FIME: ought to check/copy other command line options as well.  */
+
   run (program_name, ds->s);
 
   dyn_string_delete (ds);
@@ -4547,17 +3623,17 @@ mcore_elf_gen_out_file (void)
   /* Step four. Feed the .exp and object files to ld -shared to create the dll.  */
   ds = dyn_string_new (100);
 
-  dyn_string_append_cstr (ds, "-shared ");
+  dyn_string_append (ds, "-shared ");
 
   if (mcore_elf_linker_flags)
-    dyn_string_append_cstr (ds, mcore_elf_linker_flags);
+    dyn_string_append (ds, mcore_elf_linker_flags);
 
-  dyn_string_append_cstr (ds, " ");
-  dyn_string_append_cstr (ds, MCORE_ELF_TMP_EXP);
-  dyn_string_append_cstr (ds, " ");
-  dyn_string_append_cstr (ds, MCORE_ELF_TMP_OBJ);
-  dyn_string_append_cstr (ds, " -o ");
-  dyn_string_append_cstr (ds, mcore_elf_out_file);
+  dyn_string_append (ds, " ");
+  dyn_string_append (ds, MCORE_ELF_TMP_EXP);
+  dyn_string_append (ds, " ");
+  dyn_string_append (ds, MCORE_ELF_TMP_OBJ);
+  dyn_string_append (ds, " -o ");
+  dyn_string_append (ds, mcore_elf_out_file);
 
   run (mcore_elf_linker, ds->s);
 

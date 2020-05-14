@@ -1,21 +1,22 @@
 # Generate the main loop of the simulator.
-# Copyright (C) 1996-2020 Free Software Foundation, Inc.
+# Copyright (C) 1996, 1997, 1998, 1999, 2000 Free Software Foundation, Inc.
 # Contributed by Cygnus Support.
 #
 # This file is part of the GNU simulators.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 # This file creates two files: eng.hin and mloop.cin.
 # eng.hin defines a few macros that specify what kind of engine was selected
@@ -117,10 +118,6 @@
 #
 #	Specify the suffix to append to output files.
 #
-# -shell <shell>
-#
-#	Specify the shell to use to execute <input-file>
-#
 # Only one of -scache/-pbb may be selected.
 # -simple is the default.
 #
@@ -163,7 +160,6 @@ do
 	-switch) shift ; switch=$1 ;;
 	-cpu) shift ; cpu=$1 ;;
 	-infile) shift ; infile=$1 ;;
-	-shell) shift ; SHELL=$1 ;;
 	*) echo "unknown option: $1" >&2 ; exit 1 ;;
 	esac
 	shift
@@ -1112,7 +1108,7 @@ void
 	    }
 	}
 
-      CGEN_TRACE_INSN_FINI (current_cpu, cur_abuf, 0 /*last_p*/);
+      TRACE_INSN_FINI (current_cpu, cur_abuf, 0 /*last_p*/);
     }
 
   /* FIXME: Later make cover macros: PROFILE_INSN_{INIT,FINI}.  */
@@ -1120,8 +1116,8 @@ void
       && ARGBUF_PROFILE_P (cur_abuf))
     @prefix@_model_insn_before (current_cpu, first_p);
 
-  CGEN_TRACE_INSN_INIT (current_cpu, cur_abuf, first_p);
-  CGEN_TRACE_INSN (current_cpu, cur_idesc->idata, cur_abuf, pc);
+  TRACE_INSN_INIT (current_cpu, cur_abuf, first_p);
+  TRACE_INSN (current_cpu, cur_idesc->idata, cur_abuf, pc);
 }
 
 /* x-after handler.
@@ -1146,7 +1142,7 @@ void
       cycles = (*prev_idesc->timing->model_fn) (current_cpu, prev_sem_arg);
       @prefix@_model_insn_after (current_cpu, 1 /*last_p*/, cycles);
     }
-  CGEN_TRACE_INSN_FINI (current_cpu, prev_abuf, 1 /*last_p*/);
+  TRACE_INSN_FINI (current_cpu, prev_abuf, 1 /*last_p*/);
 }
 
 #define FAST_P 0

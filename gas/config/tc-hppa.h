@@ -1,11 +1,12 @@
 /* tc-hppa.h -- Header file for the PA
-   Copyright (C) 1989-2020 Free Software Foundation, Inc.
+   Copyright 1989, 1993, 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2002
+   Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 1, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 /* HP PA-RISC support was contributed by the Center for Software Science
    at the University of Utah.  */
@@ -47,21 +48,17 @@
 #ifdef OBJ_ELF
 #if TARGET_ARCH_SIZE == 64
 #include "bfd/elf64-hppa.h"
-#if defined (TE_LINUX) || defined (TE_NetBSD)
+#ifdef TE_LINUX
 #define TARGET_FORMAT "elf64-hppa-linux"
 #else
 #define TARGET_FORMAT "elf64-hppa"
 #endif
 #else /* TARGET_ARCH_SIZE == 32 */
 #include "bfd/elf32-hppa.h"
-#if defined (TE_LINUX)
+#ifdef TE_LINUX
 #define TARGET_FORMAT "elf32-hppa-linux"
 #else
-#if defined (TE_NetBSD)
-#define TARGET_FORMAT "elf32-hppa-netbsd"
-#else
 #define TARGET_FORMAT "elf32-hppa"
-#endif
 #endif
 #endif
 #endif
@@ -80,6 +77,13 @@
 #define WARN_COMMENTS 1
 #endif
 
+#ifdef TE_NetBSD
+/* XXX the original OpenBSD code has labels without colons,
+   so this is required, for now -- fredette@netbsd.org */
+/* Labels are not required to have a colon for a suffix.  */
+#define LABELS_WITHOUT_COLONS 1
+#endif
+
 /* FIXME.  Why oh why aren't these defined somewhere globally?  */
 #ifndef FALSE
 #define FALSE   (0)
@@ -89,20 +93,22 @@
 #define ASEC_NULL (asection *)0
 
 /* pa_define_label gets used outside of tc-hppa.c via tc_frob_label.  */
-extern void pa_define_label (symbolS *);
-extern int parse_cons_expression_hppa (expressionS *);
-extern void cons_fix_new_hppa (fragS *, int, int, expressionS *, int);
-extern int hppa_force_relocation (struct fix *);
+extern void pa_define_label PARAMS ((symbolS *));
+
+extern void parse_cons_expression_hppa PARAMS ((expressionS *));
+extern void cons_fix_new_hppa PARAMS ((fragS *, int, int, expressionS *));
+extern int hppa_force_relocation PARAMS ((struct fix *));
 
 /* This gets called before writing the object file to make sure
    things like entry/exit and proc/procend pairs match.  */
-extern void pa_check_eof (void);
+extern void pa_check_eof PARAMS ((void));
 #define tc_frob_file pa_check_eof
 
 #define tc_frob_label(sym) pa_define_label (sym)
 
-extern const char	hppa_symbol_chars[];
-#define tc_symbol_chars	hppa_symbol_chars
+/* The PA does not need support for either of these.  */
+#define tc_crawl_symbol_chain(headers) {;}
+#define tc_headers_hook(headers) {;}
 
 #define RELOC_EXPANSION_POSSIBLE
 #define MAX_RELOC_EXPANSION 6
@@ -112,34 +118,33 @@ extern const char	hppa_symbol_chars[];
 #define TC_PARSE_CONS_EXPRESSION(EXP, NBYTES) \
   parse_cons_expression_hppa (EXP)
 #define TC_CONS_FIX_NEW cons_fix_new_hppa
-#define TC_PARSE_CONS_RETURN_TYPE int
-#define TC_PARSE_CONS_RETURN_NONE e_fsel
 
-/* On the PA, an exclamation point can appear in an instruction.  It is
-   used in FP comparison instructions and as an end of line marker.
-   When used in an instruction it will always follow a comma.  */
+/* On the PA, an equal sign often appears as a condition or nullification
+   completer in an instruction.  This can be detected by checking the
+   previous character, if the character is a comma, then the equal is
+   being used as part of an instruction.  */
+#define TC_EQUAL_IN_INSN(C, PTR)	((C) == ',')
+
+/* Similarly for an exclamation point.  It is used in FP comparison
+   instructions and as an end of line marker.  When used in an instruction
+   it will always follow a comma.  */
 #define TC_EOL_IN_INSN(PTR)	(*(PTR) == '!' && (PTR)[-1] == ',')
 
-int hppa_fix_adjustable (struct fix *);
+int hppa_fix_adjustable PARAMS((struct fix *));
 #define tc_fix_adjustable hppa_fix_adjustable
-
-#define EXTERN_FORCE_RELOC 1
 
 /* Because of the strange PA calling conventions, it is sometimes
    necessary to emit a relocation for a call even though it would
    normally appear safe to handle it completely within GAS.  */
-#define TC_FORCE_RELOCATION(FIX) hppa_force_relocation (FIX)
-
-/* Values passed to md_apply_fix don't include the symbol value.  */
-#define MD_APPLY_SYM_VALUE(FIX) 0
+#define TC_FORCE_RELOCATION(FIXP) hppa_force_relocation (FIXP)
 
 #ifdef OBJ_SOM
 /* If a symbol is imported, but never used, then the symbol should
    *not* end up in the symbol table.  Likewise for absolute symbols
    with local scope.  */
 #define tc_frob_symbol(sym,punt) \
-    if ((S_GET_SEGMENT (sym) == bfd_und_section_ptr && ! symbol_used_p (sym)) \
-	|| (S_GET_SEGMENT (sym) == bfd_abs_section_ptr \
+    if ((S_GET_SEGMENT (sym) == &bfd_und_section && ! symbol_used_p (sym)) \
+	|| (S_GET_SEGMENT (sym) == &bfd_abs_section \
 	    && ! S_IS_EXTERNAL (sym))) \
       punt = 1
 
@@ -147,26 +152,19 @@ int hppa_fix_adjustable (struct fix *);
    two symbols.  This includes the difference of two symbols when
    one of them is undefined (this comes up in PIC code generation).
 
-   We allow the difference of two symbols when the subtract symbol is
-   local to the relocation.  This is implemented using R_HPPA_COMPLEX.
-
-   This has some limitations.  Difference expressions only work between
-   symbols in the same segment/quadrant of a module since the HP dynamic
-   loader relocates the text and data segments independently.  Thus, a
-   difference expression can't be used between text and data symbols,
-   or between symbols in different executable modules.  */
-#define DIFF_EXPR_OK 1
-#define TC_FORCE_RELOCATION_SUB_LOCAL(FIX, SEG) 1
+   We don't define DIFF_EXPR_OK because it does the wrong thing if
+   the add symbol is undefined and the sub symbol is a symbol in
+   the same section as the relocation.  We also need some way to
+   specialize some code in adjust_reloc_syms.  */
 #define UNDEFINED_DIFFERENCE_OK
 #endif
 
 #ifdef OBJ_ELF
+/* It's OK to subtract two symbols in the same section without
+   emitting a relocation.  */
+#define TC_FORCE_RELOCATION_SECTION(FIXP, SEC) 0
 
-/* Difference expressions for the 64-bit HP-UX target have the same
-   limitations as those for the 32-bit SOM target.  */
-#define DIFF_EXPR_OK 1
-
-/* Handle .type pseudo.  Given a type string of `millicode', set the
+/* Handle .type psuedo.  Given a type string of `millicode', set the
    internal elf symbol type to STT_PARISC_MILLI, and return
    BSF_FUNCTION for the BFD symbol type.  */
 #define md_elf_symbol_type(name, sym, elf)				\
@@ -177,32 +175,20 @@ int hppa_fix_adjustable (struct fix *);
        ), BSF_FUNCTION)							\
    : -1)
 
-/* Handle type change from .type pseudo: Zap STT_PARISC_MILLI when
-   switching to a non-function type.  */
-#define md_elf_symbol_type_change(sym, elf, type)			\
-  ((type) != BSF_FUNCTION						\
-   && (((elf)->internal_elf_sym.st_info = 				\
-	ELF_ST_INFO (ELF_ST_BIND ((elf)->internal_elf_sym.st_info),	\
-		     STT_NOTYPE)), 0))
-
 #define tc_frob_symbol(sym,punt) \
   { \
-    if ((S_GET_SEGMENT (sym) == bfd_und_section_ptr \
-         && ! symbol_used_p (sym) \
-         && ELF_ST_VISIBILITY (S_GET_OTHER (sym)) == STV_DEFAULT) \
+    if ((S_GET_SEGMENT (sym) == &bfd_und_section && ! symbol_used_p (sym)) \
+	|| (S_GET_SEGMENT (sym) == &bfd_abs_section \
+	    && ! S_IS_EXTERNAL (sym)) \
 	|| strcmp (S_GET_NAME (sym), "$global$") == 0 \
-	|| strcmp (S_GET_NAME (sym), "$segrel$") == 0 \
-	|| strcmp (S_GET_NAME (sym), "$PIC_pcrel$0") == 0 \
-	|| strcmp (S_GET_NAME (sym), "$tls_gdidx$") == 0 \
-	|| strcmp (S_GET_NAME (sym), "$tls_ldidx$") == 0 \
-	|| strcmp (S_GET_NAME (sym), "$tls_dtpoff$") == 0 \
-	|| strcmp (S_GET_NAME (sym), "$tls_ieoff$") == 0 \
-	|| strcmp (S_GET_NAME (sym), "$tls_leoff$") == 0) \
+	|| strcmp (S_GET_NAME (sym), "$PIC_pcrel$0") == 0) \
       punt = 1; \
   }
 
 #define elf_tc_final_processing	elf_hppa_final_processing
-void elf_hppa_final_processing (void);
+void elf_hppa_final_processing PARAMS ((void));
+
+#define DWARF2_LINE_MIN_INSN_LENGTH 4
 #endif /* OBJ_ELF */
 
 #define md_operand(x)
@@ -211,38 +197,10 @@ void elf_hppa_final_processing (void);
    A silly fudge required for backwards compatibility.  */
 #define md_optimize_expr hppa_force_reg_syms_absolute
 
-int hppa_force_reg_syms_absolute (expressionS *, operatorT, expressionS *);
+int hppa_force_reg_syms_absolute
+  PARAMS ((expressionS *, operatorT, expressionS *));
 
-#define TC_FIX_TYPE void *
-#define TC_INIT_FIX_DATA(FIX) ((FIX)->tc_fix_data = NULL)
+#define TC_FIX_TYPE PTR
+#define TC_INIT_FIX_DATA(FIXP) ((FIXP)->tc_fix_data = NULL)
 
-#ifdef OBJ_ELF
-#define TARGET_USE_CFIPOP 1
-
-#define tc_cfi_frame_initial_instructions hppa_cfi_frame_initial_instructions
-extern void hppa_cfi_frame_initial_instructions (void);
-
-#define tc_regname_to_dw2regnum hppa_regname_to_dw2regnum
-extern int hppa_regname_to_dw2regnum (char *regname);
-
-#define DWARF2_LINE_MIN_INSN_LENGTH 4
-#define DWARF2_DEFAULT_RETURN_COLUMN 2
-#if TARGET_ARCH_SIZE == 64
-#define DWARF2_CIE_DATA_ALIGNMENT 8
-#define DWARF2_FDE_RELOC_SIZE 8
-#else
-#define DWARF2_CIE_DATA_ALIGNMENT 4
-#endif
-
-#if !defined (TE_LINUX) && !defined (TE_NetBSD)
-/* Due to the way dynamic linking to personality functions is handled
-   on HP-UX, we need to have a read-write .eh_frame section.  */
-#define DWARF2_EH_FRAME_READ_ONLY 0
-
-/* Because differences between text and data symbols don't work, we
-   can't use difference expressions during CFI generation.  */
-#define CFI_DIFF_EXPR_OK 0
-#endif
-
-#endif /* OBJ_ELF */
 #endif /* _TC_HPPA_H */

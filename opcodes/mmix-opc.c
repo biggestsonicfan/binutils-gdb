@@ -1,23 +1,22 @@
 /* mmix-opc.c -- MMIX opcode table
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001 Free Software Foundation, Inc.
    Written by Hans-Peter Nilsson (hp@bitrange.com)
 
-   This file is part of the GNU opcodes library.
+This file is part of GDB, GAS, and the GNU binutils.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version 2,
+or (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include <stdio.h>
 #include "opcode/mmix.h"
@@ -68,11 +67,11 @@ const struct mmix_spec_reg mmix_spec_regs[] =
 /* All bits in the opcode-byte are significant.  Add "| ..." expressions
    to add zero-bits.  */
 #undef O
-#define O(m) ((unsigned long) (m) << 24UL), ((~(unsigned long) (m) & 255) << 24)
+#define O(m) ((m) << 24), ((~(m) & 255) << 24)
 
 /* Bits 7..1 of the opcode are significant.  */
 #undef Z
-#define Z(m) ((unsigned long) (m) << 24), ((~(unsigned long) (m) & 254) << 24)
+#define Z(m) ((m) << 24), ((~(m) & 254) << 24)
 
 /* For easier overview of the table.  */
 #define N mmix_type_normal
@@ -228,8 +227,7 @@ const struct mmix_opcode mmix_opcodes[] =
    {"prego",	Z (0x9c),	OP (x_regs_z),		N},
 
    {"ldunc",	Z (0x96),	OP (regs_z_opt),	MO},
-   {"go",	Z (GO_INSN_BYTE),
-				OP (regs_z_opt),	B},
+   {"go",	Z (0x9e),	OP (regs_z_opt),	B},
 
    {"stb",	Z (0xa0),	OP (regs_z_opt),	MB},
    {"stt",	Z (0xa8),	OP (regs_z_opt),	MT},
@@ -253,8 +251,7 @@ const struct mmix_opcode mmix_opcodes[] =
    {"syncid",	Z (0xbc),	OP (x_regs_z),		M},
 
    {"stunc",	Z (0xb6),	OP (regs_z_opt),	MO},
-   {"pushgo",	Z (PUSHGO_INSN_BYTE),
-				OP (pushgo),		J},
+   {"pushgo",	Z (0xbe),	OP (pushgo),		J},
 
    /* Synonym for OR with a zero Z.  */
    {"set",	O (0xc1)
@@ -290,20 +287,16 @@ const struct mmix_opcode mmix_opcodes[] =
    {"ormh",	O (0xe9),	OP (reg_yz),		N},
 
    {"setml",	O (0xe2),	OP (reg_yz),		N},
-   {"setl",	O (SETL_INSN_BYTE),
-				OP (reg_yz),		N},
+   {"setl",	O (0xe3),	OP (reg_yz),		N},
    {"orml",	O (0xea),	OP (reg_yz),		N},
    {"orl",	O (0xeb),	OP (reg_yz),		N},
 
-   {"inch",	O (INCH_INSN_BYTE),
-				OP (reg_yz),		N},
-   {"incmh",	O (INCMH_INSN_BYTE),
-				OP (reg_yz),		N},
+   {"inch",	O (0xe4),	OP (reg_yz),		N},
+   {"incmh",	O (0xe5),	OP (reg_yz),		N},
    {"andnh",	O (0xec),	OP (reg_yz),		N},
    {"andnmh",	O (0xed),	OP (reg_yz),		N},
 
-   {"incml",	O (INCML_INSN_BYTE),
-				OP (reg_yz),		N},
+   {"incml",	O (0xe6),	OP (reg_yz),		N},
    {"incl",	O (0xe7),	OP (reg_yz),		N},
    {"andnml",	O (0xee),	OP (reg_yz),		N},
    {"andnl",	O (0xef),	OP (reg_yz),		N},
@@ -321,8 +314,7 @@ const struct mmix_opcode mmix_opcodes[] =
 
    {"geta",	Z (0xf4),	OP (regaddr),		N},
    {"sync",	O (0xfc),	OP (sync),		N},
-   {"swym",	O (SWYM_INSN_BYTE),
-				OP (xyz_opt),		N},
+   {"swym",	O (0xfd),	OP (xyz_opt),		N},
 
    {"put", Z (0xf6) | 0xff00,	OP (put),		N},
    {"get", O (0xfe) | 0xffe0,	OP (get),		N},

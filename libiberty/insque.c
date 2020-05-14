@@ -3,8 +3,7 @@
 
 /*
 
-@deftypefn Supplemental void insque (struct qelem *@var{elem}, @
-  struct qelem *@var{pred})
+@deftypefn Supplemental void insque (struct qelem *@var{elem}, struct qelem *@var{pred})
 @deftypefnx Supplemental void remque (struct qelem *@var{elem})
 
 Routines to manipulate queues built from doubly linked lists.  The
@@ -34,7 +33,9 @@ struct qelem {
 
 
 void
-insque (struct qelem *elem, struct qelem *pred)
+insque (elem, pred)
+  struct qelem *elem;
+  struct qelem *pred;
 {
   elem -> q_forw = pred -> q_forw;
   pred -> q_forw -> q_back = elem;
@@ -44,7 +45,8 @@ insque (struct qelem *elem, struct qelem *pred)
 
 
 void
-remque (struct qelem *elem)
+remque (elem)
+  struct qelem *elem;
 {
   elem -> q_forw -> q_back = elem -> q_back;
   elem -> q_back -> q_forw = elem -> q_forw;

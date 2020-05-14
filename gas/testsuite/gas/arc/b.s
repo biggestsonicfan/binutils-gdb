@@ -1,5 +1,5 @@
 # b test
-
+	
 text_label:
 
 	b	text_label
@@ -32,13 +32,9 @@ text_label:
 	bpnz	text_label
 
 	b.d	text_label
-	nop
 	b.nd	text_label
-	b.d	text_label
-	nop
+	b.jd	text_label
 
 	beq.d	text_label
-	nop
 	bne.nd	text_label
-	bcc.d	text_label
-	nop
+	bcc.jd	text_label

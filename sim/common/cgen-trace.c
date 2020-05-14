@@ -1,28 +1,31 @@
 /* Tracing support for CGEN-based simulators.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "config.h"
 #include <errno.h>
 #include "dis-asm.h"
 #include "bfd.h"
 #include "sim-main.h"
 #include "sim-fpu.h"
+
+#undef min
+#define min(a,b) ((a) < (b) ? (a) : (b))
 
 #ifndef SIZE_INSTRUCTION
 #define SIZE_INSTRUCTION 16
@@ -63,30 +66,29 @@ static char *bufptr;
 /* Non-zero if this is the first insn in a set of parallel insns.  */
 static int first_insn_p;
 
-/* For communication between cgen_trace_insn and cgen_trace_result.  */
+/* For communication between trace_insn and trace_result.  */
 static int printed_result_p;
 
 /* Insn and its extracted fields.
-   Set by cgen_trace_insn, used by cgen_trace_insn_fini.
+   Set by trace_insn, used by trace_insn_fini.
    ??? Move to SIM_CPU to support heterogeneous multi-cpu case.  */
 static const struct cgen_insn *current_insn;
 static const struct argbuf *current_abuf;
 
 void
-cgen_trace_insn_init (SIM_CPU *cpu, int first_p)
+trace_insn_init (SIM_CPU *cpu, int first_p)
 {
   bufptr = trace_buf;
   *bufptr = 0;
   first_insn_p = first_p;
 
-  /* Set to NULL so cgen_trace_insn_fini can know if cgen_trace_insn was
-     called.  */
+  /* Set to NULL so trace_insn_fini can know if trace_insn was called.  */
   current_insn = NULL;
   current_abuf = NULL;
 }
 
 void
-cgen_trace_insn_fini (SIM_CPU *cpu, const struct argbuf *abuf, int last_p)
+trace_insn_fini (SIM_CPU *cpu, const struct argbuf *abuf, int last_p)
 {
   SIM_DESC sd = CPU_STATE (cpu);
 
@@ -141,7 +143,7 @@ cgen_trace_insn_fini (SIM_CPU *cpu, const struct argbuf *abuf, int last_p)
 	     ++i, ++opinst)
 	  {
 	    if (CGEN_OPINST_TYPE (opinst) == CGEN_OPINST_OUTPUT)
-	      cgen_trace_result (cpu, current_insn, opinst, indices[i]);
+	      trace_result (cpu, current_insn, opinst, indices[i]);
 	  }
       }
   }
@@ -156,8 +158,8 @@ cgen_trace_insn_fini (SIM_CPU *cpu, const struct argbuf *abuf, int last_p)
 }
 
 void
-cgen_trace_insn (SIM_CPU *cpu, const struct cgen_insn *opcode,
-		 const struct argbuf *abuf, IADDR pc)
+trace_insn (SIM_CPU *cpu, const struct cgen_insn *opcode,
+	    const struct argbuf *abuf, IADDR pc)
 {
   char disasm_buf[50];
 
@@ -181,7 +183,7 @@ cgen_trace_insn (SIM_CPU *cpu, const struct cgen_insn *opcode,
 }
 
 void
-cgen_trace_extract (SIM_CPU *cpu, IADDR pc, char *name, ...)
+trace_extract (SIM_CPU *cpu, IADDR pc, char *name, ...)
 {
   va_list args;
   int printed_one_p = 0;
@@ -190,7 +192,7 @@ cgen_trace_extract (SIM_CPU *cpu, IADDR pc, char *name, ...)
   va_start (args, name);
 
   trace_printf (CPU_STATE (cpu), cpu, "Extract: 0x%.*lx: %s ",
-		SIZE_PC, (unsigned long) pc, name);
+		SIZE_PC, pc, name);
 
   do {
     int type,ival;
@@ -220,7 +222,7 @@ cgen_trace_extract (SIM_CPU *cpu, IADDR pc, char *name, ...)
 }
 
 void
-cgen_trace_result (SIM_CPU *cpu, char *name, int type, ...)
+trace_result (SIM_CPU *cpu, char *name, int type, ...)
 {
   va_list args;
 
@@ -297,12 +299,20 @@ cgen_trace_printf (SIM_CPU *cpu, char *fmt, ...)
 /* sprintf to a "stream" */
 
 int
-sim_disasm_sprintf (SFILE *f, const char *format, ...)
+sim_disasm_sprintf VPARAMS ((SFILE *f, const char *format, ...))
 {
+#ifndef __STDC__
+  SFILE *f;
+  const char *format;
+#endif
   int n;
   va_list args;
 
-  va_start (args, format);
+  VA_START (args, format);
+#ifndef __STDC__
+  f = va_arg (args, SFILE *);
+  format = va_arg (args, char *);
+#endif
   vsprintf (f->current, format, args);
   f->current += n = strlen (f->current);
   va_end (args);
@@ -312,12 +322,12 @@ sim_disasm_sprintf (SFILE *f, const char *format, ...)
 /* Memory read support for an opcodes disassembler.  */
 
 int
-sim_disasm_read_memory (bfd_vma memaddr, bfd_byte *myaddr, unsigned int length,
+sim_disasm_read_memory (bfd_vma memaddr, bfd_byte *myaddr, int length,
 			struct disassemble_info *info)
 {
   SIM_CPU *cpu = (SIM_CPU *) info->application_data;
   SIM_DESC sd = CPU_STATE (cpu);
-  unsigned length_read;
+  int length_read;
 
   length_read = sim_core_read_buffer (sd, cpu, read_map, myaddr, memaddr,
 				      length);

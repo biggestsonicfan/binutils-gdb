@@ -1,24 +1,23 @@
 /* alpha.h -- Header file for Alpha opcode table
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright 1996, 1999 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@tamu.edu>,
    patterned after the PPC opcode table written by Ian Lance Taylor.
 
-   This file is part of GDB, GAS, and the GNU binutils.
+This file is part of GDB, GAS, and the GNU binutils.
 
-   GDB, GAS, and the GNU binutils are free software; you can redistribute
-   them and/or modify them under the terms of the GNU General Public
-   License as published by the Free Software Foundation; either version 3,
-   or (at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-   GDB, GAS, and the GNU binutils are distributed in the hope that they
-   will be useful, but WITHOUT ANY WARRANTY; without even the implied
-   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
-   the GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING3.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef OPCODE_ALPHA_H
 #define OPCODE_ALPHA_H
@@ -109,7 +108,8 @@ struct alpha_operand
      string (the operand will be inserted in any case).  If the
      operand value is legal, *ERRMSG will be unchanged (most operands
      can accept any value).  */
-  unsigned (*insert) (unsigned instruction, int op, const char **errmsg);
+  unsigned (*insert) PARAMS ((unsigned instruction, int op,
+			      const char **errmsg));
 
   /* Extraction function.  This is used by the disassembler.  To
      extract this operand type from an instruction, check this field.
@@ -128,7 +128,7 @@ struct alpha_operand
      non-zero if this operand type can not actually be extracted from
      this operand (i.e., the instruction does not match).  If the
      operand is valid, *INVALID will not be changed.  */
-  int (*extract) (unsigned instruction, int *invalid);
+  int (*extract) PARAMS ((unsigned instruction, int *invalid));
 };
 
 /* Elements in the table are retrieved by indexing with values from

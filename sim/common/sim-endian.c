@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1995, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #ifndef _SIM_ENDIAN_C_
@@ -25,13 +24,14 @@
 
 #include "sim-basics.h"
 #include "sim-assert.h"
+#include "sim-io.h"
 
 
 #if !defined(_SWAP_1)
 #define _SWAP_1(SET,RAW) SET (RAW)
 #endif
 
-#if !defined(_SWAP_2) && (HOST_BYTE_ORDER == BFD_ENDIAN_LITTLE) && defined(htons)
+#if !defined(_SWAP_2) && (WITH_HOST_BYTE_ORDER == LITTLE_ENDIAN) && defined(htons)
 #define _SWAP_2(SET,RAW) SET htons (RAW)
 #endif
 
@@ -39,7 +39,7 @@
 #define _SWAP_2(SET,RAW) SET (((RAW) >> 8) | ((RAW) << 8))
 #endif
 
-#if !defined(_SWAP_4) && (HOST_BYTE_ORDER == BFD_ENDIAN_LITTLE) && defined(htonl)
+#if !defined(_SWAP_4) && (WITH_HOST_BYTE_ORDER == LITTLE_ENDIAN) && defined(htonl)
 #define _SWAP_4(SET,RAW) SET htonl (RAW)
 #endif
 
@@ -93,7 +93,7 @@ INLINE_SIM_ENDIAN\
 (unsigned_8)
 sim_endian_split_16 (unsigned_16 word, int w)
 {
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_LITTLE)
+  if (CURRENT_HOST_BYTE_ORDER == LITTLE_ENDIAN)
     {
       return word.a[1 - w];
     }
@@ -110,7 +110,7 @@ sim_endian_join_16 (unsigned_8 h, unsigned_8 l)
 
 {
   unsigned_16 word;
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_LITTLE)
+  if (CURRENT_HOST_BYTE_ORDER == LITTLE_ENDIAN)
     {
       word.a[0] = l;
       word.a[1] = h;

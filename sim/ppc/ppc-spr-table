@@ -5,7 +5,7 @@
 #
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 3 of the License, or
+#   the Free Software Foundation; either version 2 of the License, or
 #   (at your option) any later version.
 #
 #   This program is distributed in the hope that it will be useful,
@@ -14,7 +14,8 @@
 #   GNU General Public License for more details.
 #
 #   You should have received a copy of the GNU General Public License
-#   along with this program; if not, see <http://www.gnu.org/licenses/>.
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
 # Name:reg-nr:read-only:length
@@ -30,9 +31,6 @@ DEC:22:0:0
 SDR1:25:0:0
 SRR0:26:0:0
 SRR1:27:0:0
-VRSAVE:256:0:0
-TBRL:268:0:0
-TBRU:269:0:0
 SPRG0:272:0:0
 SPRG1:273:0:0
 SPRG2:274:0:0
@@ -41,7 +39,6 @@ EAR:282:0:0
 TBL:284:0:0
 TBU:285:0:0
 PVR:287:0:0
-SPEFSCR:512:0:0
 IBAT0U:528:0:0
 IBAT0L:529:0:0
 IBAT1U:530:0:0

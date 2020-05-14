@@ -1,11 +1,8 @@
 # Test PHDRS with empty sections in a linker script.
-# Copyright (C) 2005-2020 Free Software Foundation, Inc.
 #
-# This file is part of the GNU Binutils.
-#
-# This program is free software; you can redistribute it and/or modify
+# This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -15,8 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 # PHDRS2 is only meaningful for ELF.
 if {    ![istarget *-*-sysv4*] \
@@ -25,22 +21,20 @@ if {    ![istarget *-*-sysv4*] \
      && ![istarget *-*-eabi*] \
      && ![istarget hppa*64*-*-hpux*] \
      && ![istarget *-*-linux*] \
-     && ![istarget arm*-*-uclinuxfdpiceabi] \
-     && ![istarget *-*-gnu*] \
      && ![istarget *-*-irix5*] \
      && ![istarget *-*-irix6*] \
      && ![istarget *-*-solaris2*] } {
     return
 }
 
+if { [istarget *-*-linux*aout*] \
+     || [istarget *-*-linux*oldld*] } {
+    return
+}
+
 # This is a very simplistic test.
 
 set testname "PHDRS2"
-
-set ldopt ""
-if { [istarget spu*-*-*] } {
-    set ldopt "--local-store 0:0"
-}
 
 if ![ld_assemble $as $srcdir/$subdir/phdrs2.s tmpdir/phdrs2.o] {
     unresolved $testname
@@ -50,16 +44,16 @@ if ![ld_assemble $as $srcdir/$subdir/phdrs2.s tmpdir/phdrs2.o] {
 set phdrs_regexp \
     ".*Program Header:.*LOAD *off *0x00\[0-9a-f\]* *vaddr *0x00*800000 *paddr *0x00*800000.*filesz *0x0\[0-9a-f\]* *memsz *0x0\[0-9a-f\]*.*LOAD *off *0x00\[0-9a-f\]* *vaddr *0x00*800004 *paddr *0x00*800004.*filesz *0x00*\[0-9a-f\]* *memsz *0x0\[0-9a-f\]* *flags rw.*"
 
-set ldopt "$ldopt -T $srcdir/$subdir/phdrs2.t tmpdir/phdrs2.o"
-if ![ld_link $ld tmpdir/phdrs2 $ldopt] {
+if ![ld_simple_link $ld tmpdir/phdrs2 "-T $srcdir/$subdir/phdrs2.t tmpdir/phdrs2.o"] {
     fail $testname
 } else {
-    if {![is_remote host] && [which $objdump] == 0} {
+    if {[which $objdump] == 0} {
 	unresolved $testname
 	return
     }
 
-    set exec_output [run_host_cmd "$objdump" "--private-headers tmpdir/phdrs2"]
+    verbose -log "$objdump --private tmpdir/phdrs2"
+    catch "exec $objdump --private tmpdir/phdrs2" exec_output
     set exec_output [prune_warnings $exec_output]
     verbose -log $exec_output
 

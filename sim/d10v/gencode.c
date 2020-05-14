@@ -2,16 +2,17 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <limits.h>
-#include <string.h>
 #include "ansidecl.h"
 #include "opcode/d10v.h"
 
-static void write_header (void);
-static void write_opcodes (void);
-static void write_template (void);
+static void write_header PARAMS ((void));
+static void write_opcodes PARAMS ((void));
+static void write_template PARAMS ((void));
 
 int
-main (int argc, char *argv[])
+main (argc, argv)
+     int argc;
+     char *argv[];
 {
   if ((argc > 1) && (strcmp (argv[1],"-h") == 0))
     write_header();
@@ -24,13 +25,13 @@ main (int argc, char *argv[])
 
 
 static void
-write_header (void)
+write_header ()
 {
   struct d10v_opcode *opcode;
 
   for (opcode = (struct d10v_opcode *)d10v_opcodes; opcode->name; opcode++)
     if (opcode->format != OPCODE_FAKE)
-      printf ("void OP_%lX (SIM_DESC, SIM_CPU *);\t\t/* %s */\n", opcode->opcode, opcode->name);
+      printf("void OP_%X PARAMS ((void));\t\t/* %s */\n",opcode->opcode, opcode->name);
 }
 
 
@@ -38,19 +39,19 @@ write_header (void)
 /* to be filled out */
 
 static void
-write_template (void)
+write_template ()
 {
   struct d10v_opcode *opcode;
   int i,j;
 
-  printf ("#include \"sim-main.h\"\n");
+  printf ("#include \"d10v_sim.h\"\n");
   printf ("#include \"simops.h\"\n");
 
   for (opcode = (struct d10v_opcode *)d10v_opcodes; opcode->name; opcode++)
     {
       if (opcode->format != OPCODE_FAKE)
 	{
-	  printf("/* %s */\nvoid\nOP_%lX ()\n{\n", opcode->name, opcode->opcode);
+	  printf("/* %s */\nvoid\nOP_%X ()\n{\n",opcode->name,opcode->opcode);
 	  
 	  /* count operands */
 	  j = 0;
@@ -86,24 +87,24 @@ write_template (void)
 long Opcodes[512];
 static int curop=0;
 
-static void
 check_opcodes( long op)
 {
   int i;
 
   for (i=0;i<curop;i++)
     if (Opcodes[i] == op)
-      fprintf(stderr,"DUPLICATE OPCODES: %lx\n", op);
+      fprintf(stderr,"DUPLICATE OPCODES: %x\n",op);
 }
 
+
 static void
-write_opcodes (void)
+write_opcodes ()
 {
   struct d10v_opcode *opcode;
   int i, j;
   
   /* write out opcode table */
-  printf ("#include \"sim-main.h\"\n");
+  printf ("#include \"d10v_sim.h\"\n");
   printf ("#include \"simops.h\"\n\n");
   printf ("struct simops Simops[] = {\n");
   
@@ -111,7 +112,7 @@ write_opcodes (void)
     {
       if (opcode->format != OPCODE_FAKE)
 	{
-	  printf ("  { %ld,%d,%ld,%d,%d,%d,%d,OP_%lX,", opcode->opcode,
+	  printf ("  { %ld,%d,%ld,%d,%d,%d,%d,OP_%X,", opcode->opcode, 
 		  (opcode->format & LONG_OPCODE) ? 1 : 0, opcode->mask, opcode->format, 
 		  opcode->cycles, opcode->unit, opcode->exec_type, opcode->opcode);
       
@@ -150,5 +151,5 @@ write_opcodes (void)
 	  printf ("},\n");
 	}
     }
-  printf ("{ 0,0,0,0,0,0,0,(void (*)())0,0,{0,0,0}},\n};\n");
+  printf ("{ 0,0,0,0,0,0,0,(void (*)(void))0,0,{0,0,0}},\n};\n");
 }

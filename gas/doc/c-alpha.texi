@@ -1,7 +1,7 @@
-@c Copyright (C) 2002-2020 Free Software Foundation, Inc.
+@c Copyright 2002
+@c Free Software Foundation, Inc.
 @c This is part of the GAS manual.
 @c For copying conditions, see the file as.texinfo.
-@c man end
 
 @ifset GENERIC
 @page
@@ -38,16 +38,15 @@ features specific to these formats are not yet documented.
 @cindex Alpha options
 @cindex options for Alpha
 
-@c man begin OPTIONS
-@table @gcctabopt
-@cindex @code{-m@var{cpu}} command-line option, Alpha
+@table @option
+@cindex @code{-m@var{cpu}} command line option, Alpha
 @item -m@var{cpu}
 This option specifies the target processor.  If an attempt is made to
 assemble an instruction which will not execute on the target processor,
 the assembler may either expand the instruction as a macro or issue an
 error message.  This option is equivalent to the @code{.arch} directive.
 
-The following processor names are recognized:
+The following processor names are recognized: 
 @code{21064},
 @code{21064a},
 @code{21066},
@@ -75,15 +74,15 @@ and existing practice within @command{MILO} (the Linux ARC bootloader), the
 numbered processor names (e.g.@: 21064) enable the processor-specific PALcode
 instructions, while the ``electro-vlasic'' names (e.g.@: @code{ev4}) do not.
 
-@cindex @code{-mdebug} command-line option, Alpha
-@cindex @code{-no-mdebug} command-line option, Alpha
+@cindex @code{-mdebug} command line option, Alpha
+@cindex @code{-no-mdebug} command line option, Alpha
 @item -mdebug
 @itemx -no-mdebug
 Enables or disables the generation of @code{.mdebug} encapsulation for
 stabs directives and procedure descriptors.  The default is to automatically
 enable @code{.mdebug} when the first stabs directive is seen.
 
-@cindex @code{-relax} command-line option, Alpha
+@cindex @code{-relax} command line option, Alpha
 @item -relax
 This option forces all relocations to be put into the object file, instead
 of saving space and resolving some relocations at assembly time.  Note that
@@ -91,34 +90,24 @@ this option does not propagate all symbol arithmetic into the object file,
 because not all symbol arithmetic can be represented.  However, the option
 can still be useful in specific applications.
 
-@cindex @code{-replace} command-line option, Alpha
-@cindex @code{-noreplace} command-line option, Alpha
-@item -replace
-@itemx -noreplace
-Enables or disables the optimization of procedure calls, both at assemblage
-and at link time.  These options are only available for VMS targets and
-@code{-replace} is the default.  See section 1.4.1 of the OpenVMS Linker
-Utility Manual.
-
-@cindex @code{-g} command-line option, Alpha
+@cindex @code{-g} command line option, Alpha
 @item -g
 This option is used when the compiler generates debug information.  When
 @command{gcc} is using @command{mips-tfile} to generate debug
 information for ECOFF, local labels must be passed through to the object
 file.  Otherwise this option has no effect.
 
-@cindex @code{-G} command-line option, Alpha
+@cindex @code{-G} command line option, Alpha
 @item -G@var{size}
 A local common symbol larger than @var{size} is placed in @code{.bss},
 while smaller symbols are placed in @code{.sbss}.
 
-@cindex @code{-F} command-line option, Alpha
-@cindex @code{-32addr} command-line option, Alpha
+@cindex @code{-F} command line option, Alpha
+@cindex @code{-32addr} command line option, Alpha
 @item -F
 @itemx -32addr
 These options are ignored for backward compatibility.
 @end table
-@c man end
 
 @cindex Alpha Syntax
 @node Alpha Syntax
@@ -138,10 +127,7 @@ OpenVMS syntax, with a few differences for ELF.
 
 @cindex line comment character, Alpha
 @cindex Alpha line comment character
-@samp{#} is the line comment character.  Note that if @samp{#} is the
-first character on a line then it can also be a logical line number
-directive (@pxref{Comments}) or a preprocessor control
-command (@pxref{Preprocessing}).
+@samp{#} is the line comment character.
 
 @cindex line separator, Alpha
 @cindex statement separator, Alpha
@@ -153,12 +139,12 @@ command (@pxref{Preprocessing}).
 @cindex Alpha registers
 @cindex register names, Alpha
 
-The 32 integer registers are referred to as @samp{$@var{n}} or
+The 32 integer registers are refered to as @samp{$@var{n}} or
 @samp{$r@var{n}}.  In addition, registers 15, 28, 29, and 30 may
-be referred to by the symbols @samp{$fp}, @samp{$at}, @samp{$gp},
+be refered to by the symbols @samp{$fp}, @samp{$at}, @samp{$gp},
 and @samp{$sp} respectively.
 
-The 32 floating-point registers are referred to as @samp{$f@var{n}}.
+The 32 floating-point registers are refered to as @samp{$f@var{n}}.
 
 @node Alpha-Relocs
 @subsection Relocations
@@ -166,8 +152,8 @@ The 32 floating-point registers are referred to as @samp{$f@var{n}}.
 @cindex relocations, Alpha
 
 Some of these relocations are available for ECOFF, but mostly
-only for ELF.  They are modeled after the relocation format
-introduced in Digital Unix 4.0, but there are additions.
+only for ELF.  They are modeled after the relocation format 
+introduced in Digial Unix 4.0, but there are additions.
 
 The format is @samp{!@var{tag}} or @samp{!@var{tag}!@var{number}}
 where @var{tag} is the name of the relocation.  In some cases
@@ -217,12 +203,6 @@ Used with a register branch format instruction (e.g.@: @code{jsr}) to
 indicate that the literal is used for a call.  During relaxation, the
 code may be altered to use a direct branch (e.g.@: @code{bsr}).
 
-@item !lituse_jsrdirect!@var{N}
-Similar to @code{lituse_jsr}, but also that this call cannot be vectored
-through a PLT entry.  This is useful for functions with special calling
-conventions which do not allow the normal call-clobbered registers to be
-clobbered.
-
 @item !lituse_bytoff!@var{N}
 Used with a byte mask instruction (e.g.@: @code{extbl}) to indicate
 that only the low 3 bits of the address are relevant.  During relaxation,
@@ -242,13 +222,13 @@ jsr  $26,($27),foo  !lituse_jsr!1
 
 @item !lituse_tlsgd!@var{N}
 Used with a register branch format instruction to indicate that the
-literal is the call to @code{__tls_get_addr} used to compute the
+literal is the call to @code{__tls_get_addr} used to compute the 
 address of the thread-local storage variable whose descriptor was
 loaded with @code{!tlsgd!@var{N}}.
 
 @item !lituse_tlsldm!@var{N}
 Used with a register branch format instruction to indicate that the
-literal is the call to @code{__tls_get_addr} used to compute the
+literal is the call to @code{__tls_get_addr} used to compute the 
 address of the base of the thread-local storage block for the current
 module.  The descriptor for the module must have been loaded with
 @code{!tlsldm!@var{N}}.
@@ -258,7 +238,7 @@ Used with @code{ldah} and @code{lda} to load the GP from the current
 address, a-la the @code{ldgp} macro.  The source register for the
 @code{ldah} instruction must contain the address of the @code{ldah}
 instruction.  There must be exactly one @code{lda} instruction paired
-with the @code{ldah} instruction, though it may appear anywhere in
+with the @code{ldah} instruction, though it may appear anywhere in 
 the instruction stream.  The immediate operands must be zero.
 
 @example
@@ -399,18 +379,6 @@ to perform a load of the GP register; 2 indicates that @code{$27} is
 used in some non-standard way and so the linker cannot elide the load of
 the procedure vector during relaxation.
 
-@item .usepv @var{function}, @var{which}
-Used to indicate the use of the @code{$27} register, similar to
-@code{.prologue}, but without the other semantics of needing to
-be inside an open @code{.ent}/@code{.end} block.
-
-The @var{which} argument should be either @code{no}, indicating that
-@code{$27} is not used, or @code{std}, indicating that the first two
-instructions of the function perform a GP load.
-
-One might use this directive instead of @code{.prologue} if you are
-also using dwarf2 CFI directives.
-
 @item .gprel32 @var{expression}
 Computes the difference between the address in @var{expression} and the
 GP for the current object file, and stores it in 4 bytes.  In addition
@@ -445,7 +413,7 @@ is in effect.  When @code{at} is in effect, a warning will be generated
 if @code{$at} is used by the programmer.
 
 @item macro
-Enables the expansion of macro instructions.  Note that variants of real
+Enables the expasion of macro instructions.  Note that variants of real
 instructions, such as @code{br label} vs @code{br $31,label} are
 considered alternate forms and not macros.
 

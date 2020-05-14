@@ -29,18 +29,16 @@
 
 	comment "exit (0)"
 	.macro gdbasm_exit0
-	comment "sys_exit"
-	li	0, 1
-	sc
+	comment "Don't know how to exit, but this will certainly halt..."
+	li	0, 0
+	lwz 	0, 0(0)
 	.endm
 
 	comment "crt0 startup"
 	.macro gdbasm_startup
-	.p2align 2
 	.endm
 
 	comment "Declare a data variable"
-	.purgem gdbasm_datavar
 	.macro gdbasm_datavar name value
 	.data
 \name:

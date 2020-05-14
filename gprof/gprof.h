@@ -33,11 +33,11 @@
 #include "sysdep.h"
 #include "bfd.h"
 
+/* Undefine the BFD PACKAGE and VERSION macros before including the
+   gprof config.h file.  */
 #undef PACKAGE
-#undef PACKAGE_NAME
-#undef PACKAGE_STRING
-#undef PACKAGE_TARNAME
-#undef PACKAGE_VERSION
+#undef VERSION
+
 #include "gconfig.h"
 
 #ifndef MIN
@@ -67,6 +67,8 @@
 #undef  _
 #define _(String) gettext (String)
 #endif
+
+#include "bin-bugs.h"
 
 #define STYLE_FLAT_PROFILE	(1<<0)
 #define STYLE_CALL_GRAPH	(1<<1)
@@ -117,21 +119,21 @@ extern long hz;			/* ticks per second */
 extern int debug_level;			/* debug level */
 extern int output_style;
 extern int output_width;		/* controls column width in index */
-extern bfd_boolean bsd_style_output;	/* as opposed to FSF style output */
-extern bfd_boolean demangle;		/* demangle symbol names? */
-extern bfd_boolean ignore_direct_calls;	/* don't count direct calls */
-extern bfd_boolean ignore_static_funcs;	/* suppress static functions */
-extern bfd_boolean ignore_zeros;	/* ignore unused symbols/files */
-extern bfd_boolean line_granularity;	/* function or line granularity? */
-extern bfd_boolean print_descriptions;	/* output profile description */
-extern bfd_boolean print_path;		/* print path or just filename? */
-extern bfd_boolean ignore_non_functions; /* Ignore non-function symbols.  */
-extern bfd_boolean inline_file_names;	/* print file names after symbols */
+extern boolean bsd_style_output;	/* as opposed to FSF style output */
+extern boolean demangle;		/* demangle symbol names? */
+extern boolean discard_underscores;	/* discard leading underscores? */
+extern boolean ignore_direct_calls;	/* don't count direct calls */
+extern boolean ignore_static_funcs;	/* suppress static functions */
+extern boolean ignore_zeros;		/* ignore unused symbols/files */
+extern boolean line_granularity;	/* function or line granularity? */
+extern boolean print_descriptions;	/* output profile description */
+extern boolean print_path;		/* print path or just filename? */
+extern boolean ignore_non_functions;	/* Ignore non-function symbols.  */
 
 extern File_Format file_format;		/* requested file format */
 
-extern bfd_boolean first_output;	/* no output so far? */
+extern boolean first_output;		/* no output so far? */
 
-extern void done (int status) ATTRIBUTE_NORETURN;
+extern void done PARAMS ((int status)) ATTRIBUTE_NORETURN;
 
 #endif /* gprof_h */

@@ -1,23 +1,23 @@
 /* ia64-asmtab.h -- Header for compacted IA-64 opcode tables.
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000 Free Software Foundation, Inc.
    Contributed by Bob Manson of Cygnus Support <manson@cygnus.com>
 
-   This file is part of the GNU opcodes library.
+   This file is part of GDB, GAS, and the GNU binutils.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+   GDB, GAS, and the GNU binutils are free software; you can redistribute
+   them and/or modify them under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either version
+   2, or (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   GDB, GAS, and the GNU binutils are distributed in the hope that they
+   will be useful, but WITHOUT ANY WARRANTY; without even the implied
+   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+   the GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #ifndef IA64_ASMTAB_H
 #define IA64_ASMTAB_H
@@ -31,7 +31,7 @@ struct ia64_main_table
      opcode. */
   unsigned short name_index;
 
-  /* The type of opcode; corresponds to the TYPE field in
+  /* The type of opcode; corresponds to the TYPE field in 
      struct ia64_opcode. */
   unsigned char opcode_type;
 
@@ -64,7 +64,7 @@ struct ia64_main_table
    The completer entries modify certain bits in the instruction opcode.
    Which bits are to be modified are marked by the BITS, MASK and
    OFFSET fields.  The completer entry may also note dependencies for the
-   opcode.
+   opcode. 
 
    These completers are arranged in a DAG; the pointers are indexes
    into the completer_table array.  The completer DAG is searched by
@@ -81,7 +81,7 @@ struct ia64_main_table
    not contain an empty entry.
 
    Terminal completers (those completers that validly complete an
-   instruction) are marked by having the TERMINAL_COMPLETER flag set.
+   instruction) are marked by having the TERMINAL_COMPLETER flag set. 
 
    Only dependencies listed in the terminal completer for an opcode are
    considered to apply to that opcode instance. */
@@ -91,7 +91,7 @@ struct ia64_completer_table
   /* The bit value that this completer sets. */
   unsigned int bits;
 
-  /* And its mask. 1s are bits that are to be modified in the
+  /* And its mask. 1s are bits that are to be modified in the 
      instruction. */
   unsigned int mask;
 
@@ -118,11 +118,11 @@ struct ia64_completer_table
 
 /* This contains sufficient information for the disassembler to resolve
    the complete name of the original instruction.  */
-struct ia64_dis_names
+struct ia64_dis_names 
 {
   /* COMPLETER_INDEX represents the tree of completers that make up
      the instruction.  The LSB represents the top of the tree for the
-     specified instruction.
+     specified instruction. 
 
      A 0 bit indicates to go to the next alternate completer via the
      alternative field; a 1 bit indicates that the current completer
@@ -131,7 +131,7 @@ struct ia64_dis_names
      bits.
 
      There is always at least one 1 bit. */
-  unsigned int completer_index ;
+  unsigned int completer_index : 20;
 
   /* The index in the main_table[] array for the instruction. */
   unsigned short insn_index : 11;

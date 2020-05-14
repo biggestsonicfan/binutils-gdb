@@ -1,23 +1,23 @@
 /* Main simulator entry points specific to the SH5.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright (C) 2000 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of the GNU simulators.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "config.h"
 #include "libiberty.h"
 #include "bfd.h"
 #include "sim-main.h"
@@ -32,6 +32,10 @@ static void free_state (SIM_DESC);
 /* Since we don't build the cgen-opcode table, we use a wrapper around
    the existing disassembler from libopcodes. */
 static CGEN_DISASSEMBLER sh64_disassemble_insn;
+
+/* Records simulator descriptor so utilities like sh5_dump_regs can be
+   called from gdb.  */
+SIM_DESC current_state;
 
 /* Cover function of sim_state_free to free the cpu buffers as well.  */
 
@@ -50,8 +54,8 @@ SIM_DESC
 sim_open (kind, callback, abfd, argv)
      SIM_OPEN_KIND kind;
      host_callback *callback;
-     struct bfd *abfd;
-     char * const *argv;
+     struct _bfd *abfd;
+     char **argv;
 {
   char c;
   int i;
@@ -79,7 +83,17 @@ sim_open (kind, callback, abfd, argv)
       return 0;
     }
 
-  /* The parser will print an error message for us, so we silently return.  */
+#if 0 /* FIXME: 'twould be nice if we could do this */
+  /* These options override any module options.
+     Obviously ambiguity should be avoided, however the caller may wish to
+     augment the meaning of an option.  */
+  if (extra_options != NULL)
+    sim_add_option_table (sd, extra_options);
+#endif
+
+  /* getopt will print the error message so we just have to exit if this fails.
+     FIXME: Hmmm...  in the case of gdb we need getopt to call
+     print_filtered.  */
   if (sim_parse_args (sd, argv) != SIM_RC_OK)
     {
       free_state (sd);
@@ -141,15 +155,28 @@ sim_open (kind, callback, abfd, argv)
      Must be done after sh_cgen_cpu_open.  */
   cgen_init (sd);
 
+  /* Store in a global so things like sparc32_dump_regs can be invoked
+     from the gdb command line.  */
+  current_state = sd;
+
   return sd;
+}
+
+void
+sim_close (sd, quitting)
+     SIM_DESC sd;
+     int quitting;
+{
+  sh_cgen_cpu_close (CPU_CPU_DESC (STATE_CPU (sd, 0)));
+  sim_module_uninstall (sd);
 }
 
 SIM_RC
 sim_create_inferior (sd, abfd, argv, envp)
      SIM_DESC sd;
-     struct bfd *abfd;
-     char * const *argv;
-     char * const *envp;
+     struct _bfd *abfd;
+     char **argv;
+     char **envp;
 {
   SIM_CPU *current_cpu = STATE_CPU (sd, 0);
   SIM_ADDR addr;
@@ -160,18 +187,23 @@ sim_create_inferior (sd, abfd, argv, envp)
     addr = 0;
   sim_pc_set (current_cpu, addr);
 
-  /* Standalone mode (i.e. `run`) will take care of the argv for us in
-     sim_open() -> sim_parse_args().  But in debug mode (i.e. 'target sim'
-     with `gdb`), we need to handle it because the user can change the
-     argv on the fly via gdb's 'run'.  */
-  if (STATE_PROG_ARGV (sd) != argv)
-    {
-      freeargv (STATE_PROG_ARGV (sd));
-      STATE_PROG_ARGV (sd) = dupargv (argv);
-    }
+#if 0
+  STATE_ARGV (sd) = sim_copy_argv (argv);
+  STATE_ENVP (sd) = sim_copy_argv (envp);
+#endif
 
   return SIM_RC_OK;
 }
+
+void
+sim_do_command (sd, cmd)
+     SIM_DESC sd;
+     char *cmd;
+{ 
+  if (sim_args_command (sd, cmd) != SIM_RC_OK)
+    sim_io_eprintf (sd, "Unknown command `%s'\n", cmd);
+}
+
 
 /* Disassemble an instruction.  */
 

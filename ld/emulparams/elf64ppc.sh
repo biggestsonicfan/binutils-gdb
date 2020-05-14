@@ -1,50 +1,50 @@
-source_sh ${srcdir}/emulparams/elf32ppccommon.sh
-source_sh ${srcdir}/emulparams/plt_unwind.sh
+TEMPLATE_NAME=elf32
 EXTRA_EM_FILE=ppc64elf
 ELFSIZE=64
+GENERATE_SHLIB_SCRIPT=yes
+SCRIPT_NAME=elf
 OUTPUT_FORMAT="elf64-powerpc"
 TEXT_START_ADDR=0x10000000
-#SEGMENT_SIZE=0x10000000
+MAXPAGESIZE=0x40000
+COMMONPAGESIZE=0x1000
 ARCH=powerpc:common64
-unset EXECUTABLE_SYMBOLS
-unset SDATA_START_SYMBOLS
-unset SDATA2_START_SYMBOLS
-unset SBSS_START_SYMBOLS
-unset SBSS_END_SYMBOLS
-unset OTHER_END_SYMBOLS
-unset OTHER_RELRO_SECTIONS
+MACHINE=
+NOP=0x60000000
+EXECUTABLE_SYMBOLS='PROVIDE (__stack = 0); PROVIDE (___stack = 0);'
+OTHER_BSS_END_SYMBOLS='__end = .;'
+CTOR_START='PROVIDE (__CTOR_LIST__ = .); PROVIDE (___CTOR_LIST__ = .);'
+CTOR_END='PROVIDE (__CTOR_END__ = .); PROVIDE (___CTOR_END__ = .);'
+DTOR_START='PROVIDE (__DTOR_LIST__ = .); PROVIDE (___DTOR_LIST__ = .);'
+DTOR_END='PROVIDE (__DTOR_END__ = .); PROVIDE (___DTOR_END__ = .);'
 OTHER_TEXT_SECTIONS="*(.sfpr .glink)"
-OTHER_SDATA_SECTIONS="
-  .tocbss	${RELOCATING-0} :${RELOCATING+ ALIGN(8)} { *(.tocbss)}"
-
-if test x${RELOCATING+set} = xset; then
-  GOT="
-  .got		: ALIGN(256) { *(.got .toc) }"
-else
-  GOT="
-  .got		0 : { *(.got) }
-  .toc		0 : { *(.toc) }"
-fi
-# Put .opd relocs first so ld.so will process them before any ifunc relocs.
-INITIAL_RELOC_SECTIONS="
-  .rela.opd	${RELOCATING-0} : { *(.rela.opd) }"
+BSS_PLT=
+OTHER_BSS_SYMBOLS="
+  .tocbss	${RELOCATING-0}${RELOCATING+ALIGN(8)} : { *(.tocbss)}"
+OTHER_PLT_RELOC_SECTIONS="
+  .rela.tocbss	${RELOCATING-0} : { *(.rela.tocbss) }"
+OTHER_GOT_SECTIONS="
+  .toc		${RELOCATING-0}${RELOCATING+ALIGN(8)} : { *(.toc) }"
 OTHER_GOT_RELOC_SECTIONS="
-  .rela.toc	${RELOCATING-0} : { *(.rela.toc) }
-  .rela.toc1	${RELOCATING-0} : { *(.rela.toc1) }
-  .rela.tocbss	${RELOCATING-0} : { *(.rela.tocbss) }
-  .rela.branch_lt	${RELOCATING-0} : { *(.rela.branch_lt) }"
-OTHER_RELRO_SECTIONS_2="
-  .opd		${RELOCATING-0} :${RELOCATING+ ALIGN(8)} { KEEP (*(.opd)) }
-  .toc1		${RELOCATING-0} :${RELOCATING+ ALIGN(8)} { *(.toc1) }
-  .branch_lt	${RELOCATING-0} :${RELOCATING+ ALIGN(8)} { *(.branch_lt) }"
-INITIAL_READWRITE_SECTIONS="
-  .toc		${RELOCATING-0} :${RELOCATING+ ALIGN(8)} { *(.toc) }"
-# Put .got before .data
-DATA_GOT=" "
-# Always make .got read-only after relocation
-SEPARATE_GOTPLT=0
-# Also put .sdata before .data
-DATA_SDATA=" "
-# and .plt/.iplt before .data
-DATA_PLT=
-PLT_BEFORE_GOT=" "
+  .rela.toc	${RELOCATING-0} : { *(.rela.toc) }"
+OTHER_READWRITE_SECTIONS="
+  .toc1		${RELOCATING-0}${RELOCATING+ALIGN(8)} : { *(.toc1) }
+  .opd		${RELOCATING-0}${RELOCATING+ALIGN(8)} : { KEEP (*(.opd)) }"
+
+# Treat a host that matches the target with the possible exception of "64"
+# in the name as if it were native.
+if test `echo "$host" | sed -e s/64//` = `echo "$target" | sed -e s/64//`; then
+    case " $EMULATION_LIBPATH " in
+      *" ${EMULATION_NAME} "*)
+	LIB_PATH=${libdir}
+	for lib in ${NATIVE_LIB_DIRS}; do
+	  case :${LIB_PATH}: in
+	    *:${lib}:*) ;;
+	    *) LIB_PATH=${LIB_PATH}:${lib} ;;
+	  esac
+	done
+	# Look for 64 bit target libraries in /lib64, /usr/lib64 etc., first.
+    	case "$EMULATION_NAME" in
+    	  *64*) LIB_PATH=`echo ${LIB_PATH}: | sed -e s,:,64:,g`$LIB_PATH
+    	esac
+    esac
+fi

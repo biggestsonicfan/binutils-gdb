@@ -1,10 +1,10 @@
 /* SPARC-specific values for a.out files 
 
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright 2001 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
    
    This program is distributed in the hope that it will be useful,
@@ -14,8 +14,7 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* Some systems, e.g., AIX, may have defined this in header files already
    included.  */
@@ -44,16 +43,13 @@
    expected text address.  These kludges have gotta go!
    For linked files, should reflect reality if we know it.  */
 
-#define N_SHARED_LIB(x) ((x)->a_entry < TEXT_START_ADDR \
-			 && (x)->a_text >= EXEC_BYTES_SIZE)
-
 /* This differs from the version in aout64.h (which we override by defining
    it here) only for NMAGIC (we return TEXT_START_ADDR+EXEC_BYTES_SIZE;
    they return 0).  */
 
 #define N_TXTADDR(x) \
     (N_MAGIC(x)==OMAGIC? 0 \
-     : (N_MAGIC(x) == ZMAGIC && (x)->a_entry < TEXT_START_ADDR)? 0 \
+     : (N_MAGIC(x) == ZMAGIC && (x).a_entry < TEXT_START_ADDR)? 0 \
      : TEXT_START_ADDR+EXEC_BYTES_SIZE)
 
 /* When a file is linked against a shared library on SunOS 4, the

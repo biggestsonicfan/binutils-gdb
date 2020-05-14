@@ -1,5 +1,6 @@
 /* Declarations for getopt.
-   Copyright (C) 1989-2020 Free Software Foundation, Inc.
+   Copyright 1989, 1990, 1991, 1992, 1993, 1994, 1996, 1997, 1998, 2000
+   Free Software Foundation, Inc.
 
    NOTE: The canonical source of this file is maintained with the GNU C Library.
    Bugs can be reported to bug-glibc@gnu.org.
@@ -16,7 +17,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301,
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
    USA.  */
 
 #ifndef _GETOPT_H
@@ -107,13 +108,11 @@ struct option
 #if !HAVE_DECL_GETOPT
 #if defined (__GNU_LIBRARY__) || defined (HAVE_DECL_GETOPT)
 /* Many other libraries have conflicting prototypes for getopt, with
-   differences in the consts, in unistd.h.  To avoid compilation
+   differences in the consts, in stdlib.h.  To avoid compilation
    errors, only prototype getopt for the GNU C library.  */
 extern int getopt (int argc, char *const *argv, const char *shortopts);
 #else
-#ifndef __cplusplus
 extern int getopt ();
-#endif /* __cplusplus */
 #endif
 #endif /* !HAVE_DECL_GETOPT */
 

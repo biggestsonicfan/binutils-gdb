@@ -1,3 +1,3 @@
 # nop test
 
-	nop_s
+	nop

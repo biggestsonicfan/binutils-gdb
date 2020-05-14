@@ -16,7 +16,7 @@ Idx Name          Size      VMA               LMA               File off  Algn
   0 \.text         0+8  0+  0+  0+  2\*\*2
                   CONTENTS, ALLOC, LOAD, CODE
   1 \.data         0+4  2068098510aa5564  2068098510aa5564  0+  2\*\*2
-                  CONTENTS, ALLOC, LOAD, DATA
+                  CONTENTS, ALLOC, LOAD
 SYMBOL TABLE:
 0+4 g       \.text Main
 0+4 g       \.text a
@@ -24,4 +24,4 @@ SYMBOL TABLE:
 Contents of section \.text:
  0000 e3fd0001 e3fd0004                    .*
 Contents of section \.data:
- 2068098510aa5564 00000008                             .*
+ 10aa5564 00000008                             .*

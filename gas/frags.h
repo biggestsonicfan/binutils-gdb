@@ -1,11 +1,12 @@
 /* frags.h - Header file for the frag concept.
-   Copyright (C) 1987-2020 Free Software Foundation, Inc.
+   Copyright 1987, 1992, 1993, 1994, 1995, 1997, 1998, 1999, 2000, 2001
+   Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,13 +16,15 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #ifndef FRAGS_H
 #define FRAGS_H
 
+#ifdef ANSI_PROTOTYPES
 struct obstack;
+#endif
 
 /* A code fragment (frag) is some known number of chars, followed by some
    unknown number of chars. Typically the unknown number of chars is an
@@ -45,7 +48,7 @@ struct frag {
   addressT last_fr_address;
 
   /* (Fixed) number of octets we know we have.  May be 0.  */
-  valueT fr_fix;
+  offsetT fr_fix;
   /* May be used for (Variable) number of octets after above.
      The generic frag handling code no longer makes any use of fr_var.  */
   offsetT fr_var;
@@ -60,25 +63,16 @@ struct frag {
   struct frag *fr_next;
 
   /* Where the frag was created, or where it became a variant frag.  */
-  const char *fr_file;
+  char *fr_file;
   unsigned int fr_line;
 
 #ifndef NO_LISTING
   struct list_info_struct *line;
 #endif
 
-  /* A serial number for a sequence of frags having at most one alignment
-     or org frag, and that at the tail of the sequence.  */
-  unsigned int region:16;
-
   /* Flipped each relax pass so we can easily determine whether
      fr_address has been adjusted.  */
   unsigned int relax_marker:1;
-
-  /* Used to ensure that all insns are emitted on proper address
-     boundaries.  */
-  unsigned int has_code:1;
-  unsigned int insn_addr:6;
 
   /* What state is my tail in? */
   relax_stateT fr_type;
@@ -99,9 +93,6 @@ struct frag {
 #ifdef TC_FRAG_TYPE
   TC_FRAG_TYPE tc_frag_data;
 #endif
-#ifdef OBJ_FRAG_TYPE
-  OBJ_FRAG_TYPE obj_frag_data;
-#endif
 
   /* Data begins here.  */
   char fr_literal[1];
@@ -115,49 +106,58 @@ struct frag {
    however, included in frchain_now.  The fr_fix field is bogus;
    instead, use frag_now_fix ().  */
 COMMON fragS *frag_now;
-extern addressT frag_now_fix (void);
-extern addressT frag_now_fix_octets (void);
+extern addressT frag_now_fix PARAMS ((void));
+extern addressT frag_now_fix_octets PARAMS ((void));
 
 /* For foreign-segment symbol fixups.  */
 COMMON fragS zero_address_frag;
-COMMON fragS predefined_address_frag;
+/* For local common (N_BSS segment) fixups.  */
+COMMON fragS bss_address_frag;
 
-extern void frag_append_1_char (int);
+#if 0
+/* A macro to speed up appending exactly 1 char to current frag.  */
+/* JF changed < 1 to <= 1 to avoid a race conditon.  */
+#define FRAG_APPEND_1_CHAR(datum)			\
+{							\
+  if (obstack_room (&frags) <= 1)			\
+    {							\
+      frag_wane (frag_now);				\
+      frag_new (0);					\
+    }							\
+  obstack_1grow (&frags, datum);			\
+}
+#else
+extern void frag_append_1_char PARAMS ((int));
 #define FRAG_APPEND_1_CHAR(X) frag_append_1_char (X)
+#endif
 
-void frag_init (void);
-fragS *frag_alloc (struct obstack *);
-void frag_grow (size_t nchars);
-char *frag_more (size_t nchars);
-void frag_align (int alignment, int fill_character, int max);
-void frag_align_pattern (int alignment, const char *fill_pattern,
-			 size_t n_fill, int max);
-void frag_align_code (int alignment, int max);
-void frag_new (size_t old_frags_var_max_size);
-void frag_wane (fragS * fragP);
-size_t frag_room (void);
+void frag_init PARAMS ((void));
+fragS *frag_alloc PARAMS ((struct obstack *));
+void frag_grow PARAMS ((unsigned int nchars));
+char *frag_more PARAMS ((int nchars));
+void frag_align PARAMS ((int alignment, int fill_character, int max));
+void frag_align_pattern PARAMS ((int alignment,
+				 const char *fill_pattern,
+				 int n_fill,
+				 int max));
+void frag_align_code PARAMS ((int alignment, int max));
+void frag_new PARAMS ((int old_frags_var_max_size));
+void frag_wane PARAMS ((fragS * fragP));
 
-char *frag_variant (relax_stateT type,
-		    size_t max_chars,
-		    size_t var,
-		    relax_substateT subtype,
-		    symbolS * symbol,
-		    offsetT offset,
-		    char *opcode);
+char *frag_variant PARAMS ((relax_stateT type,
+			    int max_chars,
+			    int var,
+			    relax_substateT subtype,
+			    symbolS * symbol,
+			    offsetT offset,
+			    char *opcode));
 
-char *frag_var (relax_stateT type,
-		size_t max_chars,
-		size_t var,
-		relax_substateT subtype,
-		symbolS * symbol,
-		offsetT offset,
-		char *opcode);
-
-bfd_boolean frag_offset_fixed_p (const fragS *, const fragS *, offsetT *);
-bfd_boolean frag_gtoffset_p (valueT, const fragS *, valueT, const fragS *,
-			     offsetT *);
-
-int get_frag_count (void);
-void clear_frag_count (void);
+char *frag_var PARAMS ((relax_stateT type,
+			int max_chars,
+			int var,
+			relax_substateT subtype,
+			symbolS * symbol,
+			offsetT offset,
+			char *opcode));
 
 #endif /* FRAGS_H */

@@ -1,28 +1,29 @@
 /* Address ranges.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of the GNU Simulators.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#ifndef _SIM_ARANGE_C_
-#define _SIM_ARANGE_C_
+/* Tell sim-arange.h it's us.  */
+#define SIM_ARANGE_C
 
 #include "libiberty.h"
 #include "sim-basics.h"
-#include "sim-arange.h"
+#include "sim-assert.h"
 
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
@@ -31,6 +32,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
+
+#define DEFINE_INLINE_P (! defined (SIM_ARANGE_C_INCLUDED))
+#define DEFINE_NON_INLINE_P defined (SIM_ARANGE_C_INCLUDED)
+
+#if DEFINE_NON_INLINE_P
 
 /* Insert a range.  */
 
@@ -188,9 +194,9 @@ frob_range (ADDR_RANGE *ar, address_word start, address_word end, int delete_p)
 
  out:
   if (new_asr)
-    free (new_asr);
+    free(new_asr);
   if (new_asr2)
-    free (new_asr2);
+    free(new_asr2);
 }
 
 /* Free T and all subtrees.  */
@@ -249,8 +255,7 @@ build_search_tree (ADDR_RANGE *ar)
   free (asrtab);
 }
 
-INLINE_SIM_ARANGE\
-(void)
+void
 sim_addr_range_add (ADDR_RANGE *ar, address_word start, address_word end)
 {
   frob_range (ar, start, end, 0);
@@ -263,8 +268,7 @@ sim_addr_range_add (ADDR_RANGE *ar, address_word start, address_word end)
   build_search_tree (ar);
 }
 
-INLINE_SIM_ARANGE\
-(void)
+void
 sim_addr_range_delete (ADDR_RANGE *ar, address_word start, address_word end)
 {
   frob_range (ar, start, end, 1);
@@ -277,8 +281,11 @@ sim_addr_range_delete (ADDR_RANGE *ar, address_word start, address_word end)
   build_search_tree (ar);
 }
 
-INLINE_SIM_ARANGE\
-(int)
+#endif /* DEFINE_NON_INLINE_P */
+
+#if DEFINE_INLINE_P
+
+SIM_ARANGE_INLINE int
 sim_addr_range_hit_p (ADDR_RANGE *ar, address_word addr)
 {
   ADDR_RANGE_TREE *t = ar->range_tree;
@@ -295,4 +302,4 @@ sim_addr_range_hit_p (ADDR_RANGE *ar, address_word addr)
   return 0;
 }
 
-#endif /* _SIM_ARANGE_C_ */
+#endif /* DEFINE_INLINE_P */

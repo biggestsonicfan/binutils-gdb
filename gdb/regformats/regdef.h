@@ -1,11 +1,11 @@
 /* Register protocol definition structures for the GNU Debugger
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,27 +14,15 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
-#ifndef REGFORMATS_REGDEF_H
-#define REGFORMATS_REGDEF_H
-
-namespace gdb {
+#ifndef REGDEF_H
+#define REGDEF_H
 
 struct reg
 {
-  reg (int _offset)
-    : name (""),
-      offset (_offset),
-      size (0)
-  {}
-
-  reg (const char *_name, int _offset, int _size)
-    : name (_name),
-      offset (_offset),
-      size (_size)
-  {}
-
   /* The name of this register - NULL for pad entries.  */
   const char *name;
 
@@ -48,20 +36,11 @@ struct reg
 
   /* The size (in bits) of the value of this register, as transmitted.  */
   int size;
-
-  bool operator== (const reg &other) const
-  {
-    return (strcmp (name, other.name) == 0
-	    && offset == other.offset
-	    && size == other.size);
-  }
-
-  bool operator!= (const reg &other) const
-  {
-    return !(*this == other);
-  }
 };
 
-} /* namespace gdb */
+/* Set the current remote protocol and register cache according to the array
+   ``regs'', with ``n'' elements.  */
 
-#endif /* REGFORMATS_REGDEF_H */
+void set_register_cache (struct reg *regs, int n);
+
+#endif /* REGDEF_H */

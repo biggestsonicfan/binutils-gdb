@@ -1,28 +1,28 @@
 /* alpha-dis.c -- Disassemble Alpha AXP instructions
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright 1996, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@tamu.edu>,
    patterned after the PPC opcode handling written by Ian Lance Taylor.
 
-   This file is part of libopcodes.
+This file is part of GDB, GAS, and the GNU binutils.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+2, or (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
-#include "sysdep.h"
 #include <stdio.h>
-#include "disassemble.h"
+#include "sysdep.h"
+#include "dis-asm.h"
 #include "opcode/alpha.h"
 
 /* OSF register names.  */
@@ -54,7 +54,9 @@ static const char * const vms_regnames[64] = {
 /* Disassemble Alpha instructions.  */
 
 int
-print_insn_alpha (bfd_vma memaddr, struct disassemble_info *info)
+print_insn_alpha (memaddr, info)
+     bfd_vma memaddr;
+     struct disassemble_info *info;
 {
   static const struct alpha_opcode *opcode_index[AXP_NOPS+1];
   const char * const * regnames;
@@ -146,7 +148,7 @@ print_insn_alpha (bfd_vma memaddr, struct disassemble_info *info)
 
   return 4;
 
- found:
+found:
   (*info->fprintf_func) (info->stream, "%s", opcode->name);
   if (opcode->operands[0] != 0)
     (*info->fprintf_func) (info->stream, "\t");

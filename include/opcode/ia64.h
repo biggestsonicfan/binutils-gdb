@@ -1,22 +1,7 @@
 /* ia64.h -- Header file for ia64 opcode table
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
-   Contributed by David Mosberger-Tang <davidm@hpl.hp.com>
+   Copyright (C) 1998, 1999, 2002 David Mosberger-Tang <davidm@hpl.hp.com>
 
-   This file is part of BFD, the Binary File Descriptor library.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   See the file HP-COPYRIGHT for additional information.  */
 
 #ifndef opcode_ia64_h
 #define opcode_ia64_h
@@ -25,9 +10,6 @@
 
 #include "bfd.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 typedef BFD_HOST_U_64_BIT ia64_insn;
 
@@ -57,14 +39,13 @@ enum ia64_unit
   };
 
 /* Changes to this enumeration must be propagated to the operand table in
-   bfd/cpu-ia64-opc.c
- */
+   bfd/cpu-ia64-opc.c 
+ */ 
 enum ia64_opnd
   {
     IA64_OPND_NIL,	/* no operand---MUST BE FIRST!*/
 
     /* constants */
-    IA64_OPND_AR_CSD,	/* application register csd (ar.csd) */
     IA64_OPND_AR_CCV,	/* application register ccv (ar.ccv) */
     IA64_OPND_AR_PFS,	/* application register pfs (ar.pfs) */
     IA64_OPND_C1,	/* the constant 1 */
@@ -93,10 +74,6 @@ enum ia64_opnd
     IA64_OPND_R2,	/* second register # */
     IA64_OPND_R3,	/* third register # */
     IA64_OPND_R3_2,	/* third register # (limited to gr0-gr3) */
-    IA64_OPND_DAHR3,	/* dahr reg # ( bits 23-25) */
-
-    /* memory operands: */
-    IA64_OPND_MR3,	/* memory at addr of third register # */
 
     /* indirect operands: */
     IA64_OPND_CPUID_R3,	/* cpuid[reg] */
@@ -104,11 +81,11 @@ enum ia64_opnd
     IA64_OPND_DTR_R3,	/* dtr[reg] */
     IA64_OPND_ITR_R3,	/* itr[reg] */
     IA64_OPND_IBR_R3,	/* ibr[reg] */
+    IA64_OPND_MR3,	/* memory at addr of third register # */
     IA64_OPND_MSR_R3,	/* msr[reg] */
     IA64_OPND_PKR_R3,	/* pkr[reg] */
     IA64_OPND_PMC_R3,	/* pmc[reg] */
     IA64_OPND_PMD_R3,	/* pmd[reg] */
-    IA64_OPND_DAHR_R3,	/* dahr[reg] */
     IA64_OPND_RR_R3,	/* rr[reg] */
 
     /* immediate operands: */
@@ -123,7 +100,6 @@ enum ia64_opnd
     IA64_OPND_CPOS6c,	/* 6-bit count (63 - bits 31-36) */
     IA64_OPND_IMM1,	/* signed 1-bit immediate (bit 36) */
     IA64_OPND_IMMU2,	/* unsigned 2-bit immediate (bits 13-14) */
-    IA64_OPND_IMMU5b,	/* unsigned 5-bit immediate (32 + bits 14-18) */
     IA64_OPND_IMMU7a,	/* unsigned 7-bit immediate (bits 13-19) */
     IA64_OPND_IMMU7b,	/* unsigned 7-bit immediate (bits 20-26) */
     IA64_OPND_SOF,	/* 8-bit stack frame size */
@@ -138,9 +114,7 @@ enum ia64_opnd
     IA64_OPND_IMM9a,	/* signed 9-bit immediate (bits 6-12, 27, 36) */
     IA64_OPND_IMM9b,	/* signed 9-bit immediate (bits 13-19, 27, 36) */
     IA64_OPND_IMM14,	/* signed 14-bit immediate (bits 13-19, 27-32, 36) */
-    IA64_OPND_IMMU16,	/* unsigned 16-bit immediate (bits 6-9, 12-22, 36) */
     IA64_OPND_IMM17,	/* signed 17-bit immediate (2*bits 6-12, 24-31, 36) */
-    IA64_OPND_IMMU19,	/* unsigned 19-bit immediate (bits 6-9, 12-25, 36) */
     IA64_OPND_IMMU21,	/* unsigned 21-bit immediate (bits 6-25, 36) */
     IA64_OPND_IMM22,	/* signed 22-bit immediate (bits 13-19, 22-36) */
     IA64_OPND_IMMU24,	/* unsigned 24-bit immediate (bits 6-26, 31-32, 36) */
@@ -159,10 +133,6 @@ enum ia64_opnd
     IA64_OPND_TGT25b,	/* signed 25-bit (ip + 16*bits 6-12, 20-32, 36) */
     IA64_OPND_TGT25c,	/* signed 25-bit (ip + 16*bits 13-32, 36) */
     IA64_OPND_TGT64,    /* 64-bit (ip + 16*bits 13-32, 36, 2-40(L)) */
-    IA64_OPND_LDXMOV,	/* any symbol, generates R_IA64_LDXMOV.  */
-
-    IA64_OPND_CNT6a,	/* 6-bit count  (bits 6-11) */
-    IA64_OPND_STRD5b,	/* 5-bit stride (bits 13-17) */
 
     IA64_OPND_COUNT	/* # of operand types (MUST BE LAST!) */
   };
@@ -196,11 +166,9 @@ enum ia64_resource_specifier
   IA64_RS_BR,
   IA64_RS_CFM,
   IA64_RS_CPUID,
-  IA64_RS_CR_IIB,
   IA64_RS_CR_IRR,
   IA64_RS_CR_LRR,
-  IA64_RS_CR, /* 3-7,10-15,18,28-63,75-79,82-127 */
-  IA64_RS_DAHR,
+  IA64_RS_CR, /* 3-7,10-15,18,26-63,75-79,82-127 */
   IA64_RS_DBR,
   IA64_RS_FR,
   IA64_RS_FRb,
@@ -222,7 +190,6 @@ enum ia64_resource_specifier
   IA64_RS_PSR, /* PSR bits */
   IA64_RS_RSE, /* implementation-specific RSE resources */
   IA64_RS_AR_FPSR,
-
 };
 
 enum ia64_rse_resource
@@ -320,7 +287,7 @@ struct ia64_opcode
     /* Used by ia64_find_next_opcode (). */
     short ent_index;
 
-    /* Opcode dependencies. */
+    /* Opcode dependencies. */ 
     const struct ia64_opcode_dependency *dependencies;
   };
 
@@ -354,7 +321,7 @@ enum ia64_operand_class
 
 struct ia64_operand
 {
-  enum ia64_operand_class op_class;
+  enum ia64_operand_class class;
 
   /* Set VALUE as the operand bits for the operand of type SELF in the
      instruction pointed to by CODE.  If an error occurs, *CODE is not
@@ -408,21 +375,17 @@ extern struct ia64_opcode ia64_opcodes_f[];
 extern struct ia64_opcode ia64_opcodes_d[];
 
 
-extern struct ia64_opcode *ia64_find_opcode (const char *);
-extern struct ia64_opcode *ia64_find_next_opcode (struct ia64_opcode *);
+extern struct ia64_opcode *ia64_find_opcode (const char *name);
+extern struct ia64_opcode *ia64_find_next_opcode (struct ia64_opcode *ent);
 
-extern struct ia64_opcode *ia64_dis_opcode (ia64_insn,
-					    enum ia64_insn_type);
+extern struct ia64_opcode *ia64_dis_opcode (ia64_insn insn,
+					    enum ia64_insn_type type);
 
-extern void ia64_free_opcode (struct ia64_opcode *);
-extern const struct ia64_dependency *ia64_find_dependency (int);
+extern void ia64_free_opcode (struct ia64_opcode *ent);
+extern const struct ia64_dependency *ia64_find_dependency (int index);
 
 /* To avoid circular library dependencies, this array is implemented
    in bfd/cpu-ia64-opc.c: */
 extern const struct ia64_operand elf64_ia64_operands[IA64_OPND_COUNT];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* opcode_ia64_h */

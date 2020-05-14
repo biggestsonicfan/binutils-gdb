@@ -34,11 +34,12 @@
 #include "corefile.h"
 #include "hist.h"
 
-static int i386_iscall (unsigned char *);
-void i386_find_call (Sym *, bfd_vma, bfd_vma);
+static int i386_iscall PARAMS ((unsigned char *));
+void i386_find_call PARAMS ((Sym *, bfd_vma, bfd_vma));
 
 static int
-i386_iscall (unsigned char *ip)
+i386_iscall (ip)
+     unsigned char *ip;
 {
   if (*ip == 0xe8)
     return 1;
@@ -47,12 +48,27 @@ i386_iscall (unsigned char *ip)
 
 
 void
-i386_find_call (Sym *parent, bfd_vma p_lowpc, bfd_vma p_highpc)
+i386_find_call (parent, p_lowpc, p_highpc)
+     Sym *parent;
+     bfd_vma p_lowpc;
+     bfd_vma p_highpc;
 {
   unsigned char *instructp;
   Sym *child;
   bfd_vma pc, destpc;
 
+  if (core_text_space == 0)
+    {
+      return;
+    }
+  if (p_lowpc < s_lowpc)
+    {
+      p_lowpc = s_lowpc;
+    }
+  if (p_highpc > s_highpc)
+    {
+      p_highpc = s_highpc;
+    }
   DBG (CALLDEBUG, printf ("[findcall] %s: 0x%lx to 0x%lx\n",
 			  parent->name, (unsigned long) p_lowpc,
 			  (unsigned long) p_highpc));
@@ -71,7 +87,7 @@ i386_find_call (Sym *parent, bfd_vma p_lowpc, bfd_vma p_highpc)
 	   */
 
 	  destpc = bfd_get_32 (core_bfd, instructp + 1) + pc + 5;
-	  if (hist_check_address (destpc))
+	  if (destpc >= s_lowpc && destpc <= s_highpc)
 	    {
 	      child = sym_lookup (&symtab, destpc);
 	      if (child && child->addr == destpc)

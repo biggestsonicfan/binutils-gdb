@@ -1,27 +1,27 @@
 /* Generic simulator halt/restart.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
+#include <stdio.h>
 
 #include "sim-main.h"
 #include "sim-assert.h"
-
-#include <stdio.h>
-#include <stdlib.h>
 
 /* Get the run state.
    REASON/SIGRC are the values returned by sim_stop_reason.
@@ -79,10 +79,7 @@ sim_engine_halt (SIM_DESC sd,
       longjmp (*halt_buf, sim_engine_halt_jmpval);
     }
   else
-    {
-      sim_io_error (sd, "sim_halt - bad long jump");
-      abort ();
-    }
+    sim_io_error (sd, "sim_halt - bad long jump");
 }
 
 
@@ -130,7 +127,6 @@ sim_engine_vabort (SIM_DESC sd,
       sim_io_evprintf (sd, fmt, ap);
       sim_io_eprintf (sd, "\n");
       sim_io_error (sd, "Quit Simulator");
-      abort ();
     }
   else
     {
@@ -149,7 +145,7 @@ sim_engine_abort (SIM_DESC sd,
 {
   va_list ap;
   ASSERT (sd == NULL || STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
-  va_start (ap, fmt);
+  va_start(ap, fmt);
   sim_engine_vabort (sd, cpu, cia, fmt, ap);
   va_end (ap);
 }

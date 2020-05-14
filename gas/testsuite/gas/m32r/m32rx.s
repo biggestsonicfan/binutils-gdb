@@ -172,7 +172,7 @@ bnc__addx:
 bncl__and:
 	bncl bcl || and fp, fp
 	and fp, fp
-	bncl.s bcl
+	bncl bcl
 
 	.text
 	.global bra__cmp

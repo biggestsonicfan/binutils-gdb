@@ -1,8 +1,8 @@
-# Copyright 1998-2020 Free Software Foundation, Inc.
+# Copyright 1998, 1999, 2001 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -11,27 +11,49 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 
-standard_testfile average.c sum.c
+if $tracelevel then {
+        strace $tracelevel
+}
 
-if {[build_executable $testfile.exp $testfile \
-	 [list $srcfile $srcfile2] debug] == -1} {
-    untested "failed to compile"
-    return -1
+set testfile1 "average"
+set testfile2 "sum"
+set testfile "dbx-test"
+set binfile1 ${objdir}/${subdir}/${testfile1}
+set binfile2 ${objdir}/${subdir}/${testfile2}
+set binfile ${objdir}/${subdir}/${testfile}
+
+
+
+if  { [gdb_compile "${srcdir}/${subdir}/average.c" "${binfile1}.o" object {debug}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if  { [gdb_compile "${srcdir}/${subdir}/sum.c" "${binfile2}.o" object {debug}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if  { [gdb_compile "${binfile1}.o ${binfile2}.o" ${binfile} executable {debug}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
 }
 
 #
 # start gdb -- start gdb running, default procedure
 #
 proc dbx_gdb_start { } {
+    global verbose
     global GDB
-    global INTERNAL_GDBFLAGS GDBFLAGS
+    global GDBFLAGS
     global prompt
     global spawn_id
     global timeout
-    verbose "Spawning $GDB -dbx $INTERNAL_GDBFLAGS $GDBFLAGS"
+    verbose "Spawning $GDB -nw $GDBFLAGS"
 
     if { [which $GDB] == 0 } then {
         perror "$GDB does not exist."
@@ -40,7 +62,7 @@ proc dbx_gdb_start { } {
 
     set oldtimeout $timeout
     set timeout [expr "$timeout + 60"]
-    eval "spawn $GDB -dbx $INTERNAL_GDBFLAGS $GDBFLAGS"
+    eval "spawn $GDB -nw -dbx $GDBFLAGS"
     gdb_expect {
         -re ".*\r\n$gdb_prompt $" {
             verbose "GDB initialized."
@@ -152,27 +174,40 @@ set old_gdb_file_cmd_args [info args gdb_file_cmd]
 set old_gdb_file_cmd_body [info body gdb_file_cmd]
 
 proc gdb_file_cmd {arg} {
+    global verbose
     global loadpath
     global loadfile
     global GDB
     global gdb_prompt
     global spawn_id
     upvar timeout timeout
-    global last_loaded_file
-
-    set last_loaded_file $arg
 
     if [is_remote host] {
-        set arg [remote_download host $arg]
+        set arg [remote_download host $arg];
         if { $arg == "" } {
             error "download failed"
-            return -1
+            return -1;
         }
     }
 
     send_gdb "symbol-file $arg\n"
     gdb_expect {
-        -re "Reading symbols from.*$gdb_prompt $" {
+	-re "Detected 64-bit symbol file.\r\nInvoking.*gdb64.*$gdb_prompt $" {
+            verbose "\t\tLoaded $arg into the $GDB"
+            send_gdb "exec-file $arg\n" 
+            gdb_expect {
+                -re ".*$gdb_prompt $" {
+                    verbose "\t\tLoaded $arg with new symbol table into $GDB"
+                    return 0
+                }
+                timeout {
+                    perror "(timeout) Couldn't load $arg"
+                    return -1
+                }
+            }
+            return 0
+        }
+        -re "Reading symbols from.*done.*$gdb_prompt $" {
             verbose "\t\tLoaded $arg into the $GDB"
             send_gdb "exec-file $arg\n" 
             gdb_expect {
@@ -226,13 +261,11 @@ proc gdb_file_cmd {arg} {
 #test_breakpoints
 #
 proc test_breakpoints { } {
-    set stop_line [gdb_get_line_number "stop-in-main"]
-    gdb_test "stop in main" "Breakpoint.*at.*: file.*average\.c, line $stop_line\."
-    gdb_test "status" "Num.*Type.*Disp.*Enb.*Address.*What\r\n1\[ \r\]+breakpoint\[ \r\]+keep y.*in main at.*average\.c:$stop_line.*"
-    set stop_line [gdb_get_line_number "stop-at-call"]
-    gdb_test "stop at average.c:$stop_line" "Breakpoint.*at.*: file.*average\.c, line $stop_line.*"
-    gdb_test "stop in average.c:$stop_line" "Usage: stop in <function . address>"
-    gdb_test "stop at main" "Usage: stop at LINE"
+    gdb_test "stop in main" "Breakpoint.*at.*: file.*average\.c, line 38\."
+    gdb_test "status" "Num.*Type.*Disp.*Enb.*Address.*What\r\n1\[ \r\]+breakpoint\[ \r\]+keep y.*in main at.*average\.c:38.*"
+    gdb_test "stop at 43" "Breakpoint.*at.*: file.*average\.c, line 43.*"
+    gdb_test "stop in 43" "Usage: stop in <function . address>"
+    gdb_test "stop at main" "Usage: stop at <line>"
 }
 
 #
@@ -243,19 +276,16 @@ proc test_assign { } {
     global gdb_prompt
 
     gdb_run_cmd
-    set test "running to main"
-    gdb_test_multiple "" $test {
-        -re "Break.* at .*:$decimal.*$gdb_prompt $" {
-	    pass $test
-	}
-        -re "Breakpoint \[0-9\]*, \[0-9xa-f\]* in .*$gdb_prompt $" {
-	    pass $test
-	}
+    gdb_expect 30 {
+        -re "Break.* at .*:$decimal.*$gdb_prompt $" { pass "running to main" }
+        -re "Breakpoint \[0-9\]*, \[0-9xa-f\]* in .*$gdb_prompt $" { pass "running to main"  }
+        -re "$gdb_prompt $" { fail "running to main" }
+        timeout { fail "running to main (timeout)" }
     }
     send_gdb "assign first=1\n"
     gdb_expect {
       -re "No symbol \"first\" in current context.*$" { fail "assign first" }
-      -re "$gdb_prompt $" { pass "assign first" }
+      "$gdb_prompt $" { pass "assign first" }
       timeout { fail "assign first (timeout)" }
     }
     gdb_test "print first" ".1 = 1"
@@ -265,22 +295,23 @@ proc test_assign { } {
 #test_whereis
 #
 proc test_whereis { } {
-    gdb_test "whereis my_list" "All variables matching regular expression \"my_list\":\r\n\r\nFile.*average\.c:\r\n.*\tstatic int my_list\\\[10\\\];"
+    gdb_test "whereis my_list" "All variables matching regular expression \"my_list\":\r\n\r\nFile.*average\.c:\r\nstatic int my_list\\\[10\\\];"
 }
 
 #
 #test_func
 #
 proc test_func { } {
-    global decimal
-    global srcfile2
-    gdb_test "cont" ".*" "cont 1"
-    gdb_test "step" ".*"
+    gdb_test "cont" "" "cont 1"
+    gdb_test "step" ""
+    # This always fails, but it's not clear why. -sts 1999-08-17
+    setup_xfail "*-*-*"
     gdb_test "func sum" "'sum' not within current stack frame\."
-    set stop_line [gdb_get_line_number "stop-in-sum" $srcfile2]
-    gdb_test "stop in sum" "Breakpoint.*at.*: file.*sum\.c, line $stop_line\."
-    gdb_test "cont" ".*" "cont 2"
-    gdb_test "func print_average" ".*in print_average.*\\(list=.*, low=0, high=6\\).*at.*average\.c:${decimal}\r\n${decimal}\[ \t\]+total = sum\\(list, low, high\\);"
+    gdb_test "stop in sum" "Breakpoint.*at.*: file.*sum\.c, line 11\."
+    gdb_test "cont" "" "cont 2"
+    # This always fails, but it's not clear why. -sts 1999-08-17
+    setup_xfail "*-*-*"
+    gdb_test "func print_average" ".*in print_average.*\\(list=.*, low=0, high=6\\).*at.*average\.c:24\r\n24\[ \t\]+total = sum\\(list, low, high\\);"
 }
 
 # Start with a fresh gdb.

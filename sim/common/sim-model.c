@@ -1,54 +1,43 @@
 /* Model support.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "sim-main.h"
-#include "sim-model.h"
 #include "libiberty.h"
 #include "sim-options.h"
 #include "sim-io.h"
 #include "sim-assert.h"
 #include "bfd.h"
 
-static void model_set (sim_cpu *, const SIM_MODEL *);
+static void model_set (sim_cpu *, const MODEL *);
 
 static DECLARE_OPTION_HANDLER (model_option_handler);
 
 static MODULE_INIT_FN sim_model_init;
 
-enum {
-  OPTION_MODEL = OPTION_START,
-  OPTION_MODEL_INFO,
-};
+#define OPTION_MODEL (OPTION_START + 0)
 
 static const OPTION model_options[] = {
   { {"model", required_argument, NULL, OPTION_MODEL},
       '\0', "MODEL", "Specify model to simulate",
-      model_option_handler, NULL },
-
-  { {"model-info", no_argument, NULL, OPTION_MODEL_INFO},
-      '\0', NULL, "List selectable models",
-      model_option_handler, NULL },
-  { {"info-model", no_argument, NULL, OPTION_MODEL_INFO},
-      '\0', NULL, NULL,
-      model_option_handler, NULL },
-
-  { {NULL, no_argument, NULL, 0}, '\0', NULL, NULL, NULL, NULL }
+      model_option_handler },
+  { {NULL, no_argument, NULL, 0}, '\0', NULL, NULL, NULL }
 };
 
 static SIM_RC
@@ -59,29 +48,13 @@ model_option_handler (SIM_DESC sd, sim_cpu *cpu, int opt,
     {
     case OPTION_MODEL :
       {
-	const SIM_MODEL *model = sim_model_lookup (arg);
+	const MODEL *model = sim_model_lookup (arg);
 	if (! model)
 	  {
 	    sim_io_eprintf (sd, "unknown model `%s'\n", arg);
 	    return SIM_RC_FAIL;
 	  }
 	sim_model_set (sd, cpu, model);
-	break;
-      }
-
-    case OPTION_MODEL_INFO :
-      {
-	const SIM_MACH **machp;
-	const SIM_MODEL *model;
-	for (machp = & sim_machs[0]; *machp != NULL; ++machp)
-	  {
-	    sim_io_printf (sd, "Models for architecture `%s':\n",
-			   MACH_NAME (*machp));
-	    for (model = MACH_MODELS (*machp); MODEL_NAME (model) != NULL;
-		 ++model)
-	      sim_io_printf (sd, " %s", MODEL_NAME (model));
-	    sim_io_printf (sd, "\n");
-	  }
 	break;
       }
     }
@@ -103,7 +76,7 @@ sim_model_install (SIM_DESC sd)
 /* Subroutine of sim_model_set to set the model for one cpu.  */
 
 static void
-model_set (sim_cpu *cpu, const SIM_MODEL *model)
+model_set (sim_cpu *cpu, const MODEL *model)
 {
   CPU_MACH (cpu) = MODEL_MACH (model);
   CPU_MODEL (cpu) = model;
@@ -115,7 +88,7 @@ model_set (sim_cpu *cpu, const SIM_MODEL *model)
    If CPU is NULL, all cpus are set to MODEL.  */
 
 void
-sim_model_set (SIM_DESC sd, sim_cpu *cpu, const SIM_MODEL *model)
+sim_model_set (SIM_DESC sd, sim_cpu *cpu, const MODEL *model)
 {
   if (! cpu)
     {
@@ -134,11 +107,11 @@ sim_model_set (SIM_DESC sd, sim_cpu *cpu, const SIM_MODEL *model)
 /* Look up model named NAME.
    Result is pointer to MODEL entry or NULL if not found.  */
 
-const SIM_MODEL *
+const MODEL *
 sim_model_lookup (const char *name)
 {
-  const SIM_MACH **machp;
-  const SIM_MODEL *model;
+  const MACH **machp;
+  const MODEL *model;
 
   for (machp = & sim_machs[0]; *machp != NULL; ++machp)
     {
@@ -154,10 +127,10 @@ sim_model_lookup (const char *name)
 /* Look up machine named NAME.
    Result is pointer to MACH entry or NULL if not found.  */
 
-const SIM_MACH *
+const MACH *
 sim_mach_lookup (const char *name)
 {
-  const SIM_MACH **machp;
+  const MACH **machp;
 
   for (machp = & sim_machs[0]; *machp != NULL; ++machp)
     {
@@ -170,10 +143,10 @@ sim_mach_lookup (const char *name)
 /* Look up a machine via its bfd name.
    Result is pointer to MACH entry or NULL if not found.  */
 
-const SIM_MACH *
+const MACH *
 sim_mach_lookup_bfd_name (const char *name)
 {
-  const SIM_MACH **machp;
+  const MACH **machp;
 
   for (machp = & sim_machs[0]; *machp != NULL; ++machp)
     {
@@ -190,9 +163,6 @@ sim_model_init (SIM_DESC sd)
 {
   SIM_CPU *cpu;
 
-  if (!WITH_MODEL_P)
-    return SIM_RC_OK;
-
   /* If both cpu model and state architecture are set, ensure they're
      compatible.  If only one is set, set the other.  If neither are set,
      use the default model.  STATE_ARCHITECTURE is the bfd_arch_info data
@@ -206,8 +176,7 @@ sim_model_init (SIM_DESC sd)
       && ! CPU_MACH (cpu))
     {
       /* Set the default model.  */
-      const SIM_MODEL *model = sim_model_lookup (WITH_DEFAULT_MODEL);
-      SIM_ASSERT (model != NULL);
+      const MODEL *model = sim_model_lookup (WITH_DEFAULT_MODEL);
       sim_model_set (sd, NULL, model);
     }
 
@@ -227,7 +196,7 @@ sim_model_init (SIM_DESC sd)
     {
       /* Use the default model for the selected machine.
 	 The default model is the first one in the list.  */
-      const SIM_MACH *mach = sim_mach_lookup_bfd_name (STATE_ARCHITECTURE (sd)->printable_name);
+      const MACH *mach = sim_mach_lookup_bfd_name (STATE_ARCHITECTURE (sd)->printable_name);
 
       if (mach == NULL)
 	{
@@ -244,12 +213,3 @@ sim_model_init (SIM_DESC sd)
 
   return SIM_RC_OK;
 }
-
-#if !WITH_MODEL_P
-/* Set up basic model support.  This is a stub for ports that do not define
-   models.  See sim-model.h for more details.  */
-const SIM_MACH *sim_machs[] =
-{
-  NULL
-};
-#endif

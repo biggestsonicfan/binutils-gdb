@@ -1,6 +1,6 @@
 /* Builtin frame register, for GDB, the GNU debugger.
 
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
 
    Contributed by Red Hat.
 
@@ -8,7 +8,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -17,89 +17,135 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
-#include "user-regs.h"
+#include "builtin-regs.h"
 #include "frame.h"
 #include "gdbtypes.h"
 #include "value.h"
-#include "gdbarch.h"
+#include "gdb_string.h"
 
-static struct value *
-value_of_builtin_frame_fp_reg (struct frame_info *frame, const void *baton)
+/* Types that describe the various builtin registers.  */
+
+static struct type *builtin_type_frame_reg;
+
+/* Constructors for those types.  */
+
+static void
+build_builtin_type_frame_reg (void)
 {
-  struct gdbarch *gdbarch = get_frame_arch (frame);
-
-  if (gdbarch_deprecated_fp_regnum (gdbarch) >= 0)
-    /* NOTE: cagney/2003-04-24: Since the mere presence of "fp" in the
-       register name table overrides this built-in $fp register, there
-       is no real reason for this gdbarch_deprecated_fp_regnum trickery here.
-       An architecture wanting to implement "$fp" as alias for a raw
-       register can do so by adding "fp" to register name table (mind
-       you, doing this is probably a dangerous thing).  */
-    return value_of_register (gdbarch_deprecated_fp_regnum (gdbarch),
-			      frame);
-  else
+  /* $frame.  */
+  if (builtin_type_frame_reg == NULL)
     {
-      struct type *data_ptr_type = builtin_type (gdbarch)->builtin_data_ptr;
-      struct value *val = allocate_value (data_ptr_type);
-      gdb_byte *buf = value_contents_raw (val);
-
-      gdbarch_address_to_pointer (gdbarch, data_ptr_type,
-				  buf, get_frame_base_address (frame));
-      return val;
+#if 0
+      struct frame
+      {
+	void *base;
+      };
+#endif
+      builtin_type_frame_reg = init_composite_type ("frame", TYPE_CODE_STRUCT);
+      append_composite_type_field (builtin_type_frame_reg, "base",
+				   builtin_type_void_data_ptr);
     }
 }
 
 static struct value *
-value_of_builtin_frame_pc_reg (struct frame_info *frame, const void *baton)
+value_of_builtin_frame_reg (struct frame_info *frame)
 {
-  struct gdbarch *gdbarch = get_frame_arch (frame);
-
-  if (gdbarch_pc_regnum (gdbarch) >= 0)
-    return value_of_register (gdbarch_pc_regnum (gdbarch), frame);
-  else
-    {
-      struct type *func_ptr_type = builtin_type (gdbarch)->builtin_func_ptr;
-      struct value *val = allocate_value (func_ptr_type);
-      gdb_byte *buf = value_contents_raw (val);
-
-      gdbarch_address_to_pointer (gdbarch, func_ptr_type,
-				  buf, get_frame_pc (frame));
-      return val;
-    }
+  struct value *val;
+  char *buf;
+  build_builtin_type_frame_reg ();
+  val = allocate_value (builtin_type_frame_reg);
+  VALUE_LVAL (val) = not_lval;
+  buf = VALUE_CONTENTS_RAW (val);
+  memset (buf, TYPE_LENGTH (VALUE_TYPE (val)), 0);
+  /* frame.base.  */
+  if (frame != NULL)
+    ADDRESS_TO_POINTER (builtin_type_void_data_ptr, buf, frame->frame);
+  buf += TYPE_LENGTH (builtin_type_void_data_ptr);
+  /* frame.XXX.  */
+  return val;
 }
 
 static struct value *
-value_of_builtin_frame_sp_reg (struct frame_info *frame, const void *baton)
+value_of_builtin_frame_fp_reg (struct frame_info *frame)
 {
-  struct gdbarch *gdbarch = get_frame_arch (frame);
-
-  if (gdbarch_sp_regnum (gdbarch) >= 0)
-    return value_of_register (gdbarch_sp_regnum (gdbarch), frame);
-  error (_("Standard register ``$sp'' is not available for this target"));
+#ifdef FP_REGNUM
+  if (FP_REGNUM >= 0)
+    return value_of_register (FP_REGNUM, frame);
+#endif
+  {
+    struct value *val = allocate_value (builtin_type_void_data_ptr);
+    char *buf = VALUE_CONTENTS_RAW (val);
+    if (frame == NULL)
+      memset (buf, TYPE_LENGTH (VALUE_TYPE (val)), 0);
+    else
+      ADDRESS_TO_POINTER (builtin_type_void_data_ptr, buf, frame->frame);
+    return val;
+  }
 }
 
 static struct value *
-value_of_builtin_frame_ps_reg (struct frame_info *frame, const void *baton)
+value_of_builtin_frame_pc_reg (struct frame_info *frame)
 {
-  struct gdbarch *gdbarch = get_frame_arch (frame);
-
-  if (gdbarch_ps_regnum (gdbarch) >= 0)
-    return value_of_register (gdbarch_ps_regnum (gdbarch), frame);
-  error (_("Standard register ``$ps'' is not available for this target"));
+#ifdef PC_REGNUM
+  if (PC_REGNUM >= 0)
+    return value_of_register (PC_REGNUM, frame);
+#endif
+  {
+    struct value *val = allocate_value (builtin_type_void_data_ptr);
+    char *buf = VALUE_CONTENTS_RAW (val);
+    if (frame == NULL)
+      memset (buf, TYPE_LENGTH (VALUE_TYPE (val)), 0);
+    else
+      ADDRESS_TO_POINTER (builtin_type_void_data_ptr, buf, frame->pc);
+    return val;
+  }
 }
 
-void _initialize_frame_reg ();
+static struct value *
+value_of_builtin_frame_sp_reg (struct frame_info *frame)
+{
+#ifdef SP_REGNUM
+  if (SP_REGNUM >= 0)
+    return value_of_register (SP_REGNUM, frame);
+#endif
+  error ("Standard register ``$sp'' is not available for this target");
+}
+
+static struct value *
+value_of_builtin_frame_ps_reg (struct frame_info *frame)
+{
+#ifdef PS_REGNUM
+  if (PS_REGNUM >= 0)
+    return value_of_register (PS_REGNUM, frame);
+#endif
+  error ("Standard register ``$ps'' is not available for this target");
+}
+
 void
-_initialize_frame_reg ()
+_initialize_frame_reg (void)
 {
+  /* FIXME: cagney/2002-02-08: At present the local builtin types
+     can't be initialized using _initialize*() or gdbarch.  Due mainly
+     to non-multi-arch targets, GDB initializes things piece meal and,
+     as a consequence can leave these types NULL.  */
+  REGISTER_GDBARCH_SWAP (builtin_type_frame_reg);
+
   /* Frame based $fp, $pc, $sp and $ps.  These only come into play
      when the target does not define its own version of these
      registers.  */
-  user_reg_add_builtin ("fp", value_of_builtin_frame_fp_reg, NULL);
-  user_reg_add_builtin ("pc", value_of_builtin_frame_pc_reg, NULL);
-  user_reg_add_builtin ("sp", value_of_builtin_frame_sp_reg, NULL);
-  user_reg_add_builtin ("ps", value_of_builtin_frame_ps_reg, NULL);
+  add_builtin_reg ("fp", value_of_builtin_frame_fp_reg);
+  add_builtin_reg ("pc", value_of_builtin_frame_pc_reg);
+  add_builtin_reg ("sp", value_of_builtin_frame_sp_reg);
+  add_builtin_reg ("ps", value_of_builtin_frame_ps_reg);
+
+  /* NOTE: cagney/2002-04-05: For moment leave the $frame / $gdbframe
+     / $gdb.frame disabled.  It isn't yet clear which of the many
+     options is the best.  */
+  if (0)
+    add_builtin_reg ("frame", value_of_builtin_frame_reg);
 }

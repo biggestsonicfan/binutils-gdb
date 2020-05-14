@@ -1,7 +1,6 @@
 ; Error cases for invalid operands.
 ;  { dg-do assemble { target cris-*-* } }
  .text
- .syntax no_register_prefix
 start:
  add.w r3,r4,r5 ; { dg-error "(Illegal|Invalid) operands" }
  add.w 42,r4,r5 ; { dg-error "(Illegal|Invalid) operands" }
@@ -12,21 +11,16 @@ start:
  test.d [r3],r4 ; { dg-error "(Illegal|Invalid) operands" }
  move.d [r3],r4,r5 ; { dg-error "(Illegal|Invalid) operands" }
 
-; These two could be seen useful in extreme cases, but those
-; would be shadowed by not flagging erroneous use of
-; e.g. "test.d $r3" for CRISv32.  If you really need it, use
-; e.g. "test.d [$pc+] @ .dword whatever".
- test.d whatever ; { dg-error "(Illegal|Invalid) operands" "" }
- test.d 42 ; { dg-error "(Illegal|Invalid) operands" "" }
+; These two *might* be useful in extreme cases, so maybe the following
+; should not be considered an error in the first place.
+ test.d whatever ; { dg-error "(Illegal|Invalid) operands" "" { xfail *-*-* } }
+ test.d 42 ; { dg-error "(Illegal|Invalid) operands" "" { xfail *-*-* } }
 
  clear.d whatever ; { dg-error "(Illegal|Invalid) operands" }
  clear.d 42 ; { dg-error "(Illegal|Invalid) operands" }
  addi r5,r3 ; { dg-error "(Illegal|Invalid) operands" }
-
-; These two are valid instructions, though not recognized by
-; the assembler since they're obscure and generally useless.
- ba [external_symbol] ; { dg-error "(Illegal|Invalid) operands|(B|b)ad expression" }
- ba [r3] ; { dg-error "(Illegal|Invalid) operands|(B|b)ad expression" }
+ ba [external_symbol] ; Not an error, just obscure and generally useless.
+ ba [r3] ; Not an error, just obscure and generally useless.
  lsl r3,r5 ; { dg-error "(Illegal|Invalid) operands" }
  xor.d r5,r6 ; { dg-error "(Illegal|Invalid) operands" }
 

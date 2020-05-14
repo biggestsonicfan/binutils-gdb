@@ -1,12 +1,13 @@
 /* Generic serial interface routines
 
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+   2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,46 +16,53 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
 #include <ctype.h>
 #include "serial.h"
+#include "gdb_string.h"
 #include "gdbcmd.h"
-#include "cli/cli-utils.h"
 
-/* Is serial being debugged?  */
+extern void _initialize_serial (void);
 
-static unsigned int global_serial_debug_p;
+/* Is serial being debugged? */
 
-/* Serial I/O handlers.  */
+static int global_serial_debug_p;
 
-static std::vector<const struct serial_ops *> serial_ops_list;
+/* Linked list of serial I/O handlers */
 
-/* Pointer to list of scb's.  */
+static struct serial_ops *serial_ops_list = NULL;
+
+/* This is the last serial stream opened.  Used by connect command. */
+
+static struct serial *last_serial_opened = NULL;
+
+/* Pointer to list of scb's. */
 
 static struct serial *scb_base;
 
 /* Non-NULL gives filename which contains a recording of the remote session,
-   suitable for playback by gdbserver.  */
+   suitable for playback by gdbserver. */
 
 static char *serial_logfile = NULL;
 static struct ui_file *serial_logfp = NULL;
 
-static const struct serial_ops *serial_interface_lookup (const char *);
-static void serial_logchar (struct ui_file *stream,
-			    int ch_type, int ch, int timeout);
+static struct serial_ops *serial_interface_lookup (char *);
+static void serial_logchar (struct ui_file *stream, int ch_type, int ch, int timeout);
 static const char logbase_hex[] = "hex";
 static const char logbase_octal[] = "octal";
 static const char logbase_ascii[] = "ascii";
-static const char *const logbase_enums[] =
+static const char *logbase_enums[] =
 {logbase_hex, logbase_octal, logbase_ascii, NULL};
 static const char *serial_logbase = logbase_ascii;
 
 
 static int serial_current_type = 0;
 
-/* Log char CH of type CHTYPE, with TIMEOUT.  */
+/* Log char CH of type CHTYPE, with TIMEOUT */
 
 /* Define bogus char to represent a BREAK.  Should be careful to choose a value
    that can't be confused with a normal char, or an error code.  */
@@ -116,15 +124,14 @@ serial_logchar (struct ui_file *stream, int ch_type, int ch, int timeout)
 	    fputs_unfiltered ("\\v", stream);
 	    break;
 	  default:
-	    fprintf_unfiltered (stream,
-				isprint (ch) ? "%c" : "\\x%02x", ch & 0xFF);
+	    fprintf_unfiltered (stream, isprint (ch) ? "%c" : "\\x%02x", ch & 0xFF);
 	    break;
 	  }
     }
 }
 
 void
-serial_log_command (struct target_ops *self, const char *cmd)
+serial_log_command (const char *cmd)
 {
   if (!serial_logfp)
     return;
@@ -135,15 +142,17 @@ serial_log_command (struct target_ops *self, const char *cmd)
   fputs_unfiltered (cmd, serial_logfp);
 
   /* Make sure that the log file is as up-to-date as possible,
-     in case we are getting ready to dump core or something.  */
+     in case we are getting ready to dump core or something. */
   gdb_flush (serial_logfp);
 }
 
 
-static const struct serial_ops *
-serial_interface_lookup (const char *name)
+static struct serial_ops *
+serial_interface_lookup (char *name)
 {
-  for (const serial_ops *ops : serial_ops_list)
+  struct serial_ops *ops;
+
+  for (ops = serial_ops_list; ops; ops = ops->next)
     if (strcmp (name, ops->name) == 0)
       return ops;
 
@@ -151,155 +160,75 @@ serial_interface_lookup (const char *name)
 }
 
 void
-serial_add_interface (const struct serial_ops *optable)
+serial_add_interface (struct serial_ops *optable)
 {
-  serial_ops_list.push_back (optable);
+  optable->next = serial_ops_list;
+  serial_ops_list = optable;
 }
 
-/* Return the open serial device for FD, if found, or NULL if FD is
-   not already opened.  */
-
-struct serial *
-serial_for_fd (int fd)
-{
-  struct serial *scb;
-
-  for (scb = scb_base; scb; scb = scb->next)
-    if (scb->fd == fd)
-      return scb;
-
-  return NULL;
-}
-
-/* Create a new serial for OPS.  */
-
-static struct serial *
-new_serial (const struct serial_ops *ops)
-{
-  struct serial *scb;
-
-  scb = XCNEW (struct serial);
-
-  scb->ops = ops;
-
-  scb->bufp = scb->buf;
-  scb->error_fd = -1;
-  scb->refcnt = 1;
-
-  return scb;
-}
-
-static struct serial *serial_open_ops_1 (const struct serial_ops *ops,
-					 const char *open_name);
-
-/* Open up a device or a network socket, depending upon the syntax of NAME.  */
+/* Open up a device or a network socket, depending upon the syntax of NAME. */
 
 struct serial *
 serial_open (const char *name)
 {
-  const struct serial_ops *ops;
+  struct serial *scb;
+  struct serial_ops *ops;
   const char *open_name = name;
 
-  if (startswith (name, "|"))
-    {
-      ops = serial_interface_lookup ("pipe");
-      /* Discard ``|'' and any space before the command itself.  */
-      ++open_name;
-      open_name = skip_spaces (open_name);
-    }
-  /* Check for a colon, suggesting an IP address/port pair.
-     Do this *after* checking for all the interesting prefixes.  We
-     don't want to constrain the syntax of what can follow them.  */
+  for (scb = scb_base; scb; scb = scb->next)
+    if (scb->name && strcmp (scb->name, name) == 0)
+      {
+	scb->refcnt++;
+	return scb;
+      }
+
+  if (strcmp (name, "pc") == 0)
+    ops = serial_interface_lookup ("pc");
   else if (strchr (name, ':'))
     ops = serial_interface_lookup ("tcp");
-  else
+  else if (strncmp (name, "lpt", 3) == 0)
+    ops = serial_interface_lookup ("parallel");
+  else if (strncmp (name, "|", 1) == 0)
     {
-#ifndef USE_WIN32API
-      /* Check to see if name is a socket.  If it is, then treat it
-         as such.  Otherwise assume that it's a character device.  */
-      struct stat sb;
-      if (stat (name, &sb) == 0 && (sb.st_mode & S_IFMT) == S_IFSOCK)
-	ops = serial_interface_lookup ("local");
-      else
-#endif
-	ops = serial_interface_lookup ("hardwire");
+      ops = serial_interface_lookup ("pipe");
+      open_name = name + 1; /* discard ``|'' */
     }
+  else
+    ops = serial_interface_lookup ("hardwire");
 
   if (!ops)
     return NULL;
 
-  return serial_open_ops_1 (ops, open_name);
-}
+  scb = XMALLOC (struct serial);
 
-/* Open up a serial for OPS, passing OPEN_NAME to the open method.  */
+  scb->ops = ops;
 
-static struct serial *
-serial_open_ops_1 (const struct serial_ops *ops, const char *open_name)
-{
-  struct serial *scb;
+  scb->bufcnt = 0;
+  scb->bufp = scb->buf;
 
-  scb = new_serial (ops);
-
-  /* `...->open (...)' would get expanded by the open(2) syscall macro.  */
-  if ((*scb->ops->open) (scb, open_name))
+  if (scb->ops->open (scb, open_name))
     {
       xfree (scb);
       return NULL;
     }
 
-  scb->name = open_name != NULL ? xstrdup (open_name) : NULL;
+  scb->name = xstrdup (name);
   scb->next = scb_base;
+  scb->refcnt = 1;
+  scb->debug_p = 0;
+  scb->async_state = 0;
+  scb->async_handler = NULL;
+  scb->async_context = NULL;
   scb_base = scb;
+
+  last_serial_opened = scb;
 
   if (serial_logfile != NULL)
     {
-      stdio_file_up file (new stdio_file ());
-
-      if (!file->open (serial_logfile, "w"))
+      serial_logfp = gdb_fopen (serial_logfile, "w");
+      if (serial_logfp == NULL)
 	perror_with_name (serial_logfile);
-
-      serial_logfp = file.release ();
     }
-
-  return scb;
-}
-
-/* See serial.h.  */
-
-struct serial *
-serial_open_ops (const struct serial_ops *ops)
-{
-  return serial_open_ops_1 (ops, NULL);
-}
-
-/* Open a new serial stream using a file handle, using serial
-   interface ops OPS.  */
-
-static struct serial *
-serial_fdopen_ops (const int fd, const struct serial_ops *ops)
-{
-  struct serial *scb;
-
-  if (!ops)
-    {
-      ops = serial_interface_lookup ("terminal");
-      if (!ops)
- 	ops = serial_interface_lookup ("hardwire");
-    }
-
-  if (!ops)
-    return NULL;
-
-  scb = new_serial (ops);
-
-  scb->name = NULL;
-  scb->next = scb_base;
-  scb_base = scb;
-
-  if ((ops->fdopen) != NULL)
-    (*ops->fdopen) (scb, fd);
-  else
-    scb->fd = fd;
 
   return scb;
 }
@@ -307,7 +236,42 @@ serial_fdopen_ops (const int fd, const struct serial_ops *ops)
 struct serial *
 serial_fdopen (const int fd)
 {
-  return serial_fdopen_ops (fd, NULL);
+  struct serial *scb;
+  struct serial_ops *ops;
+
+  for (scb = scb_base; scb; scb = scb->next)
+    if (scb->fd == fd)
+      {
+	scb->refcnt++;
+	return scb;
+      }
+
+  ops = serial_interface_lookup ("hardwire");
+
+  if (!ops)
+    return NULL;
+
+  scb = XMALLOC (struct serial);
+
+  scb->ops = ops;
+
+  scb->bufcnt = 0;
+  scb->bufp = scb->buf;
+
+  scb->fd = fd;
+
+  scb->name = NULL;
+  scb->next = scb_base;
+  scb->refcnt = 1;
+  scb->debug_p = 0;
+  scb->async_state = 0;
+  scb->async_handler = NULL;
+  scb->async_context = NULL;
+  scb_base = scb;
+
+  last_serial_opened = scb;
+
+  return scb;
 }
 
 static void
@@ -315,27 +279,37 @@ do_serial_close (struct serial *scb, int really_close)
 {
   struct serial *tmp_scb;
 
+  last_serial_opened = NULL;
+
   if (serial_logfp)
     {
       fputs_unfiltered ("\nEnd of log\n", serial_logfp);
       serial_current_type = 0;
 
-      /* XXX - What if serial_logfp == gdb_stdout or gdb_stderr?  */
-      delete serial_logfp;
+      /* XXX - What if serial_logfp == gdb_stdout or gdb_stderr? */
+      ui_file_delete (serial_logfp);
       serial_logfp = NULL;
     }
 
-  /* ensure that the FD has been taken out of async mode.  */
+/* This is bogus.  It's not our fault if you pass us a bad scb...!  Rob, you
+   should fix your code instead.  */
+
+  if (!scb)
+    return;
+
+  scb->refcnt--;
+  if (scb->refcnt > 0)
+    return;
+
+  /* ensure that the FD has been taken out of async mode */
   if (scb->async_handler != NULL)
     serial_async (scb, NULL, NULL);
 
   if (really_close)
     scb->ops->close (scb);
 
-  xfree (scb->name);
-
-  /* For serial_is_open.  */
-  scb->bufp = NULL;
+  if (scb->name)
+    xfree (scb->name);
 
   if (scb_base == scb)
     scb_base = scb_base->next;
@@ -349,7 +323,7 @@ do_serial_close (struct serial *scb, int really_close)
 	break;
       }
 
-  serial_unref (scb);
+  xfree (scb);
 }
 
 void
@@ -365,35 +339,15 @@ serial_un_fdopen (struct serial *scb)
 }
 
 int
-serial_is_open (struct serial *scb)
-{
-  return scb->bufp != NULL;
-}
-
-void
-serial_ref (struct serial *scb)
-{
-  scb->refcnt++;
-}
-
-void
-serial_unref (struct serial *scb)
-{
-  --scb->refcnt;
-  if (scb->refcnt == 0)
-    xfree (scb);
-}
-
-int
 serial_readchar (struct serial *scb, int timeout)
 {
   int ch;
 
   /* FIXME: cagney/1999-10-11: Don't enable this check until the ASYNC
-     code is finished.  */
+     code is finished. */
   if (0 && serial_is_async_p (scb) && timeout < 0)
     internal_error (__FILE__, __LINE__,
-		    _("serial_readchar: blocking read in async mode"));
+		    "serial_readchar: blocking read in async mode");
 
   ch = scb->ops->readchar (scb, timeout);
   if (serial_logfp != NULL)
@@ -401,7 +355,7 @@ serial_readchar (struct serial *scb, int timeout)
       serial_logchar (serial_logfp, 'r', ch, timeout);
 
       /* Make sure that the log file is as up-to-date as possible,
-         in case we are getting ready to dump core or something.  */
+         in case we are getting ready to dump core or something. */
       gdb_flush (serial_logfp);
     }
   if (serial_debug_p (scb))
@@ -416,46 +370,34 @@ serial_readchar (struct serial *scb, int timeout)
 }
 
 int
-serial_write (struct serial *scb, const void *buf, size_t count)
+serial_write (struct serial *scb, const char *str, int len)
 {
   if (serial_logfp != NULL)
     {
-      const char *str = (const char *) buf;
-      size_t c;
+      int count;
 
-      for (c = 0; c < count; c++)
-	serial_logchar (serial_logfp, 'w', str[c] & 0xff, 0);
+      for (count = 0; count < len; count++)
+	serial_logchar (serial_logfp, 'w', str[count] & 0xff, 0);
 
       /* Make sure that the log file is as up-to-date as possible,
-         in case we are getting ready to dump core or something.  */
+         in case we are getting ready to dump core or something. */
       gdb_flush (serial_logfp);
     }
-  if (serial_debug_p (scb))
-    {
-      const char *str = (const char *) buf;
-      size_t c;
 
-      for (c = 0; c < count; c++)
-	{
-	  fprintf_unfiltered (gdb_stdlog, "[");
-	  serial_logchar (gdb_stdlog, 'w', str[c] & 0xff, 0);
-	  fprintf_unfiltered (gdb_stdlog, "]");
-	}
-      gdb_flush (gdb_stdlog);
-    }
-
-  return (scb->ops->write (scb, buf, count));
+  return (scb->ops->write (scb, str, len));
 }
 
 void
-serial_printf (struct serial *desc, const char *format, ...)
+serial_printf (struct serial *desc, const char *format,...)
 {
   va_list args;
+  char *buf;
   va_start (args, format);
 
-  std::string buf = string_vprintf (format, args);
-  serial_write (desc, buf.c_str (), buf.length ());
+  xvasprintf (&buf, format, args);
+  serial_write (desc, buf, strlen (buf));
 
+  xfree (buf);
   va_end (args);
 }
 
@@ -498,12 +440,6 @@ serial_get_tty_state (struct serial *scb)
   return scb->ops->get_tty_state (scb);
 }
 
-serial_ttystate
-serial_copy_tty_state (struct serial *scb, serial_ttystate ttystate)
-{
-  return scb->ops->copy_tty_state (scb, ttystate);
-}
-
 int
 serial_set_tty_state (struct serial *scb, serial_ttystate ttystate)
 {
@@ -519,6 +455,14 @@ serial_print_tty_state (struct serial *scb,
 }
 
 int
+serial_noflush_set_tty_state (struct serial *scb,
+			      serial_ttystate new_ttystate,
+			      serial_ttystate old_ttystate)
+{
+  return scb->ops->noflush_set_tty_state (scb, new_ttystate, old_ttystate);
+}
+
+int
 serial_setbaudrate (struct serial *scb, int rate)
 {
   return scb->ops->setbaudrate (scb, rate);
@@ -528,14 +472,6 @@ int
 serial_setstopbits (struct serial *scb, int num)
 {
   return scb->ops->setstopbits (scb, num);
-}
-
-/* See serial.h.  */
-
-int
-serial_setparity (struct serial *scb, int parity)
-{
-  return scb->ops->setparity (scb, parity);
 }
 
 int
@@ -555,13 +491,25 @@ serial_async (struct serial *scb,
 	      serial_event_ftype *handler,
 	      void *context)
 {
-  int changed = ((scb->async_handler == NULL) != (handler == NULL));
-
+  /* Only change mode if there is a need. */
+  if ((scb->async_handler == NULL)
+      != (handler == NULL))
+    scb->ops->async (scb, handler != NULL);
   scb->async_handler = handler;
   scb->async_context = context;
-  /* Only change mode if there is a need.  */
-  if (changed)
-    scb->ops->async (scb, handler != NULL);
+}
+
+int
+deprecated_serial_fd (struct serial *scb)
+{
+  /* FIXME: should this output a warning that deprecated code is being
+     called? */
+  if (scb->fd < 0)
+    {
+      internal_error (__FILE__, __LINE__,
+		      "serial: FD not valid");
+    }
+  return scb->fd; /* sigh */
 }
 
 void
@@ -576,156 +524,189 @@ serial_debug_p (struct serial *scb)
   return scb->debug_p || global_serial_debug_p;
 }
 
-#ifdef USE_WIN32API
-void
-serial_wait_handle (struct serial *scb, HANDLE *read, HANDLE *except)
+
+#if 0
+/* The connect command is #if 0 because I hadn't thought of an elegant
+   way to wait for I/O on two `struct serial *'s simultaneously.  Two
+   solutions came to mind:
+
+   1) Fork, and have have one fork handle the to user direction,
+   and have the other hand the to target direction.  This
+   obviously won't cut it for MSDOS.
+
+   2) Use something like select.  This assumes that stdin and
+   the target side can both be waited on via the same
+   mechanism.  This may not be true for DOS, if GDB is
+   talking to the target via a TCP socket.
+   -grossman, 8 Jun 93 */
+
+/* Connect the user directly to the remote system.  This command acts just like
+   the 'cu' or 'tip' command.  Use <CR>~. or <CR>~^D to break out.  */
+
+static struct serial *tty_desc;	/* Controlling terminal */
+
+static void
+cleanup_tty (serial_ttystate ttystate)
 {
-  if (scb->ops->wait_handle)
-    scb->ops->wait_handle (scb, read, except);
-  else
+  printf_unfiltered ("\r\n[Exiting connect mode]\r\n");
+  serial_set_tty_state (tty_desc, ttystate);
+  xfree (ttystate);
+  serial_close (tty_desc);
+}
+
+static void
+connect_command (char *args, int fromtty)
+{
+  int c;
+  char cur_esc = 0;
+  serial_ttystate ttystate;
+  struct serial *port_desc;		/* TTY port */
+
+  dont_repeat ();
+
+  if (args)
+    fprintf_unfiltered (gdb_stderr, "This command takes no args.  They have been ignored.\n");
+
+  printf_unfiltered ("[Entering connect mode.  Use ~. or ~^D to escape]\n");
+
+  tty_desc = serial_fdopen (0);
+  port_desc = last_serial_opened;
+
+  ttystate = serial_get_tty_state (tty_desc);
+
+  serial_raw (tty_desc);
+  serial_raw (port_desc);
+
+  make_cleanup (cleanup_tty, ttystate);
+
+  while (1)
     {
-      *read = (HANDLE) _get_osfhandle (scb->fd);
-      *except = NULL;
+      int mask;
+
+      mask = serial_wait_2 (tty_desc, port_desc, -1);
+
+      if (mask & 2)
+	{			/* tty input */
+	  char cx;
+
+	  while (1)
+	    {
+	      c = serial_readchar (tty_desc, 0);
+
+	      if (c == SERIAL_TIMEOUT)
+		break;
+
+	      if (c < 0)
+		perror_with_name ("connect");
+
+	      cx = c;
+	      serial_write (port_desc, &cx, 1);
+
+	      switch (cur_esc)
+		{
+		case 0:
+		  if (c == '\r')
+		    cur_esc = c;
+		  break;
+		case '\r':
+		  if (c == '~')
+		    cur_esc = c;
+		  else
+		    cur_esc = 0;
+		  break;
+		case '~':
+		  if (c == '.' || c == '\004')
+		    return;
+		  else
+		    cur_esc = 0;
+		}
+	    }
+	}
+
+      if (mask & 1)
+	{			/* Port input */
+	  char cx;
+
+	  while (1)
+	    {
+	      c = serial_readchar (port_desc, 0);
+
+	      if (c == SERIAL_TIMEOUT)
+		break;
+
+	      if (c < 0)
+		perror_with_name ("connect");
+
+	      cx = c;
+
+	      serial_write (tty_desc, &cx, 1);
+	    }
+	}
     }
 }
-
-void
-serial_done_wait_handle (struct serial *scb)
-{
-  if (scb->ops->done_wait_handle)
-    scb->ops->done_wait_handle (scb);
-}
-#endif
-
-int
-serial_pipe (struct serial *scbs[2])
-{
-  const struct serial_ops *ops;
-  int fildes[2];
-
-  ops = serial_interface_lookup ("pipe");
-  if (!ops)
-    {
-      errno = ENOSYS;
-      return -1;
-    }
-
-  if (gdb_pipe (fildes) == -1)
-    return -1;
-
-  scbs[0] = serial_fdopen_ops (fildes[0], ops);
-  scbs[1] = serial_fdopen_ops (fildes[1], ops);
-  return 0;
-}
+#endif /* 0 */
 
 /* Serial set/show framework.  */
 
 static struct cmd_list_element *serial_set_cmdlist;
 static struct cmd_list_element *serial_show_cmdlist;
 
-/* Baud rate specified for talking to serial target systems.  Default
-   is left as -1, so targets can choose their own defaults.  */
-/* FIXME: This means that "show serial baud" and gr_files_info can
-   print -1 or (unsigned int)-1.  This is a Bad User Interface.  */
-
-int baud_rate = -1;
-
 static void
-serial_baud_show_cmd (struct ui_file *file, int from_tty,
-		      struct cmd_list_element *c, const char *value)
+serial_set_cmd (char *args, int from_tty)
 {
-  fprintf_filtered (file, _("Baud rate for remote serial I/O is %s.\n"),
-		    value);
+  printf_unfiltered ("\"set serial\" must be followed by the name of a command.\n");
+  help_list (serial_set_cmdlist, "set serial ", -1, gdb_stdout);
 }
 
-/* Parity for serial port.  */
-
-int serial_parity = GDBPARITY_NONE;
-
-static const char parity_none[] = "none";
-static const char parity_odd[] = "odd";
-static const char parity_even[] = "even";
-static const char *const parity_enums[] =
-  {parity_none, parity_odd, parity_even,  NULL};
-static const char *parity = parity_none;
-
-/* Set serial_parity value.  */
-
 static void
-set_parity (const char *ignore_args, int from_tty, struct cmd_list_element *c)
+serial_show_cmd (char *args, int from_tty)
 {
-  if (parity == parity_odd)
-    serial_parity = GDBPARITY_ODD;
-  else if (parity == parity_even)
-    serial_parity = GDBPARITY_EVEN;
-  else
-    serial_parity = GDBPARITY_NONE;
+  cmd_show_list (serial_show_cmdlist, from_tty, "");
 }
 
-void _initialize_serial ();
+
 void
-_initialize_serial ()
+_initialize_serial (void)
 {
 #if 0
-  add_com ("connect", class_obscure, connect_command, _("\
-Connect the terminal directly up to the command monitor.\n\
-Use <CR>~. or <CR>~^D to break out."));
+  add_com ("connect", class_obscure, connect_command,
+	   "Connect the terminal directly up to the command monitor.\n\
+Use <CR>~. or <CR>~^D to break out.");
 #endif /* 0 */
 
-  add_basic_prefix_cmd ("serial", class_maintenance, _("\
-Set default serial/parallel port configuration."),
-			&serial_set_cmdlist, "set serial ",
-			0/*allow-unknown*/,
-			&setlist);
+  add_prefix_cmd ("serial", class_maintenance, serial_set_cmd, "\
+Set default serial/parallel port configuration.",
+		  &serial_set_cmdlist, "set serial ",
+		  0/*allow-unknown*/,
+		  &setlist);
 
-  add_show_prefix_cmd ("serial", class_maintenance, _("\
-Show default serial/parallel port configuration."),
-		       &serial_show_cmdlist, "show serial ",
-		       0/*allow-unknown*/,
-		       &showlist);
+  add_prefix_cmd ("serial", class_maintenance, serial_show_cmd, "\
+Show default serial/parallel port configuration.",
+		  &serial_show_cmdlist, "show serial ",
+		  0/*allow-unknown*/,
+		  &showlist);
 
-  /* If target is open when baud changes, it doesn't take effect until
-     the next open (I think, not sure).  */
-  add_setshow_zinteger_cmd ("baud", no_class, &baud_rate, _("\
-Set baud rate for remote serial I/O."), _("\
-Show baud rate for remote serial I/O."), _("\
-This value is used to set the speed of the serial port when debugging\n\
-using remote targets."),
-			    NULL,
-			    serial_baud_show_cmd,
-			    &serial_set_cmdlist, &serial_show_cmdlist);
-
-  add_setshow_enum_cmd ("parity", no_class, parity_enums,
-                        &parity, _("\
-Set parity for remote serial I/O."), _("\
-Show parity for remote serial I/O."), NULL,
-                        set_parity,
-                        NULL, /* FIXME: i18n: */
-                        &serial_set_cmdlist, &serial_show_cmdlist);
-
-  add_setshow_filename_cmd ("remotelogfile", no_class, &serial_logfile, _("\
-Set filename for remote session recording."), _("\
-Show filename for remote session recording."), _("\
+  add_show_from_set
+    (add_set_cmd ("remotelogfile", no_class,
+		  var_filename, (char *) &serial_logfile,
+		  "Set filename for remote session recording.\n\
 This file is used to record the remote session for future playback\n\
-by gdbserver."),
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+by gdbserver.",
+		  &setlist),
+     &showlist);
 
-  add_setshow_enum_cmd ("remotelogbase", no_class, logbase_enums,
-			&serial_logbase, _("\
-Set numerical base for remote session logging."), _("\
-Show numerical base for remote session logging."), NULL,
-			NULL,
-			NULL, /* FIXME: i18n: */
-			&setlist, &showlist);
+  add_show_from_set
+    (add_set_enum_cmd ("remotelogbase", no_class,
+		       logbase_enums, &serial_logbase,
+		       "Set numerical base for remote session logging",
+		       &setlist),
+     &showlist);
 
-  add_setshow_zuinteger_cmd ("serial", class_maintenance,
-			     &global_serial_debug_p, _("\
-Set serial debugging."), _("\
-Show serial debugging."), _("\
-When non-zero, serial port debugging is enabled."),
-			     NULL,
-			     NULL, /* FIXME: i18n: */
-			     &setdebuglist, &showdebuglist);
+  add_show_from_set (add_set_cmd ("serial",
+				  class_maintenance,
+				  var_zinteger,
+				  (char *)&global_serial_debug_p,
+				  "Set serial debugging.\n\
+When non-zero, serial port debugging is enabled.", &setdebuglist),
+		     &showdebuglist);
 }

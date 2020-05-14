@@ -13,5 +13,3 @@ Disassembly of section .text:
 0+0c <[^>]*> 012fff20 ?	bxjeq	r0
 0+10 <[^>]*> 412fff20 ?	bxjmi	r0
 0+14 <[^>]*> 512fff27 ?	bxjpl	r7
-0+18 <[^>]*> e1200070 ?	bkpt	0x0000
-0+1c <[^>]*> e120007a ?	bkpt	0x000a

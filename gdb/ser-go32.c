@@ -1,5 +1,5 @@
 /* Remote serial interface for local (hardwired) serial ports for GO32.
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright 1992, 1993, 2000, 2001 Free Software Foundation, Inc.
 
    Contributed by Nigel Stephens, Algorithmics Ltd. (nigel@algor.co.uk).
 
@@ -10,7 +10,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -19,11 +19,16 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
 #include "gdbcmd.h"
 #include "serial.h"
+#include "gdb_string.h"
+
+
 /*
  * NS16550 UART registers
  */
@@ -145,15 +150,15 @@ typedef unsigned long u_long;
 #define NCNT		20
 
 static int intrcnt;
-static size_t cnts[NCNT];
+static int cnts[NCNT];
 static char *cntnames[NCNT] =
 {
-  /* h/w interrupt counts.  */
+  /* h/w interrupt counts. */
   "mlsc", "nopend", "txrdy", "?3",
   "rxrdy", "?5", "rls", "?7",
   "?8", "?9", "?a", "?b",
   "rxtout", "?d", "?e", "?f",
-  /* s/w counts.  */
+  /* s/w counts. */
   "rxcnt", "txcnt", "stray", "swoflo"
 };
 
@@ -162,15 +167,15 @@ static char *cntnames[NCNT] =
 #define COUNT(x)
 #endif
 
-/* Main interrupt controller port addresses.  */
+/* Main interrupt controller port addresses. */
 #define ICU_BASE	0x20
 #define ICU_OCW2	(ICU_BASE + 0)
 #define ICU_MASK	(ICU_BASE + 1)
 
-/* Original interrupt controller mask register.  */
+/* Original interrupt controller mask register. */
 unsigned char icu_oldmask;
 
-/* Maximum of 8 interrupts (we don't handle the slave icu yet).  */
+/* Maximum of 8 interrupts (we don't handle the slave icu yet). */
 #define NINTR	8
 
 static struct intrupt
@@ -227,7 +232,7 @@ static int dos_open (struct serial *scb, const char *name);
 static void dos_raw (struct serial *scb);
 static int dos_readchar (struct serial *scb, int timeout);
 static int dos_setbaudrate (struct serial *scb, int rate);
-static int dos_write (struct serial *scb, const void *buf, size_t count);
+static int dos_write (struct serial *scb, const char *str, int len);
 static void dos_close (struct serial *scb);
 static serial_ttystate dos_get_tty_state (struct serial *scb);
 static int dos_set_tty_state (struct serial *scb, serial_ttystate state);
@@ -337,11 +342,11 @@ dos_comisr (int irq)
 	  break;
 
 	case IIR_NOPEND:
-	  /* No more pending interrupts, all done.  */
+	  /* no more pending interrupts, all done */
 	  return;
 
 	default:
-	  /* Unexpected interrupt, ignore.  */
+	  /* unexpected interrupt, ignore */
 	  break;
 	}
       COUNT (iir);
@@ -351,8 +356,8 @@ dos_comisr (int irq)
 #define ISRNAME(x) dos_comisr##x
 #define ISR(x) static void ISRNAME(x)(void) {dos_comisr(x);}
 
-ISR (0) ISR (1) ISR (2) ISR (3) /* OK */
-ISR (4) ISR (5) ISR (6) ISR (7) /* OK */
+ISR (0) ISR (1) ISR (2) ISR (3)
+ISR (4) ISR (5) ISR (6) ISR (7)
 
 typedef void (*isr_t) (void);
 
@@ -381,7 +386,7 @@ dos_hookirq (unsigned int irq)
   vec = 0x08 + irq;
   isr = isrs[irq];
 
-  /* Setup real mode handler.  */
+  /* setup real mode handler */
   _go32_dpmi_get_real_mode_interrupt_vector (vec, &intr->old_rmhandler);
 
   intr->new_rmhandler.pm_selector = _go32_my_cs ();
@@ -397,7 +402,7 @@ dos_hookirq (unsigned int irq)
       return 0;
     }
 
-  /* Setup protected mode handler.  */
+  /* setup protected mode handler */
   _go32_dpmi_get_protected_mode_interrupt_vector (vec, &intr->old_pmhandler);
 
   intr->new_pmhandler.pm_selector = _go32_my_cs ();
@@ -410,7 +415,7 @@ dos_hookirq (unsigned int irq)
       return 0;
     }
 
-  /* Setup interrupt controller mask.  */
+  /* setup interrupt controller mask */
   disable ();
   outportb (ICU_MASK, inportb (ICU_MASK) & ~(1 << irq));
   enable ();
@@ -429,17 +434,17 @@ dos_unhookirq (struct intrupt *intr)
   irq = intr - intrupts;
   vec = 0x08 + irq;
 
-  /* Restore old interrupt mask bit.  */
+  /* restore old interrupt mask bit */
   mask = 1 << irq;
   disable ();
   outportb (ICU_MASK, inportb (ICU_MASK) | (mask & icu_oldmask));
   enable ();
 
-  /* Remove real mode handler.  */
+  /* remove real mode handler */
   _go32_dpmi_set_real_mode_interrupt_vector (vec, &intr->old_rmhandler);
   _go32_dpmi_free_real_mode_callback (&intr->new_rmhandler);
 
-  /* Remove protected mode handler.  */
+  /* remove protected mode handler */
   _go32_dpmi_set_protected_mode_interrupt_vector (vec, &intr->old_pmhandler);
   _go32_dpmi_free_iret_wrapper (&intr->new_pmhandler);
   intr->inuse = 0;
@@ -478,12 +483,12 @@ dos_open (struct serial *scb, const char *name)
   port = &ports[fd];
   if (port->refcnt++ > 0)
     {
-      /* Device already opened another user.  Just point at it.  */
+      /* Device already opened another user.  Just point at it. */
       scb->fd = fd;
       return 0;
     }
 
-  /* Force access to ID reg.  */
+  /* force access to ID reg */
   outb (port, com_cfcr, 0);
   outb (port, com_iir, 0);
   for (i = 0; i < 17; i++)
@@ -496,23 +501,23 @@ dos_open (struct serial *scb, const char *name)
   return -1;
 
 ok:
-  /* Disable all interrupts in chip.  */
+  /* disable all interrupts in chip */
   outb (port, com_ier, 0);
 
-  /* Tentatively enable 16550 fifo, and see if it responds.  */
+  /* tentatively enable 16550 fifo, and see if it responds */
   outb (port, com_fifo,
 	FIFO_ENABLE | FIFO_RCV_RST | FIFO_XMT_RST | FIFO_TRIGGER);
   sleep (1);
   port->fifo = ((inb (port, com_iir) & IIR_FIFO_MASK) == IIR_FIFO_MASK);
 
-  /* clear pending status reports.  */
+  /* clear pending status reports. */
   (void) inb (port, com_lsr);
   (void) inb (port, com_msr);
 
-  /* Enable external interrupt gate (to avoid floating IRQ).  */
+  /* enable external interrupt gate (to avoid floating IRQ) */
   outb (port, com_mcr, MCR_IENABLE);
 
-  /* Hook up interrupt handler and initialise icu.  */
+  /* hook up interrupt handler and initialise icu */
   port->intrupt = dos_hookirq (port->irq);
   if (!port->intrupt)
     {
@@ -528,22 +533,22 @@ ok:
   port->intrupt->port = port;
   scb->fd = fd;
 
-  /* Clear rx buffer, tx busy flag and overflow count.  */
+  /* clear rx buffer, tx busy flag and overflow count */
   port->first = port->count = 0;
   port->txbusy = 0;
   port->oflo = 0;
 
-  /* Set default baud rate and mode: 9600,8,n,1 */
+  /* set default baud rate and mode: 9600,8,n,1 */
   i = dos_baudconv (port->baudrate = 9600);
   outb (port, com_cfcr, CFCR_DLAB);
   outb (port, com_dlbl, i & 0xff);
   outb (port, com_dlbh, i >> 8);
   outb (port, com_cfcr, CFCR_8BITS);
 
-  /* Enable all interrupts.  */
+  /* enable all interrupts */
   outb (port, com_ier, IER_ETXRDY | IER_ERXRDY | IER_ERLS | IER_EMSC);
 
-  /* Enable DTR & RTS.  */
+  /* enable DTR & RTS */
   outb (port, com_mcr, MCR_DTR | MCR_RTS | MCR_IENABLE);
 
   enable ();
@@ -569,7 +574,7 @@ dos_close (struct serial *scb)
   if (!(intrupt = port->intrupt))
     return;
 
-  /* Disable interrupts, fifo, flow control.  */
+  /* disable interrupts, fifo, flow control */
   disable ();
   port->intrupt = 0;
   intrupt->port = 0;
@@ -577,11 +582,11 @@ dos_close (struct serial *scb)
   outb (port, com_ier, 0);
   enable ();
 
-  /* Unhook handler, and disable interrupt gate.  */
+  /* unhook handler, and disable interrupt gate */
   dos_unhookirq (intrupt);
   outb (port, com_mcr, 0);
 
-  /* Check for overflow errors.  */
+  /* Check for overflow errors */
   if (port->oflo)
     {
       fprintf_unfiltered (gdb_stderr,
@@ -593,26 +598,9 @@ dos_close (struct serial *scb)
 }
 
 
-/* Implementation of the serial_ops flush_output method.  */
 
 static int
-dos_flush_output (struct serial *scb)
-{
-  return 0;
-}
-
-/* Implementation of the serial_ops setparity method.  */
-
-static int
-dos_setparity (struct serial *scb, int parity)
-{
-  return 0;
-}
-
-/* Implementation of the serial_ops drain_output method.  */
-
-static int
-dos_drain_output (struct serial *scb)
+dos_noop (struct serial *scb)
 {
   return 0;
 }
@@ -620,7 +608,7 @@ dos_drain_output (struct serial *scb)
 static void
 dos_raw (struct serial *scb)
 {
-  /* Always in raw mode.  */
+  /* Always in raw mode */
 }
 
 static int
@@ -633,8 +621,6 @@ dos_readchar (struct serial *scb, int timeout)
   then = rawclock () + (timeout * RAWHZ);
   while ((c = dos_getc (port)) < 0)
     {
-      QUIT;
-
       if (timeout >= 0 && (rawclock () - then) >= 0)
 	return SERIAL_TIMEOUT;
     }
@@ -655,26 +641,15 @@ dos_get_tty_state (struct serial *scb)
       /* We've never heard about this port.  We should fail this call,
 	 unless they are asking about one of the 3 standard handles,
 	 in which case we pretend the handle was open by us if it is
-	 connected to a terminal device.  This is because Unix
+	 connected to a terminal device.  This is beacuse Unix
 	 terminals use the serial interface, so GDB expects the
 	 standard handles to go through here.  */
       if (scb->fd >= 3 || !isatty (scb->fd))
 	return NULL;
     }
 
-  state = XNEW (struct dos_ttystate);
+  state = (struct dos_ttystate *) xmalloc (sizeof *state);
   *state = *port;
-  return (serial_ttystate) state;
-}
-
-static serial_ttystate
-dos_copy_tty_state (struct serial *scb, serial_ttystate ttystate)
-{
-  struct dos_ttystate *state;
-
-  state = XNEW (struct dos_ttystate);
-  *state = *(struct dos_ttystate *) ttystate;
-
   return (serial_ttystate) state;
 }
 
@@ -689,10 +664,20 @@ dos_set_tty_state (struct serial *scb, serial_ttystate ttystate)
 }
 
 static int
+dos_noflush_set_tty_state (struct serial *scb, serial_ttystate new_ttystate,
+			   serial_ttystate old_ttystate)
+{
+  struct dos_ttystate *state;
+
+  state = (struct dos_ttystate *) new_ttystate;
+  dos_setbaudrate (scb, state->baudrate);
+  return 0;
+}
+
+static int
 dos_flush_input (struct serial *scb)
 {
   struct dos_ttystate *port = &ports[scb->fd];
-
   disable ();
   port->first = port->count = 0;
   if (port->fifo)
@@ -705,7 +690,7 @@ static void
 dos_print_tty_state (struct serial *scb, serial_ttystate ttystate,
 		     struct ui_file *stream)
 {
-  /* Nothing to print.  */
+  /* Nothing to print */
   return;
 }
 
@@ -717,7 +702,7 @@ dos_baudconv (int rate)
   if (rate <= 0)
     return -1;
 
-#define divrnd(n, q)	(((n) * 2 / (q) + 1) / 2) /* Divide and round off.  */
+#define divrnd(n, q)	(((n) * 2 / (q) + 1) / 2) /* divide and round off */
   x = divrnd (COMTICK, rate);
   if (x <= 0)
     return -1;
@@ -792,35 +777,32 @@ dos_setstopbits (struct serial *scb, int num)
 }
 
 static int
-dos_write (struct serial *scb, const void *buf, size_t count)
+dos_write (struct serial *scb, const char *str, int len)
 {
   volatile struct dos_ttystate *port = &ports[scb->fd];
-  size_t fifosize = port->fifo ? 16 : 1;
+  int fifosize = port->fifo ? 16 : 1;
   long then;
-  size_t cnt;
-  const char *str = (const char *) buf;
+  int cnt;
 
-  while (count > 0)
+  while (len > 0)
     {
-      QUIT;
-
-      /* Send the data, fifosize bytes at a time.  */
-      cnt = fifosize > count ? count : fifosize;
+      /* send the data, fifosize bytes at a time */
+      cnt = fifosize > len ? len : fifosize;
       port->txbusy = 1;
       /* Francisco Pastor <fpastor.etra-id@etra.es> says OUTSB messes
 	 up the communications with UARTs with FIFOs.  */
 #ifdef UART_FIFO_WORKS
       outportsb (port->base + com_data, str, cnt);
       str += cnt;
-      count -= cnt;
+      len -= cnt;
 #else
-      for ( ; cnt > 0; cnt--, count--)
+      for ( ; cnt > 0; cnt--, len--)
 	outportb (port->base + com_data, *str++);
 #endif
 #ifdef DOS_STATS
       cnts[CNT_TX] += cnt;
 #endif
-      /* Wait for transmission to complete (max 1 sec).  */
+      /* wait for transmission to complete (max 1 sec) */
       then = rawclock () + RAWHZ;
       while (port->txbusy)
 	{
@@ -855,39 +837,31 @@ dos_sendbreak (struct serial *scb)
 }
 
 
-static const struct serial_ops dos_ops =
+static struct serial_ops dos_ops =
 {
   "hardwire",
+  0,
   dos_open,
   dos_close,
-  NULL,				/* fdopen, not implemented */
   dos_readchar,
   dos_write,
-  dos_flush_output,
+  dos_noop,			/* flush output */
   dos_flush_input,
   dos_sendbreak,
   dos_raw,
   dos_get_tty_state,
-  dos_copy_tty_state,
   dos_set_tty_state,
   dos_print_tty_state,
+  dos_noflush_set_tty_state,
   dos_setbaudrate,
   dos_setstopbits,
-  dos_setparity,
-  dos_drain_output,
-  (void (*)(struct serial *, int))NULL	/* Change into async mode.  */
+  dos_noop,			/* wait for output to drain */
+  (void (*)(struct serial *, int))NULL	/* change into async mode */
 };
 
-int
-gdb_pipe (int pdes[2])
-{
-  /* No support for pipes.  */
-  errno = ENOSYS;
-  return -1;
-}
 
 static void
-info_serial_command (const char *arg, int from_tty)
+dos_info (char *arg, int from_tty)
 {
   struct dos_ttystate *port;
 #ifdef DOS_STATS
@@ -911,80 +885,80 @@ info_serial_command (const char *arg, int from_tty)
   printf_filtered ("\nTotal interrupts: %d\n", intrcnt);
   for (i = 0; i < NCNT; i++)
     if (cnts[i])
-      printf_filtered ("%s:\t%lu\n", cntnames[i], (unsigned long) cnts[i]);
+      printf_filtered ("%s:\t%d\n", cntnames[i], cnts[i]);
 #endif
 }
 
-void _initialize_ser_dos ();
+
 void
-_initialize_ser_dos ()
+_initialize_ser_dos (void)
 {
   serial_add_interface (&dos_ops);
 
-  /* Save original interrupt mask register.  */
+  /* Save original interrupt mask register. */
   icu_oldmask = inportb (ICU_MASK);
 
-  /* Mark fixed motherboard irqs as inuse.  */
+  /* Mark fixed motherboard irqs as inuse. */
   intrupts[0].inuse =		/* timer tick */
     intrupts[1].inuse =		/* keyboard */
     intrupts[2].inuse = 1;	/* slave icu */
 
-  add_setshow_zinteger_cmd ("com1base", class_obscure, &ports[0].base, _("\
-Set COM1 base i/o port address."), _("\
-Show COM1 base i/o port address."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com1base", class_obscure, var_zinteger,
+				   (char *) &ports[0].base,
+				   "Set COM1 base i/o port address.",
+				   &setlist),
+		      &showlist);
 
-  add_setshow_zinteger_cmd ("com1irq", class_obscure, &ports[0].irq, _("\
-Set COM1 interrupt request."), _("\
-Show COM1 interrupt request."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com1irq", class_obscure, var_zinteger,
+				   (char *) &ports[0].irq,
+				   "Set COM1 interrupt request.",
+				   &setlist),
+		      &showlist);
 
-  add_setshow_zinteger_cmd ("com2base", class_obscure, &ports[1].base, _("\
-Set COM2 base i/o port address."), _("\
-Show COM2 base i/o port address."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com2base", class_obscure, var_zinteger,
+				   (char *) &ports[1].base,
+				   "Set COM2 base i/o port address.",
+				   &setlist),
+		      &showlist);
 
-  add_setshow_zinteger_cmd ("com2irq", class_obscure, &ports[1].irq, _("\
-Set COM2 interrupt request."), _("\
-Show COM2 interrupt request."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com2irq", class_obscure, var_zinteger,
+				   (char *) &ports[1].irq,
+				   "Set COM2 interrupt request.",
+				   &setlist),
+		      &showlist);
 
-  add_setshow_zinteger_cmd ("com3base", class_obscure, &ports[2].base, _("\
-Set COM3 base i/o port address."), _("\
-Show COM3 base i/o port address."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com3base", class_obscure, var_zinteger,
+				   (char *) &ports[2].base,
+				   "Set COM3 base i/o port address.",
+				   &setlist),
+		      &showlist);
 
-  add_setshow_zinteger_cmd ("com3irq", class_obscure, &ports[2].irq, _("\
-Set COM3 interrupt request."), _("\
-Show COM3 interrupt request."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com3irq", class_obscure, var_zinteger,
+				   (char *) &ports[2].irq,
+				   "Set COM3 interrupt request.",
+				   &setlist),
+		      &showlist);
 
-  add_setshow_zinteger_cmd ("com4base", class_obscure, &ports[3].base, _("\
-Set COM4 base i/o port address."), _("\
-Show COM4 base i/o port address."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com4base", class_obscure, var_zinteger,
+				   (char *) &ports[3].base,
+				   "Set COM4 base i/o port address.",
+				   &setlist),
+		      &showlist);
 
-  add_setshow_zinteger_cmd ("com4irq", class_obscure, &ports[3].irq, _("\
-Set COM4 interrupt request."), _("\
-Show COM4 interrupt request."), NULL,
-			    NULL,
-			    NULL, /* FIXME: i18n: */
-			    &setlist, &showlist);
+  add_show_from_set (
+		      add_set_cmd ("com4irq", class_obscure, var_zinteger,
+				   (char *) &ports[3].irq,
+				   "Set COM4 interrupt request.",
+				   &setlist),
+		      &showlist);
 
-  add_info ("serial", info_serial_command,
-	    _("Print DOS serial port status."));
+  add_info ("serial", dos_info,
+	    "Print DOS serial port status.");
 }

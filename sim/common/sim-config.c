@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the GNU simulators.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1995,1997, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #include "sim-main.h"
@@ -25,7 +24,8 @@
 #include "bfd.h"
 
 
-enum bfd_endian current_target_byte_order = BFD_ENDIAN_UNKNOWN;
+int current_host_byte_order;
+int current_target_byte_order;
 int current_stdio;
 
 enum sim_alignments current_alignment;
@@ -39,16 +39,16 @@ int current_floating_point;
 /* map a byte order onto a textual string */
 
 static const char *
-config_byte_order_to_a (enum bfd_endian byte_order)
+config_byte_order_to_a (int byte_order)
 {
   switch (byte_order)
     {
-    case BFD_ENDIAN_LITTLE:
+    case LITTLE_ENDIAN:
       return "LITTLE_ENDIAN";
-    case BFD_ENDIAN_BIG:
+    case BIG_ENDIAN:
       return "BIG_ENDIAN";
-    case BFD_ENDIAN_UNKNOWN:
-      return "UNKNOWN_ENDIAN";
+    case 0:
+      return "0";
     }
   return "UNKNOWN";
 }
@@ -139,39 +139,52 @@ sim_config_default (SIM_DESC sd)
 SIM_RC
 sim_config (SIM_DESC sd)
 {
-  enum bfd_endian prefered_target_byte_order;
+  int prefered_target_byte_order;
   SIM_ASSERT (STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
 
   /* extract all relevant information */
-  if (STATE_PROG_BFD (sd) == NULL
-      /* If we have a binary input file (presumably with specified
-	 "--architecture"), it'll have no endianness.  */
-      || (!bfd_little_endian (STATE_PROG_BFD (sd))
-	  && !bfd_big_endian (STATE_PROG_BFD (sd))))
-    prefered_target_byte_order = BFD_ENDIAN_UNKNOWN;
+  if (STATE_PROG_BFD (sd) == NULL)
+    prefered_target_byte_order = 0;
   else
-    prefered_target_byte_order = (bfd_little_endian (STATE_PROG_BFD (sd))
-				  ? BFD_ENDIAN_LITTLE
-				  : BFD_ENDIAN_BIG);
+    prefered_target_byte_order = (bfd_little_endian(STATE_PROG_BFD (sd))
+				  ? LITTLE_ENDIAN
+				  : BIG_ENDIAN);
+
+  /* set the host byte order */
+  current_host_byte_order = 1;
+  if (*(char*)(&current_host_byte_order))
+    current_host_byte_order = LITTLE_ENDIAN;
+  else
+    current_host_byte_order = BIG_ENDIAN;
+
+  /* verify the host byte order */
+  if (CURRENT_HOST_BYTE_ORDER != current_host_byte_order)
+    {
+      sim_io_eprintf (sd, "host (%s) and configured (%s) byte order in conflict",
+		      config_byte_order_to_a (current_host_byte_order),
+		      config_byte_order_to_a (CURRENT_HOST_BYTE_ORDER));
+      return SIM_RC_FAIL;
+    }
+
 
   /* set the target byte order */
 #if (WITH_TREE_PROPERTIES)
-  if (current_target_byte_order == BFD_ENDIAN_UNKNOWN)
+  if (current_target_byte_order == 0)
     current_target_byte_order
       = (tree_find_boolean_property (root, "/options/little-endian?")
-	 ? BFD_ENDIAN_LITTLE
-	 : BFD_ENDIAN_BIG);
+	 ? LITTLE_ENDIAN
+	 : BIG_ENDIAN);
 #endif
-  if (current_target_byte_order == BFD_ENDIAN_UNKNOWN
-      && prefered_target_byte_order != BFD_ENDIAN_UNKNOWN)
+  if (current_target_byte_order == 0
+      && prefered_target_byte_order != 0)
     current_target_byte_order = prefered_target_byte_order;
-  if (current_target_byte_order == BFD_ENDIAN_UNKNOWN)
+  if (current_target_byte_order == 0)
     current_target_byte_order = WITH_TARGET_BYTE_ORDER;
-  if (current_target_byte_order == BFD_ENDIAN_UNKNOWN)
+  if (current_target_byte_order == 0)
     current_target_byte_order = WITH_DEFAULT_TARGET_BYTE_ORDER;
 
   /* verify the target byte order */
-  if (CURRENT_TARGET_BYTE_ORDER == BFD_ENDIAN_UNKNOWN)
+  if (CURRENT_TARGET_BYTE_ORDER == 0)
     {
       sim_io_eprintf (sd, "Target byte order unspecified\n");
       return SIM_RC_FAIL;
@@ -180,7 +193,7 @@ sim_config (SIM_DESC sd)
     sim_io_eprintf (sd, "Target (%s) and configured (%s) byte order in conflict\n",
 		  config_byte_order_to_a (current_target_byte_order),
 		  config_byte_order_to_a (CURRENT_TARGET_BYTE_ORDER));
-  if (prefered_target_byte_order != BFD_ENDIAN_UNKNOWN
+  if (prefered_target_byte_order != 0
       && CURRENT_TARGET_BYTE_ORDER != prefered_target_byte_order)
     sim_io_eprintf (sd, "Target (%s) and specified (%s) byte order in conflict\n",
 		  config_byte_order_to_a (CURRENT_TARGET_BYTE_ORDER),
@@ -206,8 +219,8 @@ sim_config (SIM_DESC sd)
 		      config_stdio_to_a (current_stdio));
       return SIM_RC_FAIL;
     }
-
-
+  
+  
   /* check the value of MSB */
   if (WITH_TARGET_WORD_MSB != 0
       && WITH_TARGET_WORD_MSB != (WITH_TARGET_WORD_BITSIZE - 1))
@@ -216,36 +229,35 @@ sim_config (SIM_DESC sd)
 		      WITH_TARGET_WORD_BITSIZE, WITH_TARGET_WORD_MSB);
       return SIM_RC_FAIL;
     }
-
-
+  
+  
   /* set the environment */
 #if (WITH_TREE_PROPERTIES)
   if (STATE_ENVIRONMENT (sd) == ALL_ENVIRONMENT)
     {
       const char *env =
-	tree_find_string_property (root, "/openprom/options/env");
-      STATE_ENVIRONMENT (sd) = ((strcmp (env, "user") == 0
-				 || strcmp (env, "uea") == 0)
+	tree_find_string_property(root, "/openprom/options/env");
+      STATE_ENVIRONMENT (sd) = ((strcmp(env, "user") == 0
+				 || strcmp(env, "uea") == 0)
 				? USER_ENVIRONMENT
-				: (strcmp (env, "virtual") == 0
-				   || strcmp (env, "vea") == 0)
+				: (strcmp(env, "virtual") == 0
+				   || strcmp(env, "vea") == 0)
 				? VIRTUAL_ENVIRONMENT
-				: (strcmp (env, "operating") == 0
-				   || strcmp (env, "oea") == 0)
+				: (strcmp(env, "operating") == 0
+				   || strcmp(env, "oea") == 0)
 				? OPERATING_ENVIRONMENT
 				: ALL_ENVIRONMENT);
     }
 #endif
   if (STATE_ENVIRONMENT (sd) == ALL_ENVIRONMENT)
-    STATE_ENVIRONMENT (sd) = (WITH_ENVIRONMENT != ALL_ENVIRONMENT ?
-			      WITH_ENVIRONMENT : USER_ENVIRONMENT);
-
-
+    STATE_ENVIRONMENT (sd) = DEFAULT_ENVIRONMENT;
+  
+  
   /* set the alignment */
 #if (WITH_TREE_PROPERTIES)
   if (current_alignment == 0)
     current_alignment =
-      (tree_find_boolean_property (root, "/openprom/options/strict-alignment?")
+      (tree_find_boolean_property(root, "/openprom/options/strict-alignment?")
        ? STRICT_ALIGNMENT
        : NONSTRICT_ALIGNMENT);
 #endif
@@ -253,7 +265,7 @@ sim_config (SIM_DESC sd)
     current_alignment = WITH_ALIGNMENT;
   if (current_alignment == 0)
     current_alignment = WITH_DEFAULT_ALIGNMENT;
-
+  
   /* verify the alignment */
   if (CURRENT_ALIGNMENT == 0)
     {
@@ -267,13 +279,13 @@ sim_config (SIM_DESC sd)
 		      config_alignment_to_a (current_alignment));
       return SIM_RC_FAIL;
     }
-
+  
 #if defined (WITH_FLOATING_POINT)
-
+  
   /* set the floating point */
   if (current_floating_point == 0)
     current_floating_point = WITH_FLOATING_POINT;
-
+  
   /* verify the floating point */
   if (CURRENT_FLOATING_POINT == 0)
     {
@@ -287,7 +299,7 @@ sim_config (SIM_DESC sd)
 		      config_alignment_to_a (current_floating_point));
       return SIM_RC_FAIL;
     }
-
+  
 #endif
   return SIM_RC_OK;
 }
@@ -296,19 +308,26 @@ sim_config (SIM_DESC sd)
 void
 print_sim_config (SIM_DESC sd)
 {
-  sim_io_printf (sd, "WITH_TARGET_BYTE_ORDER = %s\n",
+#if defined (__GNUC__) && defined (__VERSION__)
+  sim_io_printf (sd, "Compiled by GCC %s on %s %s\n",
+			  __VERSION__, __DATE__, __TIME__);
+#else
+  sim_io_printf (sd, "Compiled on %s %s\n", __DATE__, __TIME__);
+#endif
+
+  sim_io_printf (sd, "WITH_TARGET_BYTE_ORDER   = %s\n",
 		 config_byte_order_to_a (WITH_TARGET_BYTE_ORDER));
 
-  sim_io_printf (sd, "WITH_DEFAULT_TARGET_BYTE_ORDER = %s\n",
+  sim_io_printf (sd, "WITH_DEFAULT_TARGET_BYTE_ORDER   = %s\n",
 		 config_byte_order_to_a (WITH_DEFAULT_TARGET_BYTE_ORDER));
 
-  sim_io_printf (sd, "HOST_BYTE_ORDER = %s\n",
-		 config_byte_order_to_a (HOST_BYTE_ORDER));
+  sim_io_printf (sd, "WITH_HOST_BYTE_ORDER     = %s\n",
+		 config_byte_order_to_a (WITH_HOST_BYTE_ORDER));
 
-  sim_io_printf (sd, "WITH_STDIO = %s\n",
+  sim_io_printf (sd, "WITH_STDIO               = %s\n",
 		 config_stdio_to_a (WITH_STDIO));
 
-  sim_io_printf (sd, "WITH_TARGET_WORD_MSB = %d\n",
+  sim_io_printf (sd, "WITH_TARGET_WORD_MSB     = %d\n",
 		 WITH_TARGET_WORD_MSB);
 
   sim_io_printf (sd, "WITH_TARGET_WORD_BITSIZE = %d\n",
@@ -350,9 +369,9 @@ print_sim_config (SIM_DESC sd)
 #if defined (WITH_RESERVED_BITS)
   sim_io_printf (sd, "WITH_RESERVED_BITS = %d\n", WITH_RESERVED_BITS);
 #endif
-
+		 
 #if defined (WITH_PROFILE)
   sim_io_printf (sd, "WITH_PROFILE = %d\n", WITH_PROFILE);
 #endif
-
+		 
 }

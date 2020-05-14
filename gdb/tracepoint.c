@@ -1,12 +1,13 @@
 /* Tracing functionality for remote targets in custom GDB protocol
 
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright 1997, 1998, 1999, 2000, 2001, 2002 Free Software
+   Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,10 +16,11 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
-#include "arch-utils.h"
 #include "symtab.h"
 #include "frame.h"
 #include "gdbtypes.h"
@@ -26,42 +28,32 @@
 #include "gdbcmd.h"
 #include "value.h"
 #include "target.h"
-#include "target-dcache.h"
 #include "language.h"
+#include "gdb_string.h"
 #include "inferior.h"
-#include "breakpoint.h"
 #include "tracepoint.h"
+#include "remote.h"
 #include "linespec.h"
 #include "regcache.h"
 #include "completer.h"
-#include "block.h"
-#include "dictionary.h"
-#include "observable.h"
-#include "user-regs.h"
-#include "valprint.h"
-#include "gdbcore.h"
-#include "objfiles.h"
-#include "filenames.h"
-#include "gdbthread.h"
-#include "stack.h"
-#include "remote.h"
-#include "source.h"
+#include "gdb-events.h"
+
 #include "ax.h"
 #include "ax-gdb.h"
-#include "memrange.h"
-#include "cli/cli-utils.h"
-#include "probe.h"
-#include "gdbsupport/filestuff.h"
-#include "gdbsupport/rsp-low.h"
-#include "tracefile.h"
-#include "location.h"
-#include <algorithm>
-#include "cli/cli-style.h"
 
+/* readline include files */
+#include <readline/readline.h>
+#include <readline/history.h>
+
+/* readline defines this.  */
+#undef savestring
+
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 
-/* Maximum length of an agent aexpression.
-   This accounts for the fact that packets are limited to 400 bytes
+/* maximum length of an agent aexpression.
+   this accounts for the fact that packets are limited to 400 bytes
    (which includes everything -- including the checksum), and assumes
    the worst case of maximum length for each of the pieces of a
    continuation packet.
@@ -70,10 +62,27 @@
    large.  (400 - 31)/2 == 184 */
 #define MAX_AGENT_EXPR_LEN	184
 
-/* A hook used to notify the UI of tracepoint operations.  */
 
-void (*deprecated_trace_find_hook) (char *arg, int from_tty);
-void (*deprecated_trace_start_stop_hook) (int start, int from_tty);
+extern void (*readline_begin_hook) (char *, ...);
+extern char *(*readline_hook) (char *);
+extern void (*readline_end_hook) (void);
+extern void x_command (char *, int);
+extern int addressprint;	/* Print machine addresses? */
+
+/* GDB commands implemented in other modules:
+ */  
+
+extern void output_command (char *, int);
+extern void registers_info (char *, int);
+extern void args_info (char *, int);
+extern void locals_info (char *, int);
+
+
+/* If this definition isn't overridden by the header files, assume
+   that isatty and fileno exist on this system.  */
+#ifndef ISATTY
+#define ISATTY(FP)	(isatty (fileno (FP)))
+#endif
 
 /* 
    Tracepoint.c:
@@ -103,15 +112,11 @@ void (*deprecated_trace_start_stop_hook) (int start, int from_tty);
 
 /* ======= Important global variables: ======= */
 
-/* The list of all trace state variables.  We don't retain pointers to
-   any of these for any reason - API is by name or number only - so it
-   works to have a vector of objects.  */
+/* Chain of all tracepoints defined.  */
+struct tracepoint *tracepoint_chain;
 
-static std::vector<trace_state_variable> tvariables;
-
-/* The next integer to assign to a variable.  */
-
-static int next_tsv_number = 1;
+/* Number of last tracepoint made.  */
+static int tracepoint_count;
 
 /* Number of last traceframe collected.  */
 static int traceframe_number;
@@ -119,74 +124,110 @@ static int traceframe_number;
 /* Tracepoint for last traceframe collected.  */
 static int tracepoint_number;
 
-/* The traceframe info of the current traceframe.  NULL if we haven't
-   yet attempted to fetch it, or if the target does not support
-   fetching this object, or if we're not inspecting a traceframe
-   presently.  */
-static traceframe_info_up current_traceframe_info;
+/* Symbol for function for last traceframe collected */
+static struct symbol *traceframe_fun;
 
-/* Tracing command lists.  */
+/* Symtab and line for last traceframe collected */
+static struct symtab_and_line traceframe_sal;
+
+/* Tracing command lists */
 static struct cmd_list_element *tfindlist;
 
-/* List of expressions to collect by default at each tracepoint hit.  */
-char *default_collect;
-
-static bool disconnected_tracing;
-
-/* This variable controls whether we ask the target for a linear or
-   circular trace buffer.  */
-
-static bool circular_trace_buffer;
-
-/* This variable is the requested trace buffer size, or -1 to indicate
-   that we don't care and leave it up to the target to set a size.  */
-
-static int trace_buffer_size = -1;
-
-/* Textual notes applying to the current and/or future trace runs.  */
-
-char *trace_user = NULL;
-
-/* Textual notes applying to the current and/or future trace runs.  */
-
-char *trace_notes = NULL;
-
-/* Textual notes applying to the stopping of a trace.  */
-
-char *trace_stop_notes = NULL;
+/* ======= Important command functions: ======= */
+static void trace_command (char *, int);
+static void tracepoints_info (char *, int);
+static void delete_trace_command (char *, int);
+static void enable_trace_command (char *, int);
+static void disable_trace_command (char *, int);
+static void trace_pass_command (char *, int);
+static void trace_actions_command (char *, int);
+static void trace_start_command (char *, int);
+static void trace_stop_command (char *, int);
+static void trace_status_command (char *, int);
+static void trace_find_command (char *, int);
+static void trace_find_pc_command (char *, int);
+static void trace_find_tracepoint_command (char *, int);
+static void trace_find_line_command (char *, int);
+static void trace_find_range_command (char *, int);
+static void trace_find_outside_command (char *, int);
+static void tracepoint_save_command (char *, int);
+static void trace_dump_command (char *, int);
 
 /* support routines */
+static void trace_mention (struct tracepoint *);
 
 struct collection_list;
-static char *mem2hex (gdb_byte *, char *, int);
+static void add_aexpr (struct collection_list *, struct agent_expr *);
+static unsigned char *mem2hex (unsigned char *, unsigned char *, int);
+static void add_register (struct collection_list *collection,
+			  unsigned int regno);
+static struct cleanup *make_cleanup_free_actions (struct tracepoint *t);
+static void free_actions_list (char **actions_list);
+static void free_actions_list_cleanup_wrapper (void *);
 
-static counted_command_line all_tracepoint_actions (struct breakpoint *);
+extern void _initialize_tracepoint (void);
 
-static struct trace_status trace_status;
-
-const char *stop_reason_names[] = {
-  "tunknown",
-  "tnotrun",
-  "tstop",
-  "tfull",
-  "tdisconnected",
-  "tpasscount",
-  "terror"
-};
-
-struct trace_status *
-current_trace_status (void)
+/* Utility: returns true if "target remote" */
+static int
+target_is_remote (void)
 {
-  return &trace_status;
+  if (current_target.to_shortname &&
+      strcmp (current_target.to_shortname, "remote") == 0)
+    return 1;
+  else
+    return 0;
 }
 
-/* Free and clear the traceframe info cache of the current
-   traceframe.  */
-
+/* Utility: generate error from an incoming stub packet.  */
 static void
-clear_traceframe_info (void)
+trace_error (char *buf)
 {
-  current_traceframe_info = NULL;
+  if (*buf++ != 'E')
+    return;			/* not an error msg */
+  switch (*buf)
+    {
+    case '1':			/* malformed packet error */
+      if (*++buf == '0')	/*   general case: */
+	error ("tracepoint.c: error in outgoing packet.");
+      else
+	error ("tracepoint.c: error in outgoing packet at field #%ld.",
+	       strtol (buf, NULL, 16));
+    case '2':
+      error ("trace API error 0x%s.", ++buf);
+    default:
+      error ("Target returns error code '%s'.", buf);
+    }
+}
+
+/* Utility: wait for reply from stub, while accepting "O" packets */
+static char *
+remote_get_noisy_reply (char *buf,
+			long sizeof_buf)
+{
+  do				/* loop on reply from remote stub */
+    {
+      QUIT;			/* allow user to bail out with ^C */
+      getpkt (buf, sizeof_buf, 0);
+      if (buf[0] == 0)
+	error ("Target does not support this command.");
+      else if (buf[0] == 'E')
+	trace_error (buf);
+      else if (buf[0] == 'O' &&
+	       buf[1] != 'K')
+	remote_console_output (buf + 1);	/* 'O' message from stub */
+      else
+	return buf;		/* here's the actual reply */
+    }
+  while (1);
+}
+
+/* Set tracepoint count to NUM.  */
+static void
+set_tracepoint_count (int num)
+{
+  tracepoint_count = num;
+  set_internalvar (lookup_internalvar ("tpnum"),
+		   value_from_longest (builtin_type_int, (LONGEST) num));
 }
 
 /* Set traceframe number to NUM.  */
@@ -194,7 +235,8 @@ static void
 set_traceframe_num (int num)
 {
   traceframe_number = num;
-  set_internalvar_integer (lookup_internalvar ("trace_frame"), num);
+  set_internalvar (lookup_internalvar ("trace_frame"),
+		   value_from_longest (builtin_type_int, (LONGEST) num));
 }
 
 /* Set tracepoint number to NUM.  */
@@ -202,292 +244,513 @@ static void
 set_tracepoint_num (int num)
 {
   tracepoint_number = num;
-  set_internalvar_integer (lookup_internalvar ("tracepoint"), num);
+  set_internalvar (lookup_internalvar ("tracepoint"),
+		   value_from_longest (builtin_type_int, (LONGEST) num));
 }
 
 /* Set externally visible debug variables for querying/printing
-   the traceframe context (line, function, file).  */
+   the traceframe context (line, function, file) */
 
 static void
-set_traceframe_context (struct frame_info *trace_frame)
+set_traceframe_context (CORE_ADDR trace_pc)
 {
-  CORE_ADDR trace_pc;
-  struct symbol *traceframe_fun;
-  symtab_and_line traceframe_sal;
+  static struct type *func_string, *file_string;
+  static struct type *func_range, *file_range;
+  struct value *func_val;
+  struct value *file_val;
+  static struct type *charstar;
+  int len;
 
-  /* Save as globals for internal use.  */
-  if (trace_frame != NULL
-      && get_frame_pc_if_available (trace_frame, &trace_pc))
+  if (charstar == (struct type *) NULL)
+    charstar = lookup_pointer_type (builtin_type_char);
+
+  if (trace_pc == -1)		/* cease debugging any trace buffers */
     {
-      traceframe_sal = find_pc_line (trace_pc, 0);
-      traceframe_fun = find_pc_function (trace_pc);
-
-      /* Save linenumber as "$trace_line", a debugger variable visible to
-	 users.  */
-      set_internalvar_integer (lookup_internalvar ("trace_line"),
-			       traceframe_sal.line);
+      traceframe_fun = 0;
+      traceframe_sal.pc = traceframe_sal.line = 0;
+      traceframe_sal.symtab = NULL;
+      set_internalvar (lookup_internalvar ("trace_func"),
+		       value_from_pointer (charstar, (LONGEST) 0));
+      set_internalvar (lookup_internalvar ("trace_file"),
+		       value_from_pointer (charstar, (LONGEST) 0));
+      set_internalvar (lookup_internalvar ("trace_line"),
+		       value_from_pointer (builtin_type_int, (LONGEST) - 1));
+      return;
     }
+
+  /* save as globals for internal use */
+  traceframe_sal = find_pc_line (trace_pc, 0);
+  traceframe_fun = find_pc_function (trace_pc);
+
+  /* save linenumber as "$trace_line", a debugger variable visible to users */
+  set_internalvar (lookup_internalvar ("trace_line"),
+		   value_from_longest (builtin_type_int,
+				       (LONGEST) traceframe_sal.line));
+
+  /* save func name as "$trace_func", a debugger variable visible to users */
+  if (traceframe_fun == NULL ||
+      SYMBOL_NAME (traceframe_fun) == NULL)
+    set_internalvar (lookup_internalvar ("trace_func"),
+		     value_from_pointer (charstar, (LONGEST) 0));
   else
     {
-      traceframe_fun = NULL;
-      set_internalvar_integer (lookup_internalvar ("trace_line"), -1);
+      len = strlen (SYMBOL_NAME (traceframe_fun));
+      func_range = create_range_type (func_range,
+				      builtin_type_int, 0, len - 1);
+      func_string = create_array_type (func_string,
+				       builtin_type_char, func_range);
+      func_val = allocate_value (func_string);
+      VALUE_TYPE (func_val) = func_string;
+      memcpy (VALUE_CONTENTS_RAW (func_val),
+	      SYMBOL_NAME (traceframe_fun),
+	      len);
+      func_val->modifiable = 0;
+      set_internalvar (lookup_internalvar ("trace_func"), func_val);
     }
 
-  /* Save func name as "$trace_func", a debugger variable visible to
-     users.  */
-  if (traceframe_fun == NULL
-      || traceframe_fun->linkage_name () == NULL)
-    clear_internalvar (lookup_internalvar ("trace_func"));
+  /* save file name as "$trace_file", a debugger variable visible to users */
+  if (traceframe_sal.symtab == NULL ||
+      traceframe_sal.symtab->filename == NULL)
+    set_internalvar (lookup_internalvar ("trace_file"),
+		     value_from_pointer (charstar, (LONGEST) 0));
   else
-    set_internalvar_string (lookup_internalvar ("trace_func"),
-			    traceframe_fun->linkage_name ());
-
-  /* Save file name as "$trace_file", a debugger variable visible to
-     users.  */
-  if (traceframe_sal.symtab == NULL)
-    clear_internalvar (lookup_internalvar ("trace_file"));
-  else
-    set_internalvar_string (lookup_internalvar ("trace_file"),
-			symtab_to_filename_for_display (traceframe_sal.symtab));
-}
-
-/* Create a new trace state variable with the given name.  */
-
-struct trace_state_variable *
-create_trace_state_variable (const char *name)
-{
-  tvariables.emplace_back (name, next_tsv_number++);
-  return &tvariables.back ();
-}
-
-/* Look for a trace state variable of the given name.  */
-
-struct trace_state_variable *
-find_trace_state_variable (const char *name)
-{
-  for (trace_state_variable &tsv : tvariables)
-    if (tsv.name == name)
-      return &tsv;
-
-  return NULL;
-}
-
-/* Look for a trace state variable of the given number.  Return NULL if
-   not found.  */
-
-struct trace_state_variable *
-find_trace_state_variable_by_number (int number)
-{
-  for (trace_state_variable &tsv : tvariables)
-    if (tsv.number == number)
-      return &tsv;
-
-  return NULL;
-}
-
-static void
-delete_trace_state_variable (const char *name)
-{
-  for (auto it = tvariables.begin (); it != tvariables.end (); it++)
-    if (it->name == name)
-      {
-	gdb::observers::tsv_deleted.notify (&*it);
-	tvariables.erase (it);
-	return;
-      }
-
-  warning (_("No trace variable named \"$%s\", not deleting"), name);
-}
-
-/* Throws an error if NAME is not valid syntax for a trace state
-   variable's name.  */
-
-void
-validate_trace_state_variable_name (const char *name)
-{
-  const char *p;
-
-  if (*name == '\0')
-    error (_("Must supply a non-empty variable name"));
-
-  /* All digits in the name is reserved for value history
-     references.  */
-  for (p = name; isdigit (*p); p++)
-    ;
-  if (*p == '\0')
-    error (_("$%s is not a valid trace state variable name"), name);
-
-  for (p = name; isalnum (*p) || *p == '_'; p++)
-    ;
-  if (*p != '\0')
-    error (_("$%s is not a valid trace state variable name"), name);
-}
-
-/* The 'tvariable' command collects a name and optional expression to
-   evaluate into an initial value.  */
-
-static void
-trace_variable_command (const char *args, int from_tty)
-{
-  LONGEST initval = 0;
-  struct trace_state_variable *tsv;
-  const char *name_start, *p;
-
-  if (!args || !*args)
-    error_no_arg (_("Syntax is $NAME [ = EXPR ]"));
-
-  /* Only allow two syntaxes; "$name" and "$name=value".  */
-  p = skip_spaces (args);
-
-  if (*p++ != '$')
-    error (_("Name of trace variable should start with '$'"));
-
-  name_start = p;
-  while (isalnum (*p) || *p == '_')
-    p++;
-  std::string name (name_start, p - name_start);
-
-  p = skip_spaces (p);
-  if (*p != '=' && *p != '\0')
-    error (_("Syntax must be $NAME [ = EXPR ]"));
-
-  validate_trace_state_variable_name (name.c_str ());
-
-  if (*p == '=')
-    initval = value_as_long (parse_and_eval (++p));
-
-  /* If the variable already exists, just change its initial value.  */
-  tsv = find_trace_state_variable (name.c_str ());
-  if (tsv)
     {
-      if (tsv->initial_value != initval)
+      len = strlen (traceframe_sal.symtab->filename);
+      file_range = create_range_type (file_range,
+				      builtin_type_int, 0, len - 1);
+      file_string = create_array_type (file_string,
+				       builtin_type_char, file_range);
+      file_val = allocate_value (file_string);
+      VALUE_TYPE (file_val) = file_string;
+      memcpy (VALUE_CONTENTS_RAW (file_val),
+	      traceframe_sal.symtab->filename,
+	      len);
+      file_val->modifiable = 0;
+      set_internalvar (lookup_internalvar ("trace_file"), file_val);
+    }
+}
+
+/* Low level routine to set a tracepoint.
+   Returns the tracepoint object so caller can set other things.
+   Does not set the tracepoint number!
+   Does not print anything.
+
+   ==> This routine should not be called if there is a chance of later
+   error(); otherwise it leaves a bogus tracepoint on the chain.  Validate
+   your arguments BEFORE calling this routine!  */
+
+static struct tracepoint *
+set_raw_tracepoint (struct symtab_and_line sal)
+{
+  register struct tracepoint *t, *tc;
+  struct cleanup *old_chain;
+
+  t = (struct tracepoint *) xmalloc (sizeof (struct tracepoint));
+  old_chain = make_cleanup (xfree, t);
+  memset (t, 0, sizeof (*t));
+  t->address = sal.pc;
+  if (sal.symtab == NULL)
+    t->source_file = NULL;
+  else
+    t->source_file = savestring (sal.symtab->filename,
+				 strlen (sal.symtab->filename));
+
+  t->section = sal.section;
+  t->language = current_language->la_language;
+  t->input_radix = input_radix;
+  t->line_number = sal.line;
+  t->enabled_p = 1;
+  t->next = 0;
+  t->step_count = 0;
+  t->pass_count = 0;
+  t->addr_string = NULL;
+
+  /* Add this tracepoint to the end of the chain
+     so that a list of tracepoints will come out in order
+     of increasing numbers.  */
+
+  tc = tracepoint_chain;
+  if (tc == 0)
+    tracepoint_chain = t;
+  else
+    {
+      while (tc->next)
+	tc = tc->next;
+      tc->next = t;
+    }
+  discard_cleanups (old_chain);
+  return t;
+}
+
+/* Set a tracepoint according to ARG (function, linenum or *address) */
+static void
+trace_command (char *arg, int from_tty)
+{
+  char **canonical = (char **) NULL;
+  struct symtabs_and_lines sals;
+  struct symtab_and_line sal;
+  struct tracepoint *t;
+  char *addr_start = 0, *addr_end = 0;
+  int i;
+
+  if (!arg || !*arg)
+    error ("trace command requires an argument");
+
+  if (from_tty && info_verbose)
+    printf_filtered ("TRACE %s\n", arg);
+
+  addr_start = arg;
+  sals = decode_line_1 (&arg, 1, (struct symtab *) NULL, 0, &canonical);
+  addr_end = arg;
+  if (!sals.nelts)
+    return;			/* ??? Presumably decode_line_1 has already warned? */
+
+  /* Resolve all line numbers to PC's */
+  for (i = 0; i < sals.nelts; i++)
+    resolve_sal_pc (&sals.sals[i]);
+
+  /* Now set all the tracepoints.  */
+  for (i = 0; i < sals.nelts; i++)
+    {
+      sal = sals.sals[i];
+
+      t = set_raw_tracepoint (sal);
+      set_tracepoint_count (tracepoint_count + 1);
+      t->number = tracepoint_count;
+
+      /* If a canonical line spec is needed use that instead of the
+         command string.  */
+      if (canonical != (char **) NULL && canonical[i] != NULL)
+	t->addr_string = canonical[i];
+      else if (addr_start)
+	t->addr_string = savestring (addr_start, addr_end - addr_start);
+
+      trace_mention (t);
+    }
+
+  if (sals.nelts > 1)
+    {
+      printf_filtered ("Multiple tracepoints were set.\n");
+      printf_filtered ("Use 'delete trace' to delete unwanted tracepoints.\n");
+    }
+}
+
+/* Tell the user we have just set a tracepoint TP. */
+
+static void
+trace_mention (struct tracepoint *tp)
+{
+  printf_filtered ("Tracepoint %d", tp->number);
+
+  if (addressprint || (tp->source_file == NULL))
+    {
+      printf_filtered (" at ");
+      print_address_numeric (tp->address, 1, gdb_stdout);
+    }
+  if (tp->source_file)
+    printf_filtered (": file %s, line %d.",
+		     tp->source_file, tp->line_number);
+
+  printf_filtered ("\n");
+}
+
+/* Print information on tracepoint number TPNUM_EXP, or all if omitted.  */
+
+static void
+tracepoints_info (char *tpnum_exp, int from_tty)
+{
+  struct tracepoint *t;
+  struct action_line *action;
+  int found_a_tracepoint = 0;
+  char wrap_indent[80];
+  struct symbol *sym;
+  int tpnum = -1;
+
+  if (tpnum_exp)
+    tpnum = parse_and_eval_long (tpnum_exp);
+
+  ALL_TRACEPOINTS (t)
+    if (tpnum == -1 || tpnum == t->number)
+    {
+      extern int addressprint;	/* print machine addresses? */
+
+      if (!found_a_tracepoint++)
 	{
-	  tsv->initial_value = initval;
-	  gdb::observers::tsv_modified.notify (tsv);
+	  printf_filtered ("Num Enb ");
+	  if (addressprint)
+	    {
+	      if (TARGET_ADDR_BIT <= 32)
+		printf_filtered ("Address    ");
+	      else
+		printf_filtered ("Address            ");
+	    }
+	  printf_filtered ("PassC StepC What\n");
 	}
-      printf_filtered (_("Trace state variable $%s "
-			 "now has initial value %s.\n"),
-		       tsv->name.c_str (), plongest (tsv->initial_value));
-      return;
-    }
+      strcpy (wrap_indent, "                           ");
+      if (addressprint)
+	{
+	  if (TARGET_ADDR_BIT <= 32)
+	    strcat (wrap_indent, "           ");
+	  else
+	    strcat (wrap_indent, "                   ");
+	}
 
-  /* Create a new variable.  */
-  tsv = create_trace_state_variable (name.c_str ());
-  tsv->initial_value = initval;
+      printf_filtered ("%-3d %-3s ", t->number,
+		       t->enabled_p ? "y" : "n");
+      if (addressprint)
+	{
+	  char *tmp;
 
-  gdb::observers::tsv_created.notify (tsv);
+	  if (TARGET_ADDR_BIT <= 32)
+	    tmp = local_hex_string_custom (t->address
+					   & (CORE_ADDR) 0xffffffff, 
+					   "08l");
+	  else
+	    tmp = local_hex_string_custom (t->address, "016l");
 
-  printf_filtered (_("Trace state variable $%s "
-		     "created, with initial value %s.\n"),
-		   tsv->name.c_str (), plongest (tsv->initial_value));
-}
+	  printf_filtered ("%s ", tmp);
+	}
+      printf_filtered ("%-5d %-5ld ", t->pass_count, t->step_count);
 
-static void
-delete_trace_variable_command (const char *args, int from_tty)
-{
-  if (args == NULL)
-    {
-      if (query (_("Delete all trace state variables? ")))
-	tvariables.clear ();
-      dont_repeat ();
-      gdb::observers::tsv_deleted.notify (NULL);
-      return;
-    }
-
-  gdb_argv argv (args);
-
-  for (char *arg : argv)
-    {
-      if (*arg == '$')
-	delete_trace_state_variable (arg + 1);
+      if (t->source_file)
+	{
+	  sym = find_pc_sect_function (t->address, t->section);
+	  if (sym)
+	    {
+	      fputs_filtered ("in ", gdb_stdout);
+	      fputs_filtered (SYMBOL_SOURCE_NAME (sym), gdb_stdout);
+	      wrap_here (wrap_indent);
+	      fputs_filtered (" at ", gdb_stdout);
+	    }
+	  fputs_filtered (t->source_file, gdb_stdout);
+	  printf_filtered (":%d", t->line_number);
+	}
       else
-	warning (_("Name \"%s\" not prefixed with '$', ignoring"), arg);
+	print_address_symbolic (t->address, gdb_stdout, demangle, " ");
+
+      printf_filtered ("\n");
+      if (t->actions)
+	{
+	  printf_filtered ("  Actions for tracepoint %d: \n", t->number);
+	  for (action = t->actions; action; action = action->next)
+	    {
+	      printf_filtered ("\t%s\n", action->action);
+	    }
+	}
+    }
+  if (!found_a_tracepoint)
+    {
+      if (tpnum == -1)
+	printf_filtered ("No tracepoints.\n");
+      else
+	printf_filtered ("No tracepoint number %d.\n", tpnum);
+    }
+}
+
+/* Optimization: the code to parse an enable, disable, or delete TP command
+   is virtually identical except for whether it performs an enable, disable,
+   or delete.  Therefore I've combined them into one function with an opcode.
+ */
+enum tracepoint_opcode
+{
+  enable_op,
+  disable_op,
+  delete_op
+};
+
+/* This function implements enable, disable and delete commands. */
+static void
+tracepoint_operation (struct tracepoint *t, int from_tty,
+		      enum tracepoint_opcode opcode)
+{
+  struct tracepoint *t2;
+
+  if (t == NULL)	/* no tracepoint operand */
+    return;
+
+  switch (opcode)
+    {
+    case enable_op:
+      t->enabled_p = 1;
+      tracepoint_modify_event (t->number);
+      break;
+    case disable_op:
+      t->enabled_p = 0;
+      tracepoint_modify_event (t->number);
+      break;
+    case delete_op:
+      if (tracepoint_chain == t)
+	tracepoint_chain = t->next;
+
+      ALL_TRACEPOINTS (t2)
+	if (t2->next == t)
+	{
+	  tracepoint_delete_event (t2->number);
+	  t2->next = t->next;
+	  break;
+	}
+
+      if (t->addr_string)
+	xfree (t->addr_string);
+      if (t->source_file)
+	xfree (t->source_file);
+      if (t->actions)
+	free_actions (t);
+
+      xfree (t);
+      break;
+    }
+}
+
+/* Utility: parse a tracepoint number and look it up in the list.
+   If MULTI_P is true, there might be a range of tracepoints in ARG.
+   if OPTIONAL_P is true, then if the argument is missing, the most
+   recent tracepoint (tracepoint_count) is returned.  */
+struct tracepoint *
+get_tracepoint_by_number (char **arg, int multi_p, int optional_p)
+{
+  struct tracepoint *t;
+  int tpnum;
+  char *instring = arg == NULL ? NULL : *arg;
+
+  if (arg == NULL || *arg == NULL || ! **arg)
+    {
+      if (optional_p)
+	tpnum = tracepoint_count;
+      else
+	error_no_arg ("tracepoint number");
+    }
+  else
+    tpnum = multi_p ? get_number_or_range (arg) : get_number (arg);
+
+  if (tpnum <= 0)
+    {
+      if (instring && *instring)
+	printf_filtered ("bad tracepoint number at or near '%s'\n", instring);
+      else
+	printf_filtered ("Tracepoint argument missing and no previous tracepoint\n");
+      return NULL;
     }
 
-  dont_repeat ();
+  ALL_TRACEPOINTS (t)
+    if (t->number == tpnum)
+    {
+      return t;
+    }
+
+  /* FIXME: if we are in the middle of a range we don't want to give
+     a message.  The current interface to get_number_or_range doesn't
+     allow us to discover this.  */
+  printf_unfiltered ("No tracepoint number %d.\n", tpnum);
+  return NULL;
 }
 
-void
-tvariables_info_1 (void)
+/* Utility: parse a list of tracepoint numbers, and call a func for each. */
+static void
+map_args_over_tracepoints (char *args, int from_tty,
+			   enum tracepoint_opcode opcode)
 {
-  struct ui_out *uiout = current_uiout;
+  struct tracepoint *t, *tmp;
 
-  /* Try to acquire values from the target.  */
-  for (trace_state_variable &tsv : tvariables)
-    tsv.value_known
-      = target_get_trace_state_variable_value (tsv.number, &tsv.value);
-
-  {
-    ui_out_emit_table table_emitter (uiout, 3, tvariables.size (),
-				     "trace-variables");
-    uiout->table_header (15, ui_left, "name", "Name");
-    uiout->table_header (11, ui_left, "initial", "Initial");
-    uiout->table_header (11, ui_left, "current", "Current");
-
-    uiout->table_body ();
-
-    for (const trace_state_variable &tsv : tvariables)
+  if (args == 0 || *args == 0)	/* do them all */
+    ALL_TRACEPOINTS_SAFE (t, tmp)
+      tracepoint_operation (t, from_tty, opcode);
+  else
+    while (*args)
       {
-	const char *c;
-
-	ui_out_emit_tuple tuple_emitter (uiout, "variable");
-
-	uiout->field_string ("name", std::string ("$") + tsv.name);
-	uiout->field_string ("initial", plongest (tsv.initial_value));
-
-	ui_file_style style;
-	if (tsv.value_known)
-	  c = plongest (tsv.value);
-	else if (uiout->is_mi_like_p ())
-	  /* For MI, we prefer not to use magic string constants, but rather
-	     omit the field completely.  The difference between unknown and
-	     undefined does not seem important enough to represent.  */
-	  c = NULL;
-	else if (current_trace_status ()->running || traceframe_number >= 0)
-	  {
-	    /* The value is/was defined, but we don't have it.  */
-	    c = "<unknown>";
-	    style = metadata_style.style ();
-	  }
-	else
-	  {
-	    /* It is not meaningful to ask about the value.  */
-	    c = "<undefined>";
-	    style = metadata_style.style ();
-	  }
-	if (c)
-	  uiout->field_string ("current", c, style);
-	uiout->text ("\n");
+	QUIT;			/* give user option to bail out with ^C */
+	t = get_tracepoint_by_number (&args, 1, 0);
+	tracepoint_operation (t, from_tty, opcode);
+	while (*args == ' ' || *args == '\t')
+	  args++;
       }
-  }
-
-  if (tvariables.empty ())
-    uiout->text (_("No trace state variables.\n"));
 }
 
-/* List all the trace state variables.  */
+/* The 'enable trace' command enables tracepoints.  Not supported by all targets.  */
+static void
+enable_trace_command (char *args, int from_tty)
+{
+  dont_repeat ();
+  map_args_over_tracepoints (args, from_tty, enable_op);
+}
+
+/* The 'disable trace' command enables tracepoints.  Not supported by all targets.  */
+static void
+disable_trace_command (char *args, int from_tty)
+{
+  dont_repeat ();
+  map_args_over_tracepoints (args, from_tty, disable_op);
+}
+
+/* Remove a tracepoint (or all if no argument) */
+static void
+delete_trace_command (char *args, int from_tty)
+{
+  dont_repeat ();
+  if (!args || !*args)		/* No args implies all tracepoints; */
+    if (from_tty)		/* confirm only if from_tty... */
+      if (tracepoint_chain)	/* and if there are tracepoints to delete! */
+	if (!query ("Delete all tracepoints? "))
+	  return;
+
+  map_args_over_tracepoints (args, from_tty, delete_op);
+}
+
+/* Set passcount for tracepoint.
+
+   First command argument is passcount, second is tracepoint number.
+   If tracepoint number omitted, apply to most recently defined.
+   Also accepts special argument "all".  */
 
 static void
-info_tvariables_command (const char *args, int from_tty)
+trace_pass_command (char *args, int from_tty)
 {
-  tvariables_info_1 ();
-}
+  struct tracepoint *t1 = (struct tracepoint *) -1, *t2;
+  unsigned int count;
+  int all = 0;
 
-/* Stash definitions of tsvs into the given file.  */
+  if (args == 0 || *args == 0)
+    error ("passcount command requires an argument (count + optional TP num)");
 
-void
-save_trace_state_variables (struct ui_file *fp)
-{
-  for (const trace_state_variable &tsv : tvariables)
+  count = strtoul (args, &args, 10);	/* count comes first, then TP num */
+
+  while (*args && isspace ((int) *args))
+    args++;
+
+  if (*args && strncasecmp (args, "all", 3) == 0)
     {
-      fprintf_unfiltered (fp, "tvariable $%s", tsv.name.c_str ());
-      if (tsv.initial_value)
-	fprintf_unfiltered (fp, " = %s", plongest (tsv.initial_value));
-      fprintf_unfiltered (fp, "\n");
+      args += 3;			/* skip special argument "all" */
+      all = 1;
+      if (*args)
+	error ("Junk at end of arguments.");
     }
+  else
+    t1 = get_tracepoint_by_number (&args, 1, 1);
+
+  do
+    {
+      if (t1)
+	{
+	  ALL_TRACEPOINTS (t2)
+	    if (t1 == (struct tracepoint *) -1 || t1 == t2)
+	      {
+		t2->pass_count = count;
+		tracepoint_modify_event (t2->number);
+		if (from_tty)
+		  printf_filtered ("Setting tracepoint %d's passcount to %d\n",
+				   t2->number, count);
+	      }
+	  if (! all && *args)
+	    t1 = get_tracepoint_by_number (&args, 1, 0);
+	}
+    }
+  while (*args);
 }
 
 /* ACTIONS functions: */
+
+/* Prototypes for action-parsing utility commands  */
+static void read_actions (struct tracepoint *);
 
 /* The three functions:
    collect_pseudocommand, 
@@ -499,1735 +762,1206 @@ save_trace_state_variables (struct ui_file *fp)
    which is always an error.  */
 
 static void
-end_actions_pseudocommand (const char *args, int from_tty)
+end_actions_pseudocommand (char *args, int from_tty)
 {
-  error (_("This command cannot be used at the top level."));
+  error ("This command cannot be used at the top level.");
 }
 
 static void
-while_stepping_pseudocommand (const char *args, int from_tty)
+while_stepping_pseudocommand (char *args, int from_tty)
 {
-  error (_("This command can only be used in a tracepoint actions list."));
+  error ("This command can only be used in a tracepoint actions list.");
 }
 
 static void
-collect_pseudocommand (const char *args, int from_tty)
+collect_pseudocommand (char *args, int from_tty)
 {
-  error (_("This command can only be used in a tracepoint actions list."));
-}
-
-static void
-teval_pseudocommand (const char *args, int from_tty)
-{
-  error (_("This command can only be used in a tracepoint actions list."));
-}
-
-/* Parse any collection options, such as /s for strings.  */
-
-const char *
-decode_agent_options (const char *exp, int *trace_string)
-{
-  struct value_print_options opts;
-
-  *trace_string = 0;
-
-  if (*exp != '/')
-    return exp;
-
-  /* Call this to borrow the print elements default for collection
-     size.  */
-  get_user_print_options (&opts);
-
-  exp++;
-  if (*exp == 's')
-    {
-      if (target_supports_string_tracing ())
-	{
-	  /* Allow an optional decimal number giving an explicit maximum
-	     string length, defaulting it to the "print elements" value;
-	     so "collect/s80 mystr" gets at most 80 bytes of string.  */
-	  *trace_string = opts.print_max;
-	  exp++;
-	  if (*exp >= '0' && *exp <= '9')
-	    *trace_string = atoi (exp);
-	  while (*exp >= '0' && *exp <= '9')
-	    exp++;
-	}
-      else
-	error (_("Target does not support \"/s\" option for string tracing."));
-    }
-  else
-    error (_("Undefined collection format \"%c\"."), *exp);
-
-  exp = skip_spaces (exp);
-
-  return exp;
+  error ("This command can only be used in a tracepoint actions list.");
 }
 
 /* Enter a list of actions for a tracepoint.  */
 static void
-actions_command (const char *args, int from_tty)
+trace_actions_command (char *args, int from_tty)
 {
   struct tracepoint *t;
+  char tmpbuf[128];
+  char *end_msg = "End with a line saying just \"end\".";
 
-  t = get_tracepoint_by_number (&args, NULL);
+  t = get_tracepoint_by_number (&args, 0, 1);
   if (t)
     {
-      std::string tmpbuf =
-	string_printf ("Enter actions for tracepoint %d, one per line.",
-		       t->number);
+      sprintf (tmpbuf, "Enter actions for tracepoint %d, one per line.",
+	       t->number);
 
-      counted_command_line l = read_command_lines (tmpbuf.c_str (),
-						   from_tty, 1,
-						   [=] (const char *line)
-						     {
-						       validate_actionline (line, t);
-						     });
-      breakpoint_set_commands (t, std::move (l));
+      if (from_tty)
+	{
+	  if (readline_begin_hook)
+	    (*readline_begin_hook) ("%s  %s\n", tmpbuf, end_msg);
+	  else if (input_from_terminal_p ())
+	    printf_filtered ("%s\n%s\n", tmpbuf, end_msg);
+	}
+
+      free_actions (t);
+      t->step_count = 0;	/* read_actions may set this */
+      read_actions (t);
+
+      if (readline_end_hook)
+	(*readline_end_hook) ();
+      /* tracepoints_changed () */
     }
   /* else just return */
 }
 
-/* Report the results of checking the agent expression, as errors or
-   internal errors.  */
-
+/* worker function */
 static void
-report_agent_reqs_errors (struct agent_expr *aexpr)
+read_actions (struct tracepoint *t)
 {
-  /* All of the "flaws" are serious bytecode generation issues that
-     should never occur.  */
-  if (aexpr->flaw != agent_flaw_none)
-    internal_error (__FILE__, __LINE__, _("expression is malformed"));
+  char *line;
+  char *prompt1 = "> ", *prompt2 = "  > ";
+  char *prompt = prompt1;
+  enum actionline_type linetype;
+  extern FILE *instream;
+  struct action_line *next = NULL, *temp;
+  struct cleanup *old_chain;
 
-  /* If analysis shows a stack underflow, GDB must have done something
-     badly wrong in its bytecode generation.  */
-  if (aexpr->min_height < 0)
-    internal_error (__FILE__, __LINE__,
-		    _("expression has min height < 0"));
+  /* Control-C quits instantly if typed while in this loop
+     since it should not wait until the user types a newline.  */
+  immediate_quit++;
+  /* FIXME: kettenis/20010823: Something is wrong here.  In this file
+     STOP_SIGNAL is never defined.  So this code has been left out, at
+     least for quite a while now.  Replacing STOP_SIGNAL with SIGTSTP
+     leads to compilation failures since the variable job_control
+     isn't declared.  Leave this alone for now.  */
+#ifdef STOP_SIGNAL
+  if (job_control)
+    {
+      if (event_loop_p)
+	signal (STOP_SIGNAL, handle_stop_sig);
+      else
+	signal (STOP_SIGNAL, stop_sig);
+    }
+#endif
+  old_chain = make_cleanup_free_actions (t);
+  while (1)
+    {
+      /* Make sure that all output has been output.  Some machines may let
+         you get away with leaving out some of the gdb_flush, but not all.  */
+      wrap_here ("");
+      gdb_flush (gdb_stdout);
+      gdb_flush (gdb_stderr);
 
-  /* Issue this error if the stack is predicted to get too deep.  The
-     limit is rather arbitrary; a better scheme might be for the
-     target to report how much stack it will have available.  The
-     depth roughly corresponds to parenthesization, so a limit of 20
-     amounts to 20 levels of expression nesting, which is actually
-     a pretty big hairy expression.  */
-  if (aexpr->max_height > 20)
-    error (_("Expression is too complicated."));
-}
+      if (readline_hook && instream == NULL)
+	line = (*readline_hook) (prompt);
+      else if (instream == stdin && ISATTY (instream))
+	{
+	  line = gdb_readline_wrapper (prompt);
+	  if (line && *line)	/* add it to command history */
+	    add_history (line);
+	}
+      else
+	line = gdb_readline (0);
 
-/* Call ax_reqs on AEXPR and raise an error if something is wrong.  */
+      linetype = validate_actionline (&line, t);
+      if (linetype == BADLINE)
+	continue;		/* already warned -- collect another line */
 
-static void
-finalize_tracepoint_aexpr (struct agent_expr *aexpr)
-{
-  ax_reqs (aexpr);
+      temp = xmalloc (sizeof (struct action_line));
+      temp->next = NULL;
+      temp->action = line;
 
-  if (aexpr->len > MAX_AGENT_EXPR_LEN)
-    error (_("Expression is too complicated."));
+      if (next == NULL)		/* first action for this tracepoint? */
+	t->actions = next = temp;
+      else
+	{
+	  next->next = temp;
+	  next = temp;
+	}
 
-  report_agent_reqs_errors (aexpr);
+      if (linetype == STEPPING)	/* begin "while-stepping" */
+	{
+	  if (prompt == prompt2)
+	    {
+	      warning ("Already processing 'while-stepping'");
+	      continue;
+	    }
+	  else
+	    prompt = prompt2;	/* change prompt for stepping actions */
+	}
+      else if (linetype == END)
+	{
+	  if (prompt == prompt2)
+	    {
+	      prompt = prompt1;	/* end of single-stepping actions */
+	    }
+	  else
+	    {			/* end of actions */
+	      if (t->actions->next == NULL)
+		{
+		  /* an "end" all by itself with no other actions means
+		     this tracepoint has no actions.  Discard empty list. */
+		  free_actions (t);
+		}
+	      break;
+	    }
+	}
+    }
+#ifdef STOP_SIGNAL
+  if (job_control)
+    signal (STOP_SIGNAL, SIG_DFL);
+#endif
+  immediate_quit--;
+  discard_cleanups (old_chain);
 }
 
 /* worker function */
-void
-validate_actionline (const char *line, struct breakpoint *b)
+enum actionline_type
+validate_actionline (char **line, struct tracepoint *t)
 {
   struct cmd_list_element *c;
-  const char *tmp_p;
-  const char *p;
-  struct bp_location *loc;
-  struct tracepoint *t = (struct tracepoint *) b;
+  struct expression *exp = NULL;
+  struct cleanup *old_chain = NULL;
+  char *p;
 
-  /* If EOF is typed, *line is NULL.  */
-  if (line == NULL)
-    return;
+  for (p = *line; isspace ((int) *p);)
+    p++;
 
-  p = skip_spaces (line);
-
-  /* Symbol lookup etc.  */
-  if (*p == '\0')	/* empty line: just prompt for another line.  */
-    return;
+  /* symbol lookup etc. */
+  if (*p == '\0')		/* empty line: just prompt for another line. */
+    return BADLINE;
 
   if (*p == '#')		/* comment line */
-    return;
+    return GENERIC;
 
   c = lookup_cmd (&p, cmdlist, "", -1, 1);
   if (c == 0)
-    error (_("`%s' is not a tracepoint action, or is ambiguous."), p);
+    {
+      warning ("'%s' is not an action that I know, or is ambiguous.", p);
+      return BADLINE;
+    }
 
   if (cmd_cfunc_eq (c, collect_pseudocommand))
     {
-      int trace_string = 0;
-
-      if (*p == '/')
-	p = decode_agent_options (p, &trace_string);
+      struct agent_expr *aexpr;
+      struct agent_reqs areqs;
 
       do
-	{			/* Repeat over a comma-separated list.  */
-	  QUIT;			/* Allow user to bail out with ^C.  */
-	  p = skip_spaces (p);
+	{			/* repeat over a comma-separated list */
+	  QUIT;			/* allow user to bail out with ^C */
+	  while (isspace ((int) *p))
+	    p++;
 
-	  if (*p == '$')	/* Look for special pseudo-symbols.  */
+	  if (*p == '$')	/* look for special pseudo-symbols */
 	    {
-	      if (0 == strncasecmp ("reg", p + 1, 3)
-		  || 0 == strncasecmp ("arg", p + 1, 3)
-		  || 0 == strncasecmp ("loc", p + 1, 3)
-		  || 0 == strncasecmp ("_ret", p + 1, 4)
-		  || 0 == strncasecmp ("_sdata", p + 1, 6))
+	      if ((0 == strncasecmp ("reg", p + 1, 3)) ||
+		  (0 == strncasecmp ("arg", p + 1, 3)) ||
+		  (0 == strncasecmp ("loc", p + 1, 3)))
 		{
 		  p = strchr (p, ',');
 		  continue;
 		}
-	      /* else fall thru, treat p as an expression and parse it!  */
+	      /* else fall thru, treat p as an expression and parse it! */
 	    }
-	  tmp_p = p;
-	  for (loc = t->loc; loc; loc = loc->next)
-	    {
-	      p = tmp_p;
-	      expression_up exp = parse_exp_1 (&p, loc->address,
-					       block_for_pc (loc->address), 1);
+	  exp = parse_exp_1 (&p, block_for_pc (t->address), 1);
+	  old_chain = make_cleanup (free_current_contents, &exp);
 
-	      if (exp->elts[0].opcode == OP_VAR_VALUE)
+	  if (exp->elts[0].opcode == OP_VAR_VALUE)
+	    {
+	      if (SYMBOL_CLASS (exp->elts[2].symbol) == LOC_CONST)
 		{
-		  if (SYMBOL_CLASS (exp->elts[2].symbol) == LOC_CONST)
-		    {
-		      error (_("constant `%s' (value %s) "
-			       "will not be collected."),
-			     exp->elts[2].symbol->print_name (),
-			     plongest (SYMBOL_VALUE (exp->elts[2].symbol)));
-		    }
-		  else if (SYMBOL_CLASS (exp->elts[2].symbol)
-			   == LOC_OPTIMIZED_OUT)
-		    {
-		      error (_("`%s' is optimized away "
-			       "and cannot be collected."),
-			     exp->elts[2].symbol->print_name ());
-		    }
+		  warning ("constant %s (value %ld) will not be collected.",
+			   SYMBOL_NAME (exp->elts[2].symbol),
+			   SYMBOL_VALUE (exp->elts[2].symbol));
+		  return BADLINE;
 		}
-
-	      /* We have something to collect, make sure that the expr to
-		 bytecode translator can handle it and that it's not too
-		 long.  */
-	      agent_expr_up aexpr = gen_trace_for_expr (loc->address,
-							exp.get (),
-							trace_string);
-
-	      finalize_tracepoint_aexpr (aexpr.get ());
+	      else if (SYMBOL_CLASS (exp->elts[2].symbol) == LOC_OPTIMIZED_OUT)
+		{
+		  warning ("%s is optimized away and cannot be collected.",
+			   SYMBOL_NAME (exp->elts[2].symbol));
+		  return BADLINE;
+		}
 	    }
+
+	  /* we have something to collect, make sure that the expr to
+	     bytecode translator can handle it and that it's not too long */
+	  aexpr = gen_trace_for_expr (t->address, exp);
+	  make_cleanup_free_agent_expr (aexpr);
+
+	  if (aexpr->len > MAX_AGENT_EXPR_LEN)
+	    error ("expression too complicated, try simplifying");
+
+	  ax_reqs (aexpr, &areqs);
+	  (void) make_cleanup (xfree, areqs.reg_mask);
+
+	  if (areqs.flaw != agent_flaw_none)
+	    error ("malformed expression");
+
+	  if (areqs.min_height < 0)
+	    error ("gdb: Internal error: expression has min height < 0");
+
+	  if (areqs.max_height > 20)
+	    error ("expression too complicated, try simplifying");
+
+	  do_cleanups (old_chain);
 	}
       while (p && *p++ == ',');
+      return GENERIC;
     }
-
-  else if (cmd_cfunc_eq (c, teval_pseudocommand))
-    {
-      do
-	{			/* Repeat over a comma-separated list.  */
-	  QUIT;			/* Allow user to bail out with ^C.  */
-	  p = skip_spaces (p);
-
-	  tmp_p = p;
-	  for (loc = t->loc; loc; loc = loc->next)
-	    {
-	      p = tmp_p;
-
-	      /* Only expressions are allowed for this action.  */
-	      expression_up exp = parse_exp_1 (&p, loc->address,
-					       block_for_pc (loc->address), 1);
-
-	      /* We have something to evaluate, make sure that the expr to
-		 bytecode translator can handle it and that it's not too
-		 long.  */
-	      agent_expr_up aexpr = gen_eval_for_expr (loc->address, exp.get ());
-
-	      finalize_tracepoint_aexpr (aexpr.get ());
-	    }
-	}
-      while (p && *p++ == ',');
-    }
-
   else if (cmd_cfunc_eq (c, while_stepping_pseudocommand))
     {
-      char *endp;
+      char *steparg;		/* in case warning is necessary */
 
-      p = skip_spaces (p);
-      t->step_count = strtol (p, &endp, 0);
-      if (endp == p || t->step_count == 0)
-	error (_("while-stepping step count `%s' is malformed."), line);
-      p = endp;
+      while (isspace ((int) *p))
+	p++;
+      steparg = p;
+
+      if (*p == '\0' ||
+	  (t->step_count = strtol (p, &p, 0)) == 0)
+	{
+	  warning ("'%s': bad step-count; command ignored.", *line);
+	  return BADLINE;
+	}
+      return STEPPING;
     }
-
   else if (cmd_cfunc_eq (c, end_actions_pseudocommand))
-    ;
-
+    return END;
   else
-    error (_("`%s' is not a supported tracepoint action."), line);
+    {
+      warning ("'%s' is not a supported tracepoint action.", *line);
+      return BADLINE;
+    }
 }
 
-enum {
-  memrange_absolute = -1
+/* worker function */
+void
+free_actions (struct tracepoint *t)
+{
+  struct action_line *line, *next;
+
+  for (line = t->actions; line; line = next)
+    {
+      next = line->next;
+      if (line->action)
+	xfree (line->action);
+      xfree (line);
+    }
+  t->actions = NULL;
+}
+
+static void
+do_free_actions_cleanup (void *t)
+{
+  free_actions (t);
+}
+
+static struct cleanup *
+make_cleanup_free_actions (struct tracepoint *t)
+{
+  return make_cleanup (do_free_actions_cleanup, t);
+}
+
+struct memrange
+{
+  int type;		/* 0 for absolute memory range, else basereg number */
+  bfd_signed_vma start;
+  bfd_signed_vma end;
 };
+
+struct collection_list
+  {
+    unsigned char regs_mask[8];	/* room for up to 256 regs */
+    long listsize;
+    long next_memrange;
+    struct memrange *list;
+    long aexpr_listsize;	/* size of array pointed to by expr_list elt */
+    long next_aexpr_elt;
+    struct agent_expr **aexpr_list;
+
+  }
+tracepoint_list, stepping_list;
 
 /* MEMRANGE functions: */
 
-/* Compare memranges for std::sort.  */
+static int memrange_cmp (const void *, const void *);
 
-static bool
-memrange_comp (const memrange &a, const memrange &b)
+/* compare memranges for qsort */
+static int
+memrange_cmp (const void *va, const void *vb)
 {
-  if (a.type == b.type)
-    {
-      if (a.type == memrange_absolute)
-	return (bfd_vma) a.start < (bfd_vma) b.start;
-      else
-	return a.start < b.start;
-    }
+  const struct memrange *a = va, *b = vb;
 
-  return a.type < b.type;
+  if (a->type < b->type)
+    return -1;
+  if (a->type > b->type)
+    return 1;
+  if (a->type == 0)
+    {
+      if ((bfd_vma) a->start < (bfd_vma) b->start)
+	return -1;
+      if ((bfd_vma) a->start > (bfd_vma) b->start)
+	return 1;
+    }
+  else
+    {
+      if (a->start < b->start)
+	return -1;
+      if (a->start > b->start)
+	return 1;
+    }
+  return 0;
 }
 
-/* Sort the memrange list using std::sort, and merge adjacent memranges.  */
-
+/* Sort the memrange list using qsort, and merge adjacent memranges */
 static void
-memrange_sortmerge (std::vector<memrange> &memranges)
+memrange_sortmerge (struct collection_list *memranges)
 {
-  if (!memranges.empty ())
+  int a, b;
+
+  qsort (memranges->list, memranges->next_memrange,
+	 sizeof (struct memrange), memrange_cmp);
+  if (memranges->next_memrange > 0)
     {
-      int a, b;
-
-      std::sort (memranges.begin (), memranges.end (), memrange_comp);
-
-      for (a = 0, b = 1; b < memranges.size (); b++)
+      for (a = 0, b = 1; b < memranges->next_memrange; b++)
 	{
-	  /* If memrange b overlaps or is adjacent to memrange a,
-	     merge them.  */
-	  if (memranges[a].type == memranges[b].type
-	      && memranges[b].start <= memranges[a].end)
+	  if (memranges->list[a].type == memranges->list[b].type &&
+	      memranges->list[b].start - memranges->list[a].end <=
+	      MAX_REGISTER_VIRTUAL_SIZE)
 	    {
-	      if (memranges[b].end > memranges[a].end)
-		memranges[a].end = memranges[b].end;
+	      /* memrange b starts before memrange a ends; merge them.  */
+	      if (memranges->list[b].end > memranges->list[a].end)
+		memranges->list[a].end = memranges->list[b].end;
 	      continue;		/* next b, same a */
 	    }
 	  a++;			/* next a */
 	  if (a != b)
-	    memranges[a] = memranges[b];
+	    memcpy (&memranges->list[a], &memranges->list[b],
+		    sizeof (struct memrange));
 	}
-      memranges.resize (a + 1);
+      memranges->next_memrange = a + 1;
     }
 }
 
-/* Add remote register number REGNO to the collection list mask.  */
-
-void
-collection_list::add_remote_register (unsigned int regno)
+/* Add a register to a collection list */
+static void
+add_register (struct collection_list *collection, unsigned int regno)
 {
   if (info_verbose)
     printf_filtered ("collect register %d\n", regno);
-
-  m_regs_mask.at (regno / 8) |= 1 << (regno % 8);
+  if (regno > (8 * sizeof (collection->regs_mask)))
+    error ("Internal: register number %d too large for tracepoint",
+	   regno);
+  collection->regs_mask[regno / 8] |= 1 << (regno % 8);
 }
 
-/* Add all the registers from the mask in AEXPR to the mask in the
-   collection list.  Registers in the AEXPR mask are already remote
-   register numbers.  */
-
-void
-collection_list::add_ax_registers (struct agent_expr *aexpr)
-{
-  if (aexpr->reg_mask_len > 0)
-    {
-      for (int ndx1 = 0; ndx1 < aexpr->reg_mask_len; ndx1++)
-	{
-	  QUIT;	/* Allow user to bail out with ^C.  */
-	  if (aexpr->reg_mask[ndx1] != 0)
-	    {
-	      /* Assume chars have 8 bits.  */
-	      for (int ndx2 = 0; ndx2 < 8; ndx2++)
-		if (aexpr->reg_mask[ndx1] & (1 << ndx2))
-		  /* It's used -- record it.  */
-		  add_remote_register (ndx1 * 8 + ndx2);
-	    }
-	}
-    }
-}
-
-/* If REGNO is raw, add its corresponding remote register number to
-   the mask.  If REGNO is a pseudo-register, figure out the necessary
-   registers using a temporary agent expression, and add it to the
-   list if it needs more than just a mask.  */
-
-void
-collection_list::add_local_register (struct gdbarch *gdbarch,
-				     unsigned int regno,
-				     CORE_ADDR scope)
-{
-  if (regno < gdbarch_num_regs (gdbarch))
-    {
-      int remote_regno = gdbarch_remote_register_number (gdbarch, regno);
-
-      if (remote_regno < 0)
-	error (_("Can't collect register %d"), regno);
-
-      add_remote_register (remote_regno);
-    }
-  else
-    {
-      agent_expr_up aexpr (new agent_expr (gdbarch, scope));
-
-      ax_reg_mask (aexpr.get (), regno);
-
-      finalize_tracepoint_aexpr (aexpr.get ());
-
-      add_ax_registers (aexpr.get ());
-
-      /* Usually ax_reg_mask for a pseudo-regiser only sets the
-	 corresponding raw registers in the ax mask, but if this isn't
-	 the case add the expression that is generated to the
-	 collection list.  */
-      if (aexpr->len > 0)
-	add_aexpr (std::move (aexpr));
-    }
-}
-
-/* Add a memrange to a collection list.  */
-
-void
-collection_list::add_memrange (struct gdbarch *gdbarch,
-			       int type, bfd_signed_vma base,
-			       unsigned long len, CORE_ADDR scope)
+/* Add a memrange to a collection list */
+static void
+add_memrange (struct collection_list *memranges, int type, bfd_signed_vma base,
+	      unsigned long len)
 {
   if (info_verbose)
-    printf_filtered ("(%d,%s,%ld)\n", type, paddress (gdbarch, base), len);
+    {
+      printf_filtered ("(%d,", type);
+      printf_vma (base);
+      printf_filtered (",%ld)\n", len);
+    }
 
-  /* type: memrange_absolute == memory, other n == basereg */
-  /* base: addr if memory, offset if reg relative.  */
+  /* type: 0 == memory, n == basereg */
+  memranges->list[memranges->next_memrange].type = type;
+  /* base: addr if memory, offset if reg relative. */
+  memranges->list[memranges->next_memrange].start = base;
   /* len: we actually save end (base + len) for convenience */
-  m_memranges.emplace_back (type, base, base + len);
+  memranges->list[memranges->next_memrange].end = base + len;
+  memranges->next_memrange++;
+  if (memranges->next_memrange >= memranges->listsize)
+    {
+      memranges->listsize *= 2;
+      memranges->list = xrealloc (memranges->list,
+				  memranges->listsize);
+    }
 
-  if (type != memrange_absolute)    /* Better collect the base register!  */
-    add_local_register (gdbarch, type, scope);
+  if (type != -1)		/* better collect the base register! */
+    add_register (memranges, type);
 }
 
-/* Add a symbol to a collection list.  */
-
-void
-collection_list::collect_symbol (struct symbol *sym,
-				 struct gdbarch *gdbarch,
-				 long frame_regno, long frame_offset,
-				 CORE_ADDR scope,
-				 int trace_string)
+/* Add a symbol to a collection list */
+static void
+collect_symbol (struct collection_list *collect, struct symbol *sym,
+		long frame_regno, long frame_offset)
 {
   unsigned long len;
   unsigned int reg;
   bfd_signed_vma offset;
-  int treat_as_expr = 0;
 
   len = TYPE_LENGTH (check_typedef (SYMBOL_TYPE (sym)));
   switch (SYMBOL_CLASS (sym))
     {
     default:
       printf_filtered ("%s: don't know symbol class %d\n",
-		       sym->print_name (), SYMBOL_CLASS (sym));
+		       SYMBOL_NAME (sym), SYMBOL_CLASS (sym));
       break;
     case LOC_CONST:
-      printf_filtered ("constant %s (value %s) will not be collected.\n",
-		       sym->print_name (), plongest (SYMBOL_VALUE (sym)));
+      printf_filtered ("constant %s (value %ld) will not be collected.\n",
+		       SYMBOL_NAME (sym), SYMBOL_VALUE (sym));
       break;
     case LOC_STATIC:
       offset = SYMBOL_VALUE_ADDRESS (sym);
       if (info_verbose)
 	{
+	  char tmp[40];
+
+	  sprintf_vma (tmp, offset);
 	  printf_filtered ("LOC_STATIC %s: collect %ld bytes at %s.\n",
-			   sym->print_name (), len,
-			   paddress (gdbarch, offset));
+			   SYMBOL_NAME (sym), len, tmp /* address */);
 	}
-      /* A struct may be a C++ class with static fields, go to general
-	 expression handling.  */
-      if (TYPE_CODE (SYMBOL_TYPE (sym)) == TYPE_CODE_STRUCT)
-	treat_as_expr = 1;
-      else
-	add_memrange (gdbarch, memrange_absolute, offset, len, scope);
+      add_memrange (collect, -1, offset, len);	/* 0 == memory */
       break;
     case LOC_REGISTER:
-      reg = SYMBOL_REGISTER_OPS (sym)->register_number (sym, gdbarch);
+    case LOC_REGPARM:
+      reg = SYMBOL_VALUE (sym);
       if (info_verbose)
-	printf_filtered ("LOC_REG[parm] %s: ", sym->print_name ());
-      add_local_register (gdbarch, reg, scope);
-      /* Check for doubles stored in two registers.  */
-      /* FIXME: how about larger types stored in 3 or more regs?  */
+	printf_filtered ("LOC_REG[parm] %s: ", SYMBOL_NAME (sym));
+      add_register (collect, reg);
+      /* check for doubles stored in two registers */
+      /* FIXME: how about larger types stored in 3 or more regs? */
       if (TYPE_CODE (SYMBOL_TYPE (sym)) == TYPE_CODE_FLT &&
-	  len > register_size (gdbarch, reg))
-	add_local_register (gdbarch, reg + 1, scope);
+	  len > REGISTER_RAW_SIZE (reg))
+	add_register (collect, reg + 1);
       break;
     case LOC_REF_ARG:
       printf_filtered ("Sorry, don't know how to do LOC_REF_ARG yet.\n");
-      printf_filtered ("       (will not collect %s)\n", sym->print_name ());
+      printf_filtered ("       (will not collect %s)\n",
+		       SYMBOL_NAME (sym));
       break;
     case LOC_ARG:
       reg = frame_regno;
       offset = frame_offset + SYMBOL_VALUE (sym);
       if (info_verbose)
 	{
-	  printf_filtered ("LOC_LOCAL %s: Collect %ld bytes at offset %s"
-			   " from frame ptr reg %d\n", sym->print_name (), len,
-			   paddress (gdbarch, offset), reg);
+	  printf_filtered ("LOC_LOCAL %s: Collect %ld bytes at offset ",
+			   SYMBOL_NAME (sym), len);
+	  printf_vma (offset);
+	  printf_filtered (" from frame ptr reg %d\n", reg);
 	}
-      add_memrange (gdbarch, reg, offset, len, scope);
+      add_memrange (collect, reg, offset, len);
       break;
     case LOC_REGPARM_ADDR:
       reg = SYMBOL_VALUE (sym);
       offset = 0;
       if (info_verbose)
 	{
-	  printf_filtered ("LOC_REGPARM_ADDR %s: Collect %ld bytes at offset %s"
-			   " from reg %d\n", sym->print_name (), len,
-			   paddress (gdbarch, offset), reg);
+	  printf_filtered ("LOC_REGPARM_ADDR %s: Collect %ld bytes at offset ",
+			   SYMBOL_NAME (sym), len);
+	  printf_vma (offset);
+	  printf_filtered (" from reg %d\n", reg);
 	}
-      add_memrange (gdbarch, reg, offset, len, scope);
+      add_memrange (collect, reg, offset, len);
       break;
     case LOC_LOCAL:
+    case LOC_LOCAL_ARG:
       reg = frame_regno;
       offset = frame_offset + SYMBOL_VALUE (sym);
       if (info_verbose)
 	{
-	  printf_filtered ("LOC_LOCAL %s: Collect %ld bytes at offset %s"
-			   " from frame ptr reg %d\n", sym->print_name (), len,
-			   paddress (gdbarch, offset), reg);
+	  printf_filtered ("LOC_LOCAL %s: Collect %ld bytes at offset ",
+			   SYMBOL_NAME (sym), len);
+	  printf_vma (offset);
+	  printf_filtered (" from frame ptr reg %d\n", reg);
 	}
-      add_memrange (gdbarch, reg, offset, len, scope);
+      add_memrange (collect, reg, offset, len);
       break;
-
+    case LOC_BASEREG:
+    case LOC_BASEREG_ARG:
+      reg = SYMBOL_BASEREG (sym);
+      offset = SYMBOL_VALUE (sym);
+      if (info_verbose)
+	{
+	  printf_filtered ("LOC_BASEREG %s: collect %ld bytes at offset ",
+			   SYMBOL_NAME (sym), len);
+	  printf_vma (offset);
+	  printf_filtered (" from basereg %d\n", reg);
+	}
+      add_memrange (collect, reg, offset, len);
+      break;
     case LOC_UNRESOLVED:
-      treat_as_expr = 1;
+      printf_filtered ("Don't know LOC_UNRESOLVED %s\n", SYMBOL_NAME (sym));
       break;
-
     case LOC_OPTIMIZED_OUT:
       printf_filtered ("%s has been optimized out of existence.\n",
-		       sym->print_name ());
+		       SYMBOL_NAME (sym));
       break;
-
-    case LOC_COMPUTED:
-      treat_as_expr = 1;
-      break;
-    }
-
-  /* Expressions are the most general case.  */
-  if (treat_as_expr)
-    {
-      agent_expr_up aexpr = gen_trace_for_var (scope, gdbarch,
-					       sym, trace_string);
-
-      /* It can happen that the symbol is recorded as a computed
-	 location, but it's been optimized away and doesn't actually
-	 have a location expression.  */
-      if (!aexpr)
-	{
-	  printf_filtered ("%s has been optimized out of existence.\n",
-			   sym->print_name ());
-	  return;
-	}
-
-      finalize_tracepoint_aexpr (aexpr.get ());
-
-      /* Take care of the registers.  */
-      add_ax_registers (aexpr.get ());
-
-      add_aexpr (std::move (aexpr));
     }
 }
 
-/* Data to be passed around in the calls to the locals and args
-   iterators.  */
-
-struct add_local_symbols_data
-{
-  struct collection_list *collect;
-  struct gdbarch *gdbarch;
-  CORE_ADDR pc;
-  long frame_regno;
-  long frame_offset;
-  int count;
-  int trace_string;
-};
-
-/* The callback for the locals and args iterators.  */
-
+/* Add all locals (or args) symbols to collection list */
 static void
-do_collect_symbol (const char *print_name,
-		   struct symbol *sym,
-		   void *cb_data)
+add_local_symbols (struct collection_list *collect, CORE_ADDR pc,
+		   long frame_regno, long frame_offset, int type)
 {
-  struct add_local_symbols_data *p = (struct add_local_symbols_data *) cb_data;
+  struct symbol *sym;
+  struct block *block;
+  int i, count = 0;
 
-  p->collect->collect_symbol (sym, p->gdbarch, p->frame_regno,
-			      p->frame_offset, p->pc, p->trace_string);
-  p->count++;
-
-  p->collect->add_wholly_collected (print_name);
-}
-
-void
-collection_list::add_wholly_collected (const char *print_name)
-{
-  m_wholly_collected.push_back (print_name);
-}
-
-/* Add all locals (or args) symbols to collection list.  */
-
-void
-collection_list::add_local_symbols (struct gdbarch *gdbarch, CORE_ADDR pc,
-				    long frame_regno, long frame_offset, int type,
-				    int trace_string)
-{
-  const struct block *block;
-  struct add_local_symbols_data cb_data;
-
-  cb_data.collect = this;
-  cb_data.gdbarch = gdbarch;
-  cb_data.pc = pc;
-  cb_data.frame_regno = frame_regno;
-  cb_data.frame_offset = frame_offset;
-  cb_data.count = 0;
-  cb_data.trace_string = trace_string;
-
-  if (type == 'L')
+  block = block_for_pc (pc);
+  while (block != 0)
     {
-      block = block_for_pc (pc);
-      if (block == NULL)
+      QUIT;			/* allow user to bail out with ^C */
+      ALL_BLOCK_SYMBOLS (block, i, sym)
 	{
-	  warning (_("Can't collect locals; "
-		     "no symbol table info available.\n"));
-	  return;
+	  switch (SYMBOL_CLASS (sym))
+	    {
+	    default:
+	      warning ("don't know how to trace local symbol %s", 
+		       SYMBOL_NAME (sym));
+	    case LOC_LOCAL:
+	    case LOC_STATIC:
+	    case LOC_REGISTER:
+	    case LOC_BASEREG:
+	      if (type == 'L')	/* collecting Locals */
+		{
+		  count++;
+		  collect_symbol (collect, sym, frame_regno, frame_offset);
+		}
+	      break;
+	    case LOC_ARG:
+	    case LOC_LOCAL_ARG:
+	    case LOC_REF_ARG:
+	    case LOC_REGPARM:
+	    case LOC_REGPARM_ADDR:
+	    case LOC_BASEREG_ARG:
+	      if (type == 'A')	/* collecting Arguments */
+		{
+		  count++;
+		  collect_symbol (collect, sym, frame_regno, frame_offset);
+		}
+	    }
 	}
-
-      iterate_over_block_local_vars (block, do_collect_symbol, &cb_data);
-      if (cb_data.count == 0)
-	warning (_("No locals found in scope."));
+      if (BLOCK_FUNCTION (block))
+	break;
+      else
+	block = BLOCK_SUPERBLOCK (block);
     }
-  else
+  if (count == 0)
+    warning ("No %s found in scope.", type == 'L' ? "locals" : "args");
+}
+
+/* worker function */
+static void
+clear_collection_list (struct collection_list *list)
+{
+  int ndx;
+
+  list->next_memrange = 0;
+  for (ndx = 0; ndx < list->next_aexpr_elt; ndx++)
     {
-      pc = get_pc_function_start (pc);
-      block = block_for_pc (pc);
-      if (block == NULL)
-	{
-	  warning (_("Can't collect args; no symbol table info available."));
-	  return;
-	}
-
-      iterate_over_block_arg_vars (block, do_collect_symbol, &cb_data);
-      if (cb_data.count == 0)
-	warning (_("No args found in scope."));
+      free_agent_expr (list->aexpr_list[ndx]);
+      list->aexpr_list[ndx] = NULL;
     }
+  list->next_aexpr_elt = 0;
+  memset (list->regs_mask, 0, sizeof (list->regs_mask));
 }
 
-void
-collection_list::add_static_trace_data ()
+/* reduce a collection list to string form (for gdb protocol) */
+static char **
+stringify_collection_list (struct collection_list *list, char *string)
 {
-  if (info_verbose)
-    printf_filtered ("collect static trace data\n");
-  m_strace_data = true;
-}
-
-collection_list::collection_list ()
-  : m_strace_data (false)
-{
-  int max_remote_regno = 0;
-  for (int i = 0; i < gdbarch_num_regs (target_gdbarch ()); i++)
-    {
-      int remote_regno = (gdbarch_remote_register_number
-			  (target_gdbarch (), i));
-
-      if (remote_regno >= 0 && remote_regno > max_remote_regno)
-	max_remote_regno = remote_regno;
-    }
-
-  m_regs_mask.resize ((max_remote_regno / 8) + 1);
-
-  m_memranges.reserve (128);
-  m_aexprs.reserve (128);
-}
-
-/* Reduce a collection list to string form (for gdb protocol).  */
-
-std::vector<std::string>
-collection_list::stringify ()
-{
-  gdb::char_vector temp_buf (2048);
-
+  char temp_buf[2048];
+  char tmp2[40];
   int count;
+  int ndx = 0;
+  char *(*str_list)[];
   char *end;
   long i;
-  std::vector<std::string> str_list;
 
-  if (m_strace_data)
-    {
-      if (info_verbose)
-	printf_filtered ("\nCollecting static trace data\n");
-      end = temp_buf.data ();
-      *end++ = 'L';
-      str_list.emplace_back (temp_buf.data (), end - temp_buf.data ());
-    }
+  count = 1 + list->next_memrange + list->next_aexpr_elt + 1;
+  str_list = (char *(*)[]) xmalloc (count * sizeof (char *));
 
-  for (i = m_regs_mask.size () - 1; i > 0; i--)
-    if (m_regs_mask[i] != 0)    /* Skip leading zeroes in regs_mask.  */
+  for (i = sizeof (list->regs_mask) - 1; i > 0; i--)
+    if (list->regs_mask[i] != 0)	/* skip leading zeroes in regs_mask */
       break;
-  if (m_regs_mask[i] != 0)	/* Prepare to send regs_mask to the stub.  */
+  if (list->regs_mask[i] != 0)	/* prepare to send regs_mask to the stub */
     {
       if (info_verbose)
 	printf_filtered ("\nCollecting registers (mask): 0x");
-
-      /* One char for 'R', one for the null terminator and two per
-	 mask byte.  */
-      std::size_t new_size = (i + 1) * 2 + 2;
-      if (new_size > temp_buf.size ())
-	temp_buf.resize (new_size);
-
-      end = temp_buf.data ();
+      end = temp_buf;
       *end++ = 'R';
       for (; i >= 0; i--)
 	{
-	  QUIT;			/* Allow user to bail out with ^C.  */
+	  QUIT;			/* allow user to bail out with ^C */
 	  if (info_verbose)
-	    printf_filtered ("%02X", m_regs_mask[i]);
-
-	  end = pack_hex_byte (end, m_regs_mask[i]);
+	    printf_filtered ("%02X", list->regs_mask[i]);
+	  sprintf (end, "%02X", list->regs_mask[i]);
+	  end += 2;
 	}
-      *end = '\0';
-
-      str_list.emplace_back (temp_buf.data ());
+      (*str_list)[ndx] = savestring (temp_buf, end - temp_buf);
+      ndx++;
     }
   if (info_verbose)
     printf_filtered ("\n");
-  if (!m_memranges.empty () && info_verbose)
+  if (list->next_memrange > 0 && info_verbose)
     printf_filtered ("Collecting memranges: \n");
-  for (i = 0, count = 0, end = temp_buf.data ();
-       i < m_memranges.size (); i++)
+  for (i = 0, count = 0, end = temp_buf; i < list->next_memrange; i++)
     {
-      QUIT;			/* Allow user to bail out with ^C.  */
+      QUIT;			/* allow user to bail out with ^C */
+      sprintf_vma (tmp2, list->list[i].start);
       if (info_verbose)
 	{
 	  printf_filtered ("(%d, %s, %ld)\n", 
-			   m_memranges[i].type,
-			   paddress (target_gdbarch (),
-				     m_memranges[i].start),
-			   (long) (m_memranges[i].end
-				   - m_memranges[i].start));
+			   list->list[i].type, 
+			   tmp2, 
+			   (long) (list->list[i].end - list->list[i].start));
 	}
       if (count + 27 > MAX_AGENT_EXPR_LEN)
 	{
-	  str_list.emplace_back (temp_buf.data (), count);
+	  (*str_list)[ndx] = savestring (temp_buf, count);
+	  ndx++;
 	  count = 0;
-	  end = temp_buf.data ();
+	  end = temp_buf;
 	}
 
-      {
-        bfd_signed_vma length
-	  = m_memranges[i].end - m_memranges[i].start;
-
-        /* The "%X" conversion specifier expects an unsigned argument,
-           so passing -1 (memrange_absolute) to it directly gives you
-           "FFFFFFFF" (or more, depending on sizeof (unsigned)).
-           Special-case it.  */
-        if (m_memranges[i].type == memrange_absolute)
-          sprintf (end, "M-1,%s,%lX", phex_nz (m_memranges[i].start, 0),
-		   (long) length);
-        else
-          sprintf (end, "M%X,%s,%lX", m_memranges[i].type,
-		   phex_nz (m_memranges[i].start, 0), (long) length);
-      }
+      sprintf (end, "M%X,%s,%lX", 
+	       list->list[i].type,
+	       tmp2,
+	       (long) (list->list[i].end - list->list[i].start));
 
       count += strlen (end);
-      end = temp_buf.data () + count;
+      end += count;
     }
 
-  for (i = 0; i < m_aexprs.size (); i++)
+  for (i = 0; i < list->next_aexpr_elt; i++)
     {
-      QUIT;			/* Allow user to bail out with ^C.  */
-      if ((count + 10 + 2 * m_aexprs[i]->len) > MAX_AGENT_EXPR_LEN)
+      QUIT;			/* allow user to bail out with ^C */
+      if ((count + 10 + 2 * list->aexpr_list[i]->len) > MAX_AGENT_EXPR_LEN)
 	{
-	  str_list.emplace_back (temp_buf.data (), count);
+	  (*str_list)[ndx] = savestring (temp_buf, count);
+	  ndx++;
 	  count = 0;
-	  end = temp_buf.data ();
+	  end = temp_buf;
 	}
-      sprintf (end, "X%08X,", m_aexprs[i]->len);
+      sprintf (end, "X%08X,", list->aexpr_list[i]->len);
       end += 10;		/* 'X' + 8 hex digits + ',' */
       count += 10;
 
-      end = mem2hex (m_aexprs[i]->buf, end, m_aexprs[i]->len);
-      count += 2 * m_aexprs[i]->len;
+      end = mem2hex (list->aexpr_list[i]->buf, end, list->aexpr_list[i]->len);
+      count += 2 * list->aexpr_list[i]->len;
     }
 
   if (count != 0)
     {
-      str_list.emplace_back (temp_buf.data (), count);
+      (*str_list)[ndx] = savestring (temp_buf, count);
+      ndx++;
       count = 0;
-      end = temp_buf.data ();
+      end = temp_buf;
     }
+  (*str_list)[ndx] = NULL;
 
-  return str_list;
-}
-
-/* Add the printed expression EXP to *LIST.  */
-
-void
-collection_list::append_exp (struct expression *exp)
-{
-  string_file tmp_stream;
-
-  print_expression (exp, &tmp_stream);
-
-  m_computed.push_back (std::move (tmp_stream.string ()));
-}
-
-void
-collection_list::finish ()
-{
-  memrange_sortmerge (m_memranges);
+  if (ndx == 0)
+    return NULL;
+  else
+    return *str_list;
 }
 
 static void
-encode_actions_1 (struct command_line *action,
-		  struct bp_location *tloc,
-		  int frame_reg,
-		  LONGEST frame_offset,
-		  struct collection_list *collect,
-		  struct collection_list *stepping_list)
+free_actions_list_cleanup_wrapper (void *al)
 {
-  const char *action_exp;
+  free_actions_list (al);
+}
+
+static void
+free_actions_list (char **actions_list)
+{
+  int ndx;
+
+  if (actions_list == 0)
+    return;
+
+  for (ndx = 0; actions_list[ndx]; ndx++)
+    xfree (actions_list[ndx]);
+
+  xfree (actions_list);
+}
+
+/* render all actions into gdb protocol */
+static void
+encode_actions (struct tracepoint *t, char ***tdp_actions,
+		char ***stepping_actions)
+{
+  static char tdp_buff[2048], step_buff[2048];
+  char *action_exp;
+  struct expression *exp = NULL;
+  struct action_line *action;
   int i;
   struct value *tempval;
+  struct collection_list *collect;
   struct cmd_list_element *cmd;
+  struct agent_expr *aexpr;
+  int frame_reg;
+  LONGEST frame_offset;
 
-  for (; action; action = action->next)
+
+  clear_collection_list (&tracepoint_list);
+  clear_collection_list (&stepping_list);
+  collect = &tracepoint_list;
+
+  *tdp_actions = NULL;
+  *stepping_actions = NULL;
+
+  TARGET_VIRTUAL_FRAME_POINTER (t->address, &frame_reg, &frame_offset);
+
+  for (action = t->actions; action; action = action->next)
     {
-      QUIT;			/* Allow user to bail out with ^C.  */
-      action_exp = action->line;
-      action_exp = skip_spaces (action_exp);
+      QUIT;			/* allow user to bail out with ^C */
+      action_exp = action->action;
+      while (isspace ((int) *action_exp))
+	action_exp++;
+
+      if (*action_exp == '#')	/* comment line */
+	return;
 
       cmd = lookup_cmd (&action_exp, cmdlist, "", -1, 1);
       if (cmd == 0)
-	error (_("Bad action list item: %s"), action_exp);
+	error ("Bad action list item: %s", action_exp);
 
       if (cmd_cfunc_eq (cmd, collect_pseudocommand))
 	{
-	  int trace_string = 0;
-
-	  if (*action_exp == '/')
-	    action_exp = decode_agent_options (action_exp, &trace_string);
-
 	  do
-	    {			/* Repeat over a comma-separated list.  */
-	      QUIT;		/* Allow user to bail out with ^C.  */
-	      action_exp = skip_spaces (action_exp);
+	    {			/* repeat over a comma-separated list */
+	      QUIT;		/* allow user to bail out with ^C */
+	      while (isspace ((int) *action_exp))
+		action_exp++;
 
 	      if (0 == strncasecmp ("$reg", action_exp, 4))
 		{
-		  for (i = 0; i < gdbarch_num_regs (target_gdbarch ());
-		       i++)
-		    {
-		      int remote_regno = (gdbarch_remote_register_number
-					  (target_gdbarch (), i));
-
-		      /* Ignore arch regnos without a corresponding
-			 remote regno.  This can happen for regnos not
-			 in the tdesc.  */
-		      if (remote_regno >= 0)
-			collect->add_remote_register (remote_regno);
-		    }
+		  for (i = 0; i < NUM_REGS; i++)
+		    add_register (collect, i);
 		  action_exp = strchr (action_exp, ',');	/* more? */
 		}
 	      else if (0 == strncasecmp ("$arg", action_exp, 4))
 		{
-		  collect->add_local_symbols (target_gdbarch (),
-					      tloc->address,
-					      frame_reg,
-					      frame_offset,
-					      'A',
-					      trace_string);
+		  add_local_symbols (collect,
+				     t->address,
+				     frame_reg,
+				     frame_offset,
+				     'A');
 		  action_exp = strchr (action_exp, ',');	/* more? */
 		}
 	      else if (0 == strncasecmp ("$loc", action_exp, 4))
 		{
-		  collect->add_local_symbols (target_gdbarch (),
-					      tloc->address,
-					      frame_reg,
-					      frame_offset,
-					      'L',
-					      trace_string);
-		  action_exp = strchr (action_exp, ',');	/* more? */
-		}
-	      else if (0 == strncasecmp ("$_ret", action_exp, 5))
-		{
-		  agent_expr_up aexpr
-		    = gen_trace_for_return_address (tloc->address,
-						    target_gdbarch (),
-						    trace_string);
-
-		  finalize_tracepoint_aexpr (aexpr.get ());
-
-		  /* take care of the registers */
-		  collect->add_ax_registers (aexpr.get ());
-
-		  collect->add_aexpr (std::move (aexpr));
-		  action_exp = strchr (action_exp, ',');	/* more? */
-		}
-	      else if (0 == strncasecmp ("$_sdata", action_exp, 7))
-		{
-		  collect->add_static_trace_data ();
+		  add_local_symbols (collect,
+				     t->address,
+				     frame_reg,
+				     frame_offset,
+				     'L');
 		  action_exp = strchr (action_exp, ',');	/* more? */
 		}
 	      else
 		{
-		  unsigned long addr;
+		  unsigned long addr, len;
+		  struct cleanup *old_chain = NULL;
+		  struct cleanup *old_chain1 = NULL;
+		  struct agent_reqs areqs;
 
-		  expression_up exp = parse_exp_1 (&action_exp, tloc->address,
-						   block_for_pc (tloc->address),
-						   1);
+		  exp = parse_exp_1 (&action_exp, 
+				     block_for_pc (t->address), 1);
+		  old_chain = make_cleanup (free_current_contents, &exp);
 
 		  switch (exp->elts[0].opcode)
 		    {
 		    case OP_REGISTER:
-		      {
-			const char *name = &exp->elts[2].string;
-
-			i = user_reg_map_name_to_regnum (target_gdbarch (),
-							 name, strlen (name));
-			if (i == -1)
-			  internal_error (__FILE__, __LINE__,
-					  _("Register $%s not available"),
-					  name);
-			if (info_verbose)
-			  printf_filtered ("OP_REGISTER: ");
-			collect->add_local_register (target_gdbarch (),
-						     i, tloc->address);
-			break;
-		      }
+		      i = exp->elts[1].longconst;
+		      if (info_verbose)
+			printf_filtered ("OP_REGISTER: ");
+		      add_register (collect, i);
+		      break;
 
 		    case UNOP_MEMVAL:
-		      /* Safe because we know it's a simple expression.  */
-		      tempval = evaluate_expression (exp.get ());
-		      addr = value_address (tempval);
-		      /* Initialize the TYPE_LENGTH if it is a typedef.  */
-		      check_typedef (exp->elts[1].type);
-		      collect->add_memrange (target_gdbarch (),
-					     memrange_absolute, addr,
-					     TYPE_LENGTH (exp->elts[1].type),
-					     tloc->address);
-		      collect->append_exp (exp.get ());
+		      /* safe because we know it's a simple expression */
+		      tempval = evaluate_expression (exp);
+		      addr = VALUE_ADDRESS (tempval) + VALUE_OFFSET (tempval);
+		      len = TYPE_LENGTH (check_typedef (exp->elts[1].type));
+		      add_memrange (collect, -1, addr, len);
 		      break;
 
 		    case OP_VAR_VALUE:
-		      {
-			struct symbol *sym = exp->elts[2].symbol;
-			const char *name = sym->natural_name ();
-
-			collect->collect_symbol (exp->elts[2].symbol,
-						 target_gdbarch (),
-						 frame_reg,
-						 frame_offset,
-						 tloc->address,
-						 trace_string);
-			collect->add_wholly_collected (name);
-		      }
+		      collect_symbol (collect,
+				      exp->elts[2].symbol,
+				      frame_reg,
+				      frame_offset);
 		      break;
 
-		    default:	/* Full-fledged expression.  */
-		      agent_expr_up aexpr = gen_trace_for_expr (tloc->address,
-								exp.get (),
-								trace_string);
+		    default:	/* full-fledged expression */
+		      aexpr = gen_trace_for_expr (t->address, exp);
 
-		      finalize_tracepoint_aexpr (aexpr.get ());
+		      old_chain1 = make_cleanup_free_agent_expr (aexpr);
 
-		      /* Take care of the registers.  */
-		      collect->add_ax_registers (aexpr.get ());
+		      ax_reqs (aexpr, &areqs);
+		      if (areqs.flaw != agent_flaw_none)
+			error ("malformed expression");
 
-		      collect->add_aexpr (std::move (aexpr));
-		      collect->append_exp (exp.get ());
+		      if (areqs.min_height < 0)
+			error ("gdb: Internal error: expression has min height < 0");
+		      if (areqs.max_height > 20)
+			error ("expression too complicated, try simplifying");
+
+		      discard_cleanups (old_chain1);
+		      add_aexpr (collect, aexpr);
+
+		      /* take care of the registers */
+		      if (areqs.reg_mask_len > 0)
+			{
+			  int ndx1;
+			  int ndx2;
+
+			  for (ndx1 = 0; ndx1 < areqs.reg_mask_len; ndx1++)
+			    {
+			      QUIT;	/* allow user to bail out with ^C */
+			      if (areqs.reg_mask[ndx1] != 0)
+				{
+				  /* assume chars have 8 bits */
+				  for (ndx2 = 0; ndx2 < 8; ndx2++)
+				    if (areqs.reg_mask[ndx1] & (1 << ndx2))
+				      /* it's used -- record it */
+				      add_register (collect, ndx1 * 8 + ndx2);
+				}
+			    }
+			}
 		      break;
 		    }		/* switch */
-		}		/* do */
-	    }
-	  while (action_exp && *action_exp++ == ',');
-	}			/* if */
-      else if (cmd_cfunc_eq (cmd, teval_pseudocommand))
-	{
-	  do
-	    {			/* Repeat over a comma-separated list.  */
-	      QUIT;		/* Allow user to bail out with ^C.  */
-	      action_exp = skip_spaces (action_exp);
-
-		{
-		  expression_up exp = parse_exp_1 (&action_exp, tloc->address,
-						   block_for_pc (tloc->address),
-						   1);
-
-		  agent_expr_up aexpr = gen_eval_for_expr (tloc->address,
-							   exp.get ());
-
-		  finalize_tracepoint_aexpr (aexpr.get ());
-
-		  /* Even though we're not officially collecting, add
-		     to the collect list anyway.  */
-		  collect->add_aexpr (std::move (aexpr));
+		  do_cleanups (old_chain);
 		}		/* do */
 	    }
 	  while (action_exp && *action_exp++ == ',');
 	}			/* if */
       else if (cmd_cfunc_eq (cmd, while_stepping_pseudocommand))
 	{
-	  /* We check against nested while-stepping when setting
-	     breakpoint action, so no way to run into nested
-	     here.  */
-	  gdb_assert (stepping_list);
-
-	  encode_actions_1 (action->body_list_0.get (), tloc, frame_reg,
-			    frame_offset, stepping_list, NULL);
+	  collect = &stepping_list;
 	}
-      else
-	error (_("Invalid tracepoint command '%s'"), action->line);
+      else if (cmd_cfunc_eq (cmd, end_actions_pseudocommand))
+	{
+	  if (collect == &stepping_list)	/* end stepping actions */
+	    collect = &tracepoint_list;
+	  else
+	    break;		/* end tracepoint actions */
+	}
     }				/* for */
-}
+  memrange_sortmerge (&tracepoint_list);
+  memrange_sortmerge (&stepping_list);
 
-/* Encode actions of tracepoint TLOC->owner and fill TRACEPOINT_LIST
-   and STEPPING_LIST.  */
-
-void
-encode_actions (struct bp_location *tloc,
-		struct collection_list *tracepoint_list,
-		struct collection_list *stepping_list)
-{
-  int frame_reg;
-  LONGEST frame_offset;
-
-  gdbarch_virtual_frame_pointer (tloc->gdbarch,
-				 tloc->address, &frame_reg, &frame_offset);
-
-  counted_command_line actions = all_tracepoint_actions (tloc->owner);
-  encode_actions_1 (actions.get (), tloc, frame_reg, frame_offset,
-		    tracepoint_list, stepping_list);
-  encode_actions_1 (breakpoint_commands (tloc->owner), tloc,
-		    frame_reg, frame_offset, tracepoint_list, stepping_list);
-
-  tracepoint_list->finish ();
-  stepping_list->finish ();
-}
-
-/* Render all actions into gdb protocol.  */
-
-void
-encode_actions_rsp (struct bp_location *tloc,
-		    std::vector<std::string> *tdp_actions,
-		    std::vector<std::string> *stepping_actions)
-{
-  struct collection_list tracepoint_list, stepping_list;
-
-  encode_actions (tloc, &tracepoint_list, &stepping_list);
-
-  *tdp_actions = tracepoint_list.stringify ();
-  *stepping_actions = stepping_list.stringify ();
-}
-
-void
-collection_list::add_aexpr (agent_expr_up aexpr)
-{
-  m_aexprs.push_back (std::move (aexpr));
+  *tdp_actions = stringify_collection_list (&tracepoint_list, tdp_buff);
+  *stepping_actions = stringify_collection_list (&stepping_list, step_buff);
 }
 
 static void
-process_tracepoint_on_disconnect (void)
+add_aexpr (struct collection_list *collect, struct agent_expr *aexpr)
 {
-  int has_pending_p = 0;
-
-  /* Check whether we still have pending tracepoint.  If we have, warn the
-     user that pending tracepoint will no longer work.  */
-  for (breakpoint *b : all_tracepoints ())
+  if (collect->next_aexpr_elt >= collect->aexpr_listsize)
     {
-      if (b->loc == NULL)
-	{
-	  has_pending_p = 1;
-	  break;
-	}
-      else
-	{
-	  struct bp_location *loc1;
-
-	  for (loc1 = b->loc; loc1; loc1 = loc1->next)
-	    {
-	      if (loc1->shlib_disabled)
-		{
-		  has_pending_p = 1;
-		  break;
-		}
-	    }
-
-	  if (has_pending_p)
-	    break;
-	}
+      collect->aexpr_list =
+	xrealloc (collect->aexpr_list,
+		2 * collect->aexpr_listsize * sizeof (struct agent_expr *));
+      collect->aexpr_listsize *= 2;
     }
-
-  if (has_pending_p)
-    warning (_("Pending tracepoints will not be resolved while"
-	       " GDB is disconnected\n"));
+  collect->aexpr_list[collect->next_aexpr_elt] = aexpr;
+  collect->next_aexpr_elt++;
 }
 
-/* Reset local state of tracing.  */
+static char target_buf[2048];
 
-void
-trace_reset_local_state (void)
+/* Set "transparent" memory ranges
+
+   Allow trace mechanism to treat text-like sections
+   (and perhaps all read-only sections) transparently, 
+   i.e. don't reject memory requests from these address ranges
+   just because they haven't been collected.  */
+
+static void
+remote_set_transparent_ranges (void)
 {
-  set_traceframe_num (-1);
-  set_tracepoint_num (-1);
-  set_traceframe_context (NULL);
-  clear_traceframe_info ();
-}
+  extern bfd *exec_bfd;
+  asection *s;
+  bfd_size_type size;
+  bfd_vma lma;
+  int anysecs = 0;
 
-void
-start_tracing (const char *notes)
-{
-  int any_enabled = 0, num_to_download = 0;
-  int ret;
+  if (!exec_bfd)
+    return;			/* no information to give. */
 
-  std::vector<breakpoint *> tp_vec = all_tracepoints ();
-
-  /* No point in tracing without any tracepoints...  */
-  if (tp_vec.empty ())
-    error (_("No tracepoints defined, not starting trace"));
-
-  for (breakpoint *b : tp_vec)
+  strcpy (target_buf, "QTro");
+  for (s = exec_bfd->sections; s; s = s->next)
     {
-      if (b->enable_state == bp_enabled)
-	any_enabled = 1;
+      char tmp1[40], tmp2[40];
 
-      if ((b->type == bp_fast_tracepoint
-	   ? may_insert_fast_tracepoints
-	   : may_insert_tracepoints))
-	++num_to_download;
-      else
-	warning (_("May not insert %stracepoints, skipping tracepoint %d"),
-		 (b->type == bp_fast_tracepoint ? "fast " : ""), b->number);
-    }
-
-  if (!any_enabled)
-    {
-      if (target_supports_enable_disable_tracepoint ())
-	warning (_("No tracepoints enabled"));
-      else
-	{
-	  /* No point in tracing with only disabled tracepoints that
-	     cannot be re-enabled.  */
-	  error (_("No tracepoints enabled, not starting trace"));
-	}
-    }
-
-  if (num_to_download <= 0)
-    error (_("No tracepoints that may be downloaded, not starting trace"));
-
-  target_trace_init ();
-
-  for (breakpoint *b : tp_vec)
-    {
-      struct tracepoint *t = (struct tracepoint *) b;
-      struct bp_location *loc;
-      int bp_location_downloaded = 0;
-
-      /* Clear `inserted' flag.  */
-      for (loc = b->loc; loc; loc = loc->next)
-	loc->inserted = 0;
-
-      if ((b->type == bp_fast_tracepoint
-	   ? !may_insert_fast_tracepoints
-	   : !may_insert_tracepoints))
+      if ((s->flags & SEC_LOAD) == 0 ||
+      /* (s->flags & SEC_CODE)     == 0 || */
+	  (s->flags & SEC_READONLY) == 0)
 	continue;
 
-      t->number_on_target = 0;
-
-      for (loc = b->loc; loc; loc = loc->next)
-	{
-	  /* Since tracepoint locations are never duplicated, `inserted'
-	     flag should be zero.  */
-	  gdb_assert (!loc->inserted);
-
-	  target_download_tracepoint (loc);
-
-	  loc->inserted = 1;
-	  bp_location_downloaded = 1;
-	}
-
-      t->number_on_target = b->number;
-
-      for (loc = b->loc; loc; loc = loc->next)
-	if (loc->probe.prob != NULL)
-	  loc->probe.prob->set_semaphore (loc->probe.objfile,
-					  loc->gdbarch);
-
-      if (bp_location_downloaded)
-	gdb::observers::breakpoint_modified.notify (b);
+      anysecs = 1;
+      lma = s->lma;
+      size = bfd_get_section_size_before_reloc (s);
+      sprintf_vma (tmp1, lma);
+      sprintf_vma (tmp2, lma + size);
+      sprintf (target_buf + strlen (target_buf), 
+	       ":%s,%s", tmp1, tmp2);
     }
-
-  /* Send down all the trace state variables too.  */
-  for (const trace_state_variable &tsv : tvariables)
-    target_download_trace_state_variable (tsv);
-  
-  /* Tell target to treat text-like sections as transparent.  */
-  target_trace_set_readonly_regions ();
-  /* Set some mode flags.  */
-  target_set_disconnected_tracing (disconnected_tracing);
-  target_set_circular_trace_buffer (circular_trace_buffer);
-  target_set_trace_buffer_size (trace_buffer_size);
-
-  if (!notes)
-    notes = trace_notes;
-  ret = target_set_trace_notes (trace_user, notes, NULL);
-
-  if (!ret && (trace_user || notes))
-    warning (_("Target does not support trace user/notes, info ignored"));
-
-  /* Now insert traps and begin collecting data.  */
-  target_trace_start ();
-
-  /* Reset our local state.  */
-  trace_reset_local_state ();
-  current_trace_status()->running = 1;
+  if (anysecs)
+    {
+      putpkt (target_buf);
+      getpkt (target_buf, sizeof (target_buf), 0);
+    }
 }
 
-/* The tstart command requests the target to start a new trace run.
-   The command passes any arguments it has to the target verbatim, as
-   an optional "trace note".  This is useful as for instance a warning
-   to other users if the trace runs disconnected, and you don't want
-   anybody else messing with the target.  */
+/* tstart command:
+
+   Tell target to clear any previous trace experiment.
+   Walk the list of tracepoints, and send them (and their actions)
+   to the target.  If no errors, 
+   Tell target to start a new trace experiment.  */
 
 static void
-tstart_command (const char *args, int from_tty)
-{
-  dont_repeat ();	/* Like "run", dangerous to repeat accidentally.  */
+trace_start_command (char *args, int from_tty)
+{				/* STUB_COMM MOSTLY_IMPLEMENTED */
+  struct tracepoint *t;
+  char buf[2048];
+  char **tdp_actions;
+  char **stepping_actions;
+  int ndx;
+  struct cleanup *old_chain = NULL;
 
-  if (current_trace_status ()->running)
+  dont_repeat ();		/* like "run", dangerous to repeat accidentally */
+
+  if (target_is_remote ())
     {
-      if (from_tty
-	  && !query (_("A trace is running already.  Start a new run? ")))
-	error (_("New trace run not started."));
-    }
+      putpkt ("QTinit");
+      remote_get_noisy_reply (target_buf, sizeof (target_buf));
+      if (strcmp (target_buf, "OK"))
+	error ("Target does not support this command.");
 
-  start_tracing (args);
+      ALL_TRACEPOINTS (t)
+      {
+	char tmp[40];
+
+	sprintf_vma (tmp, t->address);
+	sprintf (buf, "QTDP:%x:%s:%c:%lx:%x", t->number, tmp, /* address */
+		 t->enabled_p ? 'E' : 'D',
+		 t->step_count, t->pass_count);
+
+	if (t->actions)
+	  strcat (buf, "-");
+	putpkt (buf);
+	remote_get_noisy_reply (target_buf, sizeof (target_buf));
+	if (strcmp (target_buf, "OK"))
+	  error ("Target does not support tracepoints.");
+
+	if (t->actions)
+	  {
+	    encode_actions (t, &tdp_actions, &stepping_actions);
+	    old_chain = make_cleanup (free_actions_list_cleanup_wrapper,
+				      tdp_actions);
+	    (void) make_cleanup (free_actions_list_cleanup_wrapper,
+				 stepping_actions);
+
+	    /* do_single_steps (t); */
+	    if (tdp_actions)
+	      {
+		for (ndx = 0; tdp_actions[ndx]; ndx++)
+		  {
+		    QUIT;	/* allow user to bail out with ^C */
+		    sprintf (buf, "QTDP:-%x:%s:%s%c",
+			     t->number, tmp, /* address */
+			     tdp_actions[ndx],
+			     ((tdp_actions[ndx + 1] || stepping_actions)
+			      ? '-' : 0));
+		    putpkt (buf);
+		    remote_get_noisy_reply (target_buf, sizeof (target_buf));
+		    if (strcmp (target_buf, "OK"))
+		      error ("Error on target while setting tracepoints.");
+		  }
+	      }
+	    if (stepping_actions)
+	      {
+		for (ndx = 0; stepping_actions[ndx]; ndx++)
+		  {
+		    QUIT;	/* allow user to bail out with ^C */
+		    sprintf (buf, "QTDP:-%x:%s:%s%s%s",
+			     t->number, tmp, /* address */
+			     ((ndx == 0) ? "S" : ""),
+			     stepping_actions[ndx],
+			     (stepping_actions[ndx + 1] ? "-" : ""));
+		    putpkt (buf);
+		    remote_get_noisy_reply (target_buf, sizeof (target_buf));
+		    if (strcmp (target_buf, "OK"))
+		      error ("Error on target while setting tracepoints.");
+		  }
+	      }
+
+	    do_cleanups (old_chain);
+	  }
+      }
+      /* Tell target to treat text-like sections as transparent */
+      remote_set_transparent_ranges ();
+      /* Now insert traps and begin collecting data */
+      putpkt ("QTStart");
+      remote_get_noisy_reply (target_buf, sizeof (target_buf));
+      if (strcmp (target_buf, "OK"))
+	error ("Bogus reply from target: %s", target_buf);
+      set_traceframe_num (-1);	/* all old traceframes invalidated */
+      set_tracepoint_num (-1);
+      set_traceframe_context (-1);
+      trace_running_p = 1;
+      if (trace_start_stop_hook)
+	trace_start_stop_hook (1, from_tty);
+
+    }
+  else
+    error ("Trace can only be run on remote targets.");
 }
 
-/* The tstop command stops the tracing run.  The command passes any
-   supplied arguments to the target verbatim as a "stop note"; if the
-   target supports trace notes, then it will be reported back as part
-   of the trace run's status.  */
-
+/* tstop command */
 static void
-tstop_command (const char *args, int from_tty)
-{
-  if (!current_trace_status ()->running)
-    error (_("Trace is not running."));
-
-  stop_tracing (args);
-}
-
-void
-stop_tracing (const char *note)
-{
-  int ret;
-
-  target_trace_stop ();
-
-  for (breakpoint *t : all_tracepoints ())
+trace_stop_command (char *args, int from_tty)
+{				/* STUB_COMM IS_IMPLEMENTED */
+  if (target_is_remote ())
     {
-      struct bp_location *loc;
-
-      if ((t->type == bp_fast_tracepoint
-	   ? !may_insert_fast_tracepoints
-	   : !may_insert_tracepoints))
-	continue;
-
-      for (loc = t->loc; loc; loc = loc->next)
-	{
-	  /* GDB can be totally absent in some disconnected trace scenarios,
-	     but we don't really care if this semaphore goes out of sync.
-	     That's why we are decrementing it here, but not taking care
-	     in other places.  */
-	  if (loc->probe.prob != NULL)
-	    loc->probe.prob->clear_semaphore (loc->probe.objfile,
-					      loc->gdbarch);
-	}
+      putpkt ("QTStop");
+      remote_get_noisy_reply (target_buf, sizeof (target_buf));
+      if (strcmp (target_buf, "OK"))
+	error ("Bogus reply from target: %s", target_buf);
+      trace_running_p = 0;
+      if (trace_start_stop_hook)
+	trace_start_stop_hook (0, from_tty);
     }
-
-  if (!note)
-    note = trace_stop_notes;
-  ret = target_set_trace_notes (NULL, NULL, note);
-
-  if (!ret && note)
-    warning (_("Target does not support trace notes, note ignored"));
-
-  /* Should change in response to reply?  */
-  current_trace_status ()->running = 0;
+  else
+    error ("Trace can only be run on remote targets.");
 }
+
+unsigned long trace_running_p;
 
 /* tstatus command */
 static void
-tstatus_command (const char *args, int from_tty)
-{
-  struct trace_status *ts = current_trace_status ();
-  int status;
-  
-  status = target_get_trace_status (ts);
+trace_status_command (char *args, int from_tty)
+{				/* STUB_COMM IS_IMPLEMENTED */
+  if (target_is_remote ())
+    {
+      putpkt ("qTStatus");
+      remote_get_noisy_reply (target_buf, sizeof (target_buf));
 
-  if (status == -1)
-    {
-      if (ts->filename != NULL)
-	printf_filtered (_("Using a trace file.\n"));
-      else
-	{
-	  printf_filtered (_("Trace can not be run on this target.\n"));
-	  return;
-	}
-    }
+      if (target_buf[0] != 'T' ||
+	  (target_buf[1] != '0' && target_buf[1] != '1'))
+	error ("Bogus reply from target: %s", target_buf);
 
-  if (!ts->running_known)
-    {
-      printf_filtered (_("Run/stop status is unknown.\n"));
-    }
-  else if (ts->running)
-    {
-      printf_filtered (_("Trace is running on the target.\n"));
+      /* exported for use by the GUI */
+      trace_running_p = (target_buf[1] == '1');
     }
   else
-    {
-      switch (ts->stop_reason)
-	{
-	case trace_never_run:
-	  printf_filtered (_("No trace has been run on the target.\n"));
-	  break;
-	case trace_stop_command:
-	  if (ts->stop_desc)
-	    printf_filtered (_("Trace stopped by a tstop command (%s).\n"),
-			     ts->stop_desc);
-	  else
-	    printf_filtered (_("Trace stopped by a tstop command.\n"));
-	  break;
-	case trace_buffer_full:
-	  printf_filtered (_("Trace stopped because the buffer was full.\n"));
-	  break;
-	case trace_disconnected:
-	  printf_filtered (_("Trace stopped because of disconnection.\n"));
-	  break;
-	case tracepoint_passcount:
-	  printf_filtered (_("Trace stopped by tracepoint %d.\n"),
-			   ts->stopping_tracepoint);
-	  break;
-	case tracepoint_error:
-	  if (ts->stopping_tracepoint)
-	    printf_filtered (_("Trace stopped by an "
-			       "error (%s, tracepoint %d).\n"),
-			     ts->stop_desc, ts->stopping_tracepoint);
-	  else
-	    printf_filtered (_("Trace stopped by an error (%s).\n"),
-			     ts->stop_desc);
-	  break;
-	case trace_stop_reason_unknown:
-	  printf_filtered (_("Trace stopped for an unknown reason.\n"));
-	  break;
-	default:
-	  printf_filtered (_("Trace stopped for some other reason (%d).\n"),
-			   ts->stop_reason);
-	  break;
-	}
-    }
-
-  if (ts->traceframes_created >= 0
-      && ts->traceframe_count != ts->traceframes_created)
-    {
-      printf_filtered (_("Buffer contains %d trace "
-			 "frames (of %d created total).\n"),
-		       ts->traceframe_count, ts->traceframes_created);
-    }
-  else if (ts->traceframe_count >= 0)
-    {
-      printf_filtered (_("Collected %d trace frames.\n"),
-		       ts->traceframe_count);
-    }
-
-  if (ts->buffer_free >= 0)
-    {
-      if (ts->buffer_size >= 0)
-	{
-	  printf_filtered (_("Trace buffer has %d bytes of %d bytes free"),
-			   ts->buffer_free, ts->buffer_size);
-	  if (ts->buffer_size > 0)
-	    printf_filtered (_(" (%d%% full)"),
-			     ((int) ((((long long) (ts->buffer_size
-						    - ts->buffer_free)) * 100)
-				     / ts->buffer_size)));
-	  printf_filtered (_(".\n"));
-	}
-      else
-	printf_filtered (_("Trace buffer has %d bytes free.\n"),
-			 ts->buffer_free);
-    }
-
-  if (ts->disconnected_tracing)
-    printf_filtered (_("Trace will continue if GDB disconnects.\n"));
-  else
-    printf_filtered (_("Trace will stop if GDB disconnects.\n"));
-
-  if (ts->circular_buffer)
-    printf_filtered (_("Trace buffer is circular.\n"));
-
-  if (ts->user_name && strlen (ts->user_name) > 0)
-    printf_filtered (_("Trace user is %s.\n"), ts->user_name);
-
-  if (ts->notes && strlen (ts->notes) > 0)
-    printf_filtered (_("Trace notes: %s.\n"), ts->notes);
-
-  /* Now report on what we're doing with tfind.  */
-  if (traceframe_number >= 0)
-    printf_filtered (_("Looking at trace frame %d, tracepoint %d.\n"),
-		     traceframe_number, tracepoint_number);
-  else
-    printf_filtered (_("Not looking at any trace frame.\n"));
-
-  /* Report start/stop times if supplied.  */
-  if (ts->start_time)
-    {
-      if (ts->stop_time)
-	{
-	  LONGEST run_time = ts->stop_time - ts->start_time;
-
-	  /* Reporting a run time is more readable than two long numbers.  */
-	  printf_filtered (_("Trace started at %ld.%06ld secs, stopped %ld.%06ld secs later.\n"),
-			   (long int) (ts->start_time / 1000000),
-			   (long int) (ts->start_time % 1000000),
-			   (long int) (run_time / 1000000),
-			   (long int) (run_time % 1000000));
-	}
-      else
-	printf_filtered (_("Trace started at %ld.%06ld secs.\n"),
-			 (long int) (ts->start_time / 1000000),
-			 (long int) (ts->start_time % 1000000));
-    }
-  else if (ts->stop_time)
-    printf_filtered (_("Trace stopped at %ld.%06ld secs.\n"),
-		     (long int) (ts->stop_time / 1000000),
-		     (long int) (ts->stop_time % 1000000));
-
-  /* Now report any per-tracepoint status available.  */
-  for (breakpoint *t : all_tracepoints ())
-    target_get_tracepoint_status (t, NULL);
+    error ("Trace can only be run on remote targets.");
 }
 
-/* Report the trace status to uiout, in a way suitable for MI, and not
-   suitable for CLI.  If ON_STOP is true, suppress a few fields that
-   are not meaningful in the -trace-stop response.
-
-   The implementation is essentially parallel to trace_status_command, but
-   merging them will result in unreadable code.  */
-void
-trace_status_mi (int on_stop)
-{
-  struct ui_out *uiout = current_uiout;
-  struct trace_status *ts = current_trace_status ();
-  int status;
-
-  status = target_get_trace_status (ts);
-
-  if (status == -1 && ts->filename == NULL)
-    {
-      uiout->field_string ("supported", "0");
-      return;
-    }
-
-  if (ts->filename != NULL)
-    uiout->field_string ("supported", "file");
-  else if (!on_stop)
-    uiout->field_string ("supported", "1");
-
-  if (ts->filename != NULL)
-    uiout->field_string ("trace-file", ts->filename);
-
-  gdb_assert (ts->running_known);
-
-  if (ts->running)
-    {
-      uiout->field_string ("running", "1");
-
-      /* Unlike CLI, do not show the state of 'disconnected-tracing' variable.
-	 Given that the frontend gets the status either on -trace-stop, or from
-	 -trace-status after re-connection, it does not seem like this
-	 information is necessary for anything.  It is not necessary for either
-	 figuring the vital state of the target nor for navigation of trace
-	 frames.  If the frontend wants to show the current state is some
-	 configure dialog, it can request the value when such dialog is
-	 invoked by the user.  */
-    }
-  else
-    {
-      const char *stop_reason = NULL;
-      int stopping_tracepoint = -1;
-
-      if (!on_stop)
-	uiout->field_string ("running", "0");
-
-      if (ts->stop_reason != trace_stop_reason_unknown)
-	{
-	  switch (ts->stop_reason)
-	    {
-	    case trace_stop_command:
-	      stop_reason = "request";
-	      break;
-	    case trace_buffer_full:
-	      stop_reason = "overflow";
-	      break;
-	    case trace_disconnected:
-	      stop_reason = "disconnection";
-	      break;
-	    case tracepoint_passcount:
-	      stop_reason = "passcount";
-	      stopping_tracepoint = ts->stopping_tracepoint;
-	      break;
-	    case tracepoint_error:
-	      stop_reason = "error";
-	      stopping_tracepoint = ts->stopping_tracepoint;
-	      break;
-	    }
-	  
-	  if (stop_reason)
-	    {
-	      uiout->field_string ("stop-reason", stop_reason);
-	      if (stopping_tracepoint != -1)
-		uiout->field_signed ("stopping-tracepoint",
-				     stopping_tracepoint);
-	      if (ts->stop_reason == tracepoint_error)
-		uiout->field_string ("error-description",
-				     ts->stop_desc);
-	    }
-	}
-    }
-
-  if (ts->traceframe_count != -1)
-    uiout->field_signed ("frames", ts->traceframe_count);
-  if (ts->traceframes_created != -1)
-    uiout->field_signed ("frames-created", ts->traceframes_created);
-  if (ts->buffer_size != -1)
-    uiout->field_signed ("buffer-size", ts->buffer_size);
-  if (ts->buffer_free != -1)
-    uiout->field_signed ("buffer-free", ts->buffer_free);
-
-  uiout->field_signed ("disconnected",  ts->disconnected_tracing);
-  uiout->field_signed ("circular",  ts->circular_buffer);
-
-  uiout->field_string ("user-name", ts->user_name);
-  uiout->field_string ("notes", ts->notes);
-
-  {
-    char buf[100];
-
-    xsnprintf (buf, sizeof buf, "%ld.%06ld",
-	       (long int) (ts->start_time / 1000000),
-	       (long int) (ts->start_time % 1000000));
-    uiout->field_string ("start-time", buf);
-    xsnprintf (buf, sizeof buf, "%ld.%06ld",
-	       (long int) (ts->stop_time / 1000000),
-	       (long int) (ts->stop_time % 1000000));
-    uiout->field_string ("stop-time", buf);
-  }
-}
-
-/* Check if a trace run is ongoing.  If so, and FROM_TTY, query the
-   user if she really wants to detach.  */
-
-void
-query_if_trace_running (int from_tty)
-{
-  if (!from_tty)
-    return;
-
-  /* It can happen that the target that was tracing went away on its
-     own, and we didn't notice.  Get a status update, and if the
-     current target doesn't even do tracing, then assume it's not
-     running anymore.  */
-  if (target_get_trace_status (current_trace_status ()) < 0)
-    current_trace_status ()->running = 0;
-
-  /* If running interactively, give the user the option to cancel and
-     then decide what to do differently with the run.  Scripts are
-     just going to disconnect and let the target deal with it,
-     according to how it's been instructed previously via
-     disconnected-tracing.  */
-  if (current_trace_status ()->running)
-    {
-      process_tracepoint_on_disconnect ();
-
-      if (current_trace_status ()->disconnected_tracing)
-	{
-	  if (!query (_("Trace is running and will "
-			"continue after detach; detach anyway? ")))
-	    error (_("Not confirmed."));
-	}
-      else
-	{
-	  if (!query (_("Trace is running but will "
-			"stop on detach; detach anyway? ")))
-	    error (_("Not confirmed."));
-	}
-    }
-}
-
-/* This function handles the details of what to do about an ongoing
-   tracing run if the user has asked to detach or otherwise disconnect
-   from the target.  */
-
-void
-disconnect_tracing (void)
-{
-  /* Also we want to be out of tfind mode, otherwise things can get
-     confusing upon reconnection.  Just use these calls instead of
-     full tfind_1 behavior because we're in the middle of detaching,
-     and there's no point to updating current stack frame etc.  */
-  trace_reset_local_state ();
-}
-
-/* Worker function for the various flavors of the tfind command.  */
-void
-tfind_1 (enum trace_find_type type, int num,
-	 CORE_ADDR addr1, CORE_ADDR addr2,
-	 int from_tty)
+/* Worker function for the various flavors of the tfind command */
+static void
+finish_tfind_command (char *msg,
+		      long sizeof_msg,
+		      int from_tty)
 {
   int target_frameno = -1, target_tracept = -1;
-  struct frame_id old_frame_id = null_frame_id;
-  struct tracepoint *tp;
-  struct ui_out *uiout = current_uiout;
+  CORE_ADDR old_frame_addr;
+  struct symbol *old_func;
+  char *reply;
 
-  /* Only try to get the current stack frame if we have a chance of
-     succeeding.  In particular, if we're trying to get a first trace
-     frame while all threads are running, it's not going to succeed,
-     so leave it with a default value and let the frame comparison
-     below (correctly) decide to print out the source location of the
-     trace frame.  */
-  if (!(type == tfind_number && num == -1)
-      && (has_stack_frames () || traceframe_number >= 0))
-    old_frame_id = get_frame_id (get_current_frame ());
+  old_frame_addr = FRAME_FP (get_current_frame ());
+  old_func = find_pc_function (read_pc ());
 
-  target_frameno = target_trace_find (type, num, addr1, addr2,
-				      &target_tracept);
-  
-  if (type == tfind_number
-      && num == -1
-      && target_frameno == -1)
-    {
-      /* We told the target to get out of tfind mode, and it did.  */
-    }
-  else if (target_frameno == -1)
-    {
-      /* A request for a non-existent trace frame has failed.
-	 Our response will be different, depending on FROM_TTY:
+  putpkt (msg);
+  reply = remote_get_noisy_reply (msg, sizeof_msg);
 
-	 If FROM_TTY is true, meaning that this command was 
-	 typed interactively by the user, then give an error
-	 and DO NOT change the state of traceframe_number etc.
+  while (reply && *reply)
+    switch (*reply)
+      {
+      case 'F':
+	if ((target_frameno = (int) strtol (++reply, &reply, 16)) == -1)
+	  {
+	    /* A request for a non-existant trace frame has failed.
+	       Our response will be different, depending on FROM_TTY:
 
-	 However if FROM_TTY is false, meaning that we're either
-	 in a script, a loop, or a user-defined command, then 
-	 DON'T give an error, but DO change the state of
-	 traceframe_number etc. to invalid.
+	       If FROM_TTY is true, meaning that this command was 
+	       typed interactively by the user, then give an error
+	       and DO NOT change the state of traceframe_number etc.
 
-	 The rationale is that if you typed the command, you
-	 might just have committed a typo or something, and you'd
-	 like to NOT lose your current debugging state.  However
-	 if you're in a user-defined command or especially in a
-	 loop, then you need a way to detect that the command
-	 failed WITHOUT aborting.  This allows you to write
-	 scripts that search thru the trace buffer until the end,
-	 and then continue on to do something else.  */
-  
-      if (from_tty)
-	error (_("Target failed to find requested trace frame."));
-      else
-	{
-	  if (info_verbose)
-	    printf_filtered ("End of trace buffer.\n");
-#if 0 /* dubious now?  */
-	  /* The following will not recurse, since it's
-	     special-cased.  */
-	  tfind_command ("-1", from_tty);
-#endif
-	}
-    }
-  
-  tp = get_tracepoint_by_number_on_target (target_tracept);
+	       However if FROM_TTY is false, meaning that we're either
+	       in a script, a loop, or a user-defined command, then 
+	       DON'T give an error, but DO change the state of
+	       traceframe_number etc. to invalid.
 
-  reinit_frame_cache ();
-  target_dcache_invalidate ();
+	       The rationalle is that if you typed the command, you
+	       might just have committed a typo or something, and you'd
+	       like to NOT lose your current debugging state.  However
+	       if you're in a user-defined command or especially in a
+	       loop, then you need a way to detect that the command
+	       failed WITHOUT aborting.  This allows you to write
+	       scripts that search thru the trace buffer until the end,
+	       and then continue on to do something else.  */
 
-  set_tracepoint_num (tp ? tp->number : target_tracept);
+	    if (from_tty)
+	      error ("Target failed to find requested trace frame.");
+	    else
+	      {
+		if (info_verbose)
+		  printf_filtered ("End of trace buffer.\n");
+		/* The following will not recurse, since it's special-cased */
+		trace_find_command ("-1", from_tty);
+		reply = NULL;	/* break out of loop, 
+				   (avoid recursive nonsense) */
+	      }
+	  }
+	break;
+      case 'T':
+	if ((target_tracept = (int) strtol (++reply, &reply, 16)) == -1)
+	  error ("Target failed to find requested trace frame.");
+	break;
+      case 'O':		/* "OK"? */
+	if (reply[1] == 'K' && reply[2] == '\0')
+	  reply += 2;
+	else
+	  error ("Bogus reply from target: %s", reply);
+	break;
+      default:
+	error ("Bogus reply from target: %s", reply);
+      }
 
-  if (target_frameno != get_traceframe_number ())
-    gdb::observers::traceframe_changed.notify (target_frameno, tracepoint_number);
-
-  set_current_traceframe (target_frameno);
-
+  flush_cached_frames ();
+  registers_changed ();
+  select_frame (get_current_frame ());
+  set_traceframe_num (target_frameno);
+  set_tracepoint_num (target_tracept);
   if (target_frameno == -1)
-    set_traceframe_context (NULL);
+    set_traceframe_context (-1);
   else
-    set_traceframe_context (get_current_frame ());
+    set_traceframe_context (read_pc ());
 
-  if (traceframe_number >= 0)
+  if (from_tty)
     {
-      /* Use different branches for MI and CLI to make CLI messages
-	 i18n-eable.  */
-      if (uiout->is_mi_like_p ())
-	{
-	  uiout->field_string ("found", "1");
-	  uiout->field_signed ("tracepoint", tracepoint_number);
-	  uiout->field_signed ("traceframe", traceframe_number);
-	}
+      int source_only;
+
+      /* NOTE: in immitation of the step command, try to determine
+         whether we have made a transition from one function to another.
+         If so, we'll print the "stack frame" (ie. the new function and
+         it's arguments) -- otherwise we'll just show the new source line.
+
+         This determination is made by checking (1) whether the current
+         function has changed, and (2) whether the current FP has changed.
+         Hack: if the FP wasn't collected, either at the current or the
+         previous frame, assume that the FP has NOT changed.  */
+
+      if (old_func == find_pc_function (read_pc ()) &&
+	  (old_frame_addr == 0 ||
+	   FRAME_FP (get_current_frame ()) == 0 ||
+	   old_frame_addr == FRAME_FP (get_current_frame ())))
+	source_only = -1;
       else
-	{
-	  printf_unfiltered (_("Found trace frame %d, tracepoint %d\n"),
-			     traceframe_number, tracepoint_number);
-	}
-    }
-  else
-    {
-      if (uiout->is_mi_like_p ())
-	uiout->field_string ("found", "0");
-      else if (type == tfind_number && num == -1)
-	printf_unfiltered (_("No longer looking at any trace frame\n"));
-      else /* This case may never occur, check.  */
-	printf_unfiltered (_("No trace frame found\n"));
-    }
+	source_only = 1;
 
-  /* If we're in nonstop mode and getting out of looking at trace
-     frames, there won't be any current frame to go back to and
-     display.  */
-  if (from_tty
-      && (has_stack_frames () || traceframe_number >= 0))
-    {
-      enum print_what print_what;
-
-      /* NOTE: in imitation of the step command, try to determine
-         whether we have made a transition from one function to
-         another.  If so, we'll print the "stack frame" (ie. the new
-         function and it's arguments) -- otherwise we'll just show the
-         new source line.  */
-
-      if (frame_id_eq (old_frame_id,
-		       get_frame_id (get_current_frame ())))
-	print_what = SRC_LINE;
-      else
-	print_what = SRC_AND_LOC;
-
-      print_stack_frame (get_selected_frame (NULL), 1, print_what, 1);
+      print_stack_frame (selected_frame, frame_relative_level (selected_frame),
+			 source_only);
       do_displays ();
     }
-}
-
-/* Error on looking at traceframes while trace is running.  */
-
-void
-check_trace_running (struct trace_status *status)
-{
-  if (status->running && status->filename == NULL)
-    error (_("May not look at trace frames while trace is running."));
 }
 
 /* trace_find_command takes a trace frame number n, 
@@ -2246,395 +1980,481 @@ check_trace_running (struct trace_status *status)
 
 /* tfind command */
 static void
-tfind_command_1 (const char *args, int from_tty)
-{ /* This should only be called with a numeric argument.  */
+trace_find_command (char *args, int from_tty)
+{				/* STUB_COMM PART_IMPLEMENTED */
+  /* this should only be called with a numeric argument */
   int frameno = -1;
 
-  check_trace_running (current_trace_status ());
-  
-  if (args == 0 || *args == 0)
-    { /* TFIND with no args means find NEXT trace frame.  */
-      if (traceframe_number == -1)
-	frameno = 0;	/* "next" is first one.  */
-        else
-	frameno = traceframe_number + 1;
-    }
-  else if (0 == strcmp (args, "-"))
+  if (target_is_remote ())
     {
-      if (traceframe_number == -1)
-	error (_("not debugging trace buffer"));
-      else if (from_tty && traceframe_number == 0)
-	error (_("already at start of trace buffer"));
-      
-      frameno = traceframe_number - 1;
-      }
-  /* A hack to work around eval's need for fp to have been collected.  */
-  else if (0 == strcmp (args, "-1"))
-    frameno = -1;
+      if (trace_find_hook)
+	trace_find_hook (args, from_tty);
+
+      if (args == 0 || *args == 0)
+	{			/* TFIND with no args means find NEXT trace frame. */
+	  if (traceframe_number == -1)
+	    frameno = 0;	/* "next" is first one */
+	  else
+	    frameno = traceframe_number + 1;
+	}
+      else if (0 == strcmp (args, "-"))
+	{
+	  if (traceframe_number == -1)
+	    error ("not debugging trace buffer");
+	  else if (from_tty && traceframe_number == 0)
+	    error ("already at start of trace buffer");
+
+	  frameno = traceframe_number - 1;
+	}
+      else
+	frameno = parse_and_eval_long (args);
+
+      if (frameno < -1)
+	error ("invalid input (%d is less than zero)", frameno);
+
+      sprintf (target_buf, "QTFrame:%x", frameno);
+      finish_tfind_command (target_buf, sizeof (target_buf), from_tty);
+    }
   else
-    frameno = parse_and_eval_long (args);
-
-  if (frameno < -1)
-    error (_("invalid input (%d is less than zero)"), frameno);
-
-  tfind_1 (tfind_number, frameno, 0, 0, from_tty);
-}
-
-static void
-tfind_command (const char *args, int from_tty)
-{
-  tfind_command_1 (args, from_tty);
+    error ("Trace can only be run on remote targets.");
 }
 
 /* tfind end */
 static void
-tfind_end_command (const char *args, int from_tty)
+trace_find_end_command (char *args, int from_tty)
 {
-  tfind_command_1 ("-1", from_tty);
+  trace_find_command ("-1", from_tty);
+}
+
+/* tfind none */
+static void
+trace_find_none_command (char *args, int from_tty)
+{
+  trace_find_command ("-1", from_tty);
 }
 
 /* tfind start */
 static void
-tfind_start_command (const char *args, int from_tty)
+trace_find_start_command (char *args, int from_tty)
 {
-  tfind_command_1 ("0", from_tty);
+  trace_find_command ("0", from_tty);
 }
 
 /* tfind pc command */
 static void
-tfind_pc_command (const char *args, int from_tty)
-{
+trace_find_pc_command (char *args, int from_tty)
+{				/* STUB_COMM PART_IMPLEMENTED */
   CORE_ADDR pc;
+  char tmp[40];
 
-  check_trace_running (current_trace_status ());
+  if (target_is_remote ())
+    {
+      if (args == 0 || *args == 0)
+	pc = read_pc ();	/* default is current pc */
+      else
+	pc = parse_and_eval_address (args);
 
-  if (args == 0 || *args == 0)
-    pc = regcache_read_pc (get_current_regcache ());
+      sprintf_vma (tmp, pc);
+      sprintf (target_buf, "QTFrame:pc:%s", tmp);
+      finish_tfind_command (target_buf, sizeof (target_buf), from_tty);
+    }
   else
-    pc = parse_and_eval_address (args);
-
-  tfind_1 (tfind_pc, 0, pc, 0, from_tty);
+    error ("Trace can only be run on remote targets.");
 }
 
 /* tfind tracepoint command */
 static void
-tfind_tracepoint_command (const char *args, int from_tty)
-{
+trace_find_tracepoint_command (char *args, int from_tty)
+{				/* STUB_COMM PART_IMPLEMENTED */
   int tdp;
-  struct tracepoint *tp;
 
-  check_trace_running (current_trace_status ());
-
-  if (args == 0 || *args == 0)
+  if (target_is_remote ())
     {
-      if (tracepoint_number == -1)
-	error (_("No current tracepoint -- please supply an argument."));
+      if (args == 0 || *args == 0)
+	if (tracepoint_number == -1)
+	  error ("No current tracepoint -- please supply an argument.");
+	else
+	  tdp = tracepoint_number;	/* default is current TDP */
       else
-	tdp = tracepoint_number;	/* Default is current TDP.  */
+	tdp = parse_and_eval_long (args);
+
+      sprintf (target_buf, "QTFrame:tdp:%x", tdp);
+      finish_tfind_command (target_buf, sizeof (target_buf), from_tty);
     }
   else
-    tdp = parse_and_eval_long (args);
-
-  /* If we have the tracepoint on hand, use the number that the
-     target knows about (which may be different if we disconnected
-     and reconnected).  */
-  tp = get_tracepoint (tdp);
-  if (tp)
-    tdp = tp->number_on_target;
-
-  tfind_1 (tfind_tp, tdp, 0, 0, from_tty);
+    error ("Trace can only be run on remote targets.");
 }
 
 /* TFIND LINE command:
 
    This command will take a sourceline for argument, just like BREAK
-   or TRACE (ie. anything that "decode_line_1" can handle).
+   or TRACE (ie. anything that "decode_line_1" can handle).  
 
    With no argument, this command will find the next trace frame 
    corresponding to a source line OTHER THAN THE CURRENT ONE.  */
 
 static void
-tfind_line_command (const char *args, int from_tty)
-{
-  check_trace_running (current_trace_status ());
+trace_find_line_command (char *args, int from_tty)
+{				/* STUB_COMM PART_IMPLEMENTED */
+  static CORE_ADDR start_pc, end_pc;
+  struct symtabs_and_lines sals;
+  struct symtab_and_line sal;
+  struct cleanup *old_chain;
+  char   startpc_str[40], endpc_str[40];
 
-  symtab_and_line sal;
-  if (args == 0 || *args == 0)
+  if (target_is_remote ())
     {
-      sal = find_pc_line (get_frame_pc (get_current_frame ()), 0);
+      if (args == 0 || *args == 0)
+	{
+	  sal = find_pc_line ((get_current_frame ())->pc, 0);
+	  sals.nelts = 1;
+	  sals.sals = (struct symtab_and_line *)
+	    xmalloc (sizeof (struct symtab_and_line));
+	  sals.sals[0] = sal;
+	}
+      else
+	{
+	  sals = decode_line_spec (args, 1);
+	  sal = sals.sals[0];
+	}
+
+      old_chain = make_cleanup (xfree, sals.sals);
+      if (sal.symtab == 0)
+	{
+	  printf_filtered ("TFIND: No line number information available");
+	  if (sal.pc != 0)
+	    {
+	      /* This is useful for "info line *0x7f34".  If we can't tell the
+	         user about a source line, at least let them have the symbolic
+	         address.  */
+	      printf_filtered (" for address ");
+	      wrap_here ("  ");
+	      print_address (sal.pc, gdb_stdout);
+	      printf_filtered (";\n -- will attempt to find by PC. \n");
+	    }
+	  else
+	    {
+	      printf_filtered (".\n");
+	      return;		/* no line, no PC; what can we do? */
+	    }
+	}
+      else if (sal.line > 0
+	       && find_line_pc_range (sal, &start_pc, &end_pc))
+	{
+	  if (start_pc == end_pc)
+	    {
+	      printf_filtered ("Line %d of \"%s\"",
+			       sal.line, sal.symtab->filename);
+	      wrap_here ("  ");
+	      printf_filtered (" is at address ");
+	      print_address (start_pc, gdb_stdout);
+	      wrap_here ("  ");
+	      printf_filtered (" but contains no code.\n");
+	      sal = find_pc_line (start_pc, 0);
+	      if (sal.line > 0 &&
+		  find_line_pc_range (sal, &start_pc, &end_pc) &&
+		  start_pc != end_pc)
+		printf_filtered ("Attempting to find line %d instead.\n",
+				 sal.line);
+	      else
+		error ("Cannot find a good line.");
+	    }
+	}
+      else
+	/* Is there any case in which we get here, and have an address
+	   which the user would want to see?  If we have debugging symbols
+	   and no line numbers?  */
+	error ("Line number %d is out of range for \"%s\".\n",
+	       sal.line, sal.symtab->filename);
+
+      sprintf_vma (startpc_str, start_pc);
+      sprintf_vma (endpc_str, end_pc - 1);
+      if (args && *args)	/* find within range of stated line */
+	sprintf (target_buf, "QTFrame:range:%s:%s", startpc_str, endpc_str);
+      else			/* find OUTSIDE OF range of CURRENT line */
+	sprintf (target_buf, "QTFrame:outside:%s:%s", startpc_str, endpc_str);
+      finish_tfind_command (target_buf, sizeof (target_buf), from_tty);
+      do_cleanups (old_chain);
     }
   else
-    {
-      std::vector<symtab_and_line> sals
-	= decode_line_with_current_source (args, DECODE_LINE_FUNFIRSTLINE);
-      sal = sals[0];
-    }
-
-  if (sal.symtab == 0)
-    error (_("No line number information available."));
-
-  CORE_ADDR start_pc, end_pc;
-  if (sal.line > 0 && find_line_pc_range (sal, &start_pc, &end_pc))
-    {
-      if (start_pc == end_pc)
-  	{
-	  printf_filtered ("Line %d of \"%s\"",
-			   sal.line,
-			   symtab_to_filename_for_display (sal.symtab));
-	  wrap_here ("  ");
-	  printf_filtered (" is at address ");
-	  print_address (get_current_arch (), start_pc, gdb_stdout);
-	  wrap_here ("  ");
-	  printf_filtered (" but contains no code.\n");
-	  sal = find_pc_line (start_pc, 0);
-	  if (sal.line > 0
-	      && find_line_pc_range (sal, &start_pc, &end_pc)
-	      && start_pc != end_pc)
-	    printf_filtered ("Attempting to find line %d instead.\n",
-			     sal.line);
-  	  else
-	    error (_("Cannot find a good line."));
-  	}
-      }
-    else
-    /* Is there any case in which we get here, and have an address
-       which the user would want to see?  If we have debugging
-       symbols and no line numbers?  */
-    error (_("Line number %d is out of range for \"%s\"."),
-	   sal.line, symtab_to_filename_for_display (sal.symtab));
-
-  /* Find within range of stated line.  */
-  if (args && *args)
-    tfind_1 (tfind_range, 0, start_pc, end_pc - 1, from_tty);
-  else
-    tfind_1 (tfind_outside, 0, start_pc, end_pc - 1, from_tty);
+    error ("Trace can only be run on remote targets.");
 }
 
 /* tfind range command */
 static void
-tfind_range_command (const char *args, int from_tty)
+trace_find_range_command (char *args, int from_tty)
 {
   static CORE_ADDR start, stop;
-  const char *tmp;
+  char start_str[40], stop_str[40];
+  char *tmp;
 
-  check_trace_running (current_trace_status ());
-
-  if (args == 0 || *args == 0)
-    { /* XXX FIXME: what should default behavior be?  */
-      printf_filtered ("Usage: tfind range STARTADDR, ENDADDR\n");
-      return;
-    }
-
-  if (0 != (tmp = strchr (args, ',')))
+  if (target_is_remote ())
     {
-      std::string start_addr (args, tmp);
-      ++tmp;
-      tmp = skip_spaces (tmp);
-      start = parse_and_eval_address (start_addr.c_str ());
-      stop = parse_and_eval_address (tmp);
+      if (args == 0 || *args == 0)
+	{		/* XXX FIXME: what should default behavior be? */
+	  printf_filtered ("Usage: tfind range <startaddr>,<endaddr>\n");
+	  return;
+	}
+
+      if (0 != (tmp = strchr (args, ',')))
+	{
+	  *tmp++ = '\0';	/* terminate start address */
+	  while (isspace ((int) *tmp))
+	    tmp++;
+	  start = parse_and_eval_address (args);
+	  stop = parse_and_eval_address (tmp);
+	}
+      else
+	{			/* no explicit end address? */
+	  start = parse_and_eval_address (args);
+	  stop = start + 1;	/* ??? */
+	}
+
+      sprintf_vma (start_str, start);
+      sprintf_vma (stop_str, stop);
+      sprintf (target_buf, "QTFrame:range:%s:%s", start_str, stop_str);
+      finish_tfind_command (target_buf, sizeof (target_buf), from_tty);
     }
   else
-    {			/* No explicit end address?  */
-      start = parse_and_eval_address (args);
-      stop = start + 1;	/* ??? */
-    }
-
-  tfind_1 (tfind_range, 0, start, stop, from_tty);
+    error ("Trace can only be run on remote targets.");
 }
 
 /* tfind outside command */
 static void
-tfind_outside_command (const char *args, int from_tty)
+trace_find_outside_command (char *args, int from_tty)
 {
   CORE_ADDR start, stop;
-  const char *tmp;
+  char start_str[40], stop_str[40];
+  char *tmp;
 
-  if (current_trace_status ()->running
-      && current_trace_status ()->filename == NULL)
-    error (_("May not look at trace frames while trace is running."));
+  if (target_is_remote ())
+    {
+      if (args == 0 || *args == 0)
+	{		/* XXX FIXME: what should default behavior be? */
+	  printf_filtered ("Usage: tfind outside <startaddr>,<endaddr>\n");
+	  return;
+	}
+
+      if (0 != (tmp = strchr (args, ',')))
+	{
+	  *tmp++ = '\0';	/* terminate start address */
+	  while (isspace ((int) *tmp))
+	    tmp++;
+	  start = parse_and_eval_address (args);
+	  stop = parse_and_eval_address (tmp);
+	}
+      else
+	{			/* no explicit end address? */
+	  start = parse_and_eval_address (args);
+	  stop = start + 1;	/* ??? */
+	}
+
+      sprintf_vma (start_str, start);
+      sprintf_vma (stop_str, stop);
+      sprintf (target_buf, "QTFrame:outside:%s:%s", start_str, stop_str);
+      finish_tfind_command (target_buf, sizeof (target_buf), from_tty);
+    }
+  else
+    error ("Trace can only be run on remote targets.");
+}
+
+/* save-tracepoints command */
+static void
+tracepoint_save_command (char *args, int from_tty)
+{
+  struct tracepoint *tp;
+  struct action_line *line;
+  FILE *fp;
+  char *i1 = "    ", *i2 = "      ";
+  char *indent, *actionline, *pathname;
+  char tmp[40];
 
   if (args == 0 || *args == 0)
-    { /* XXX FIXME: what should default behavior be?  */
-      printf_filtered ("Usage: tfind outside STARTADDR, ENDADDR\n");
+    error ("Argument required (file name in which to save tracepoints");
+
+  if (tracepoint_chain == 0)
+    {
+      warning ("save-tracepoints: no tracepoints to save.\n");
       return;
     }
 
-  if (0 != (tmp = strchr (args, ',')))
-    {
-      std::string start_addr (args, tmp);
-      ++tmp;
-      tmp = skip_spaces (tmp);
-      start = parse_and_eval_address (start_addr.c_str ());
-      stop = parse_and_eval_address (tmp);
-    }
-  else
-    {			/* No explicit end address?  */
-      start = parse_and_eval_address (args);
-      stop = start + 1;	/* ??? */
-    }
+  pathname = tilde_expand (args);
+  if (!(fp = fopen (pathname, "w")))
+    error ("Unable to open file '%s' for saving tracepoints (%s)",
+	   args, safe_strerror (errno));
+  xfree (pathname);
+  
+  ALL_TRACEPOINTS (tp)
+  {
+    if (tp->addr_string)
+      fprintf (fp, "trace %s\n", tp->addr_string);
+    else
+      {
+	sprintf_vma (tmp, tp->address);
+	fprintf (fp, "trace *0x%s\n", tmp);
+      }
 
-  tfind_1 (tfind_outside, 0, start, stop, from_tty);
+    if (tp->pass_count)
+      fprintf (fp, "  passcount %d\n", tp->pass_count);
+
+    if (tp->actions)
+      {
+	fprintf (fp, "  actions\n");
+	indent = i1;
+	for (line = tp->actions; line; line = line->next)
+	  {
+	    struct cmd_list_element *cmd;
+
+	    QUIT;		/* allow user to bail out with ^C */
+	    actionline = line->action;
+	    while (isspace ((int) *actionline))
+	      actionline++;
+
+	    fprintf (fp, "%s%s\n", indent, actionline);
+	    if (*actionline != '#')	/* skip for comment lines */
+	      {
+		cmd = lookup_cmd (&actionline, cmdlist, "", -1, 1);
+		if (cmd == 0)
+		  error ("Bad action list item: %s", actionline);
+		if (cmd_cfunc_eq (cmd, while_stepping_pseudocommand))
+		  indent = i2;
+		else if (cmd_cfunc_eq (cmd, end_actions_pseudocommand))
+		  indent = i1;
+	      }
+	  }
+      }
+  }
+  fclose (fp);
+  if (from_tty)
+    printf_filtered ("Tracepoints saved to file '%s'.\n", args);
+  return;
 }
 
 /* info scope command: list the locals for a scope.  */
 static void
-info_scope_command (const char *args_in, int from_tty)
+scope_info (char *args, int from_tty)
 {
+  struct symtabs_and_lines sals;
   struct symbol *sym;
-  struct bound_minimal_symbol msym;
-  const struct block *block;
-  const char *symname;
-  const char *save_args = args_in;
-  struct block_iterator iter;
-  int j, count = 0;
-  struct gdbarch *gdbarch;
-  int regno;
-  const char *args = args_in;
+  struct minimal_symbol *msym;
+  struct block *block;
+  char **canonical, *symname, *save_args = args;
+  int i, j, count = 0;
 
   if (args == 0 || *args == 0)
-    error (_("requires an argument (function, "
-	     "line or *addr) to define a scope"));
+    error ("requires an argument (function, line or *addr) to define a scope");
 
-  event_location_up location = string_to_event_location (&args,
-							 current_language);
-  std::vector<symtab_and_line> sals
-    = decode_line_1 (location.get (), DECODE_LINE_FUNFIRSTLINE,
-		     NULL, NULL, 0);
-  if (sals.empty ())
-    {
-      /* Presumably decode_line_1 has already warned.  */
-      return;
-    }
+  sals = decode_line_1 (&args, 1, NULL, 0, &canonical);
+  if (sals.nelts == 0)
+    return;			/* presumably decode_line_1 has already warned */
 
-  /* Resolve line numbers to PC.  */
-  resolve_sal_pc (&sals[0]);
-  block = block_for_pc (sals[0].pc);
+  /* Resolve line numbers to PC */
+  resolve_sal_pc (&sals.sals[0]);
+  block = block_for_pc (sals.sals[0].pc);
 
   while (block != 0)
     {
-      QUIT;			/* Allow user to bail out with ^C.  */
-      ALL_BLOCK_SYMBOLS (block, iter, sym)
+      QUIT;			/* allow user to bail out with ^C */
+      ALL_BLOCK_SYMBOLS (block, i, sym)
 	{
-	  QUIT;			/* Allow user to bail out with ^C.  */
+	  QUIT;			/* allow user to bail out with ^C */
 	  if (count == 0)
 	    printf_filtered ("Scope for %s:\n", save_args);
 	  count++;
 
-	  symname = sym->print_name ();
+	  symname = SYMBOL_NAME (sym);
 	  if (symname == NULL || *symname == '\0')
-	    continue;		/* Probably botched, certainly useless.  */
-
-	  gdbarch = symbol_arch (sym);
+	    continue;		/* probably botched, certainly useless */
 
 	  printf_filtered ("Symbol %s is ", symname);
-
-	  if (SYMBOL_COMPUTED_OPS (sym) != NULL)
-	    SYMBOL_COMPUTED_OPS (sym)->describe_location (sym,
-							  BLOCK_ENTRY_PC (block),
-							  gdb_stdout);
-	  else
+	  switch (SYMBOL_CLASS (sym))
 	    {
-	      switch (SYMBOL_CLASS (sym))
+	    default:
+	    case LOC_UNDEF:	/* messed up symbol? */
+	      printf_filtered ("a bogus symbol, class %d.\n",
+			       SYMBOL_CLASS (sym));
+	      count--;		/* don't count this one */
+	      continue;
+	    case LOC_CONST:
+	      printf_filtered ("a constant with value %ld (0x%lx)",
+			       SYMBOL_VALUE (sym), SYMBOL_VALUE (sym));
+	      break;
+	    case LOC_CONST_BYTES:
+	      printf_filtered ("constant bytes: ");
+	      if (SYMBOL_TYPE (sym))
+		for (j = 0; j < TYPE_LENGTH (SYMBOL_TYPE (sym)); j++)
+		  fprintf_filtered (gdb_stdout, " %02x",
+				    (unsigned) SYMBOL_VALUE_BYTES (sym)[j]);
+	      break;
+	    case LOC_STATIC:
+	      printf_filtered ("in static storage at address ");
+	      print_address_numeric (SYMBOL_VALUE_ADDRESS (sym), 1, gdb_stdout);
+	      break;
+	    case LOC_REGISTER:
+	      printf_filtered ("a local variable in register $%s",
+			       REGISTER_NAME (SYMBOL_VALUE (sym)));
+	      break;
+	    case LOC_ARG:
+	    case LOC_LOCAL_ARG:
+	      printf_filtered ("an argument at stack/frame offset %ld",
+			       SYMBOL_VALUE (sym));
+	      break;
+	    case LOC_LOCAL:
+	      printf_filtered ("a local variable at frame offset %ld",
+			       SYMBOL_VALUE (sym));
+	      break;
+	    case LOC_REF_ARG:
+	      printf_filtered ("a reference argument at offset %ld",
+			       SYMBOL_VALUE (sym));
+	      break;
+	    case LOC_REGPARM:
+	      printf_filtered ("an argument in register $%s",
+			       REGISTER_NAME (SYMBOL_VALUE (sym)));
+	      break;
+	    case LOC_REGPARM_ADDR:
+	      printf_filtered ("the address of an argument, in register $%s",
+			       REGISTER_NAME (SYMBOL_VALUE (sym)));
+	      break;
+	    case LOC_TYPEDEF:
+	      printf_filtered ("a typedef.\n");
+	      continue;
+	    case LOC_LABEL:
+	      printf_filtered ("a label at address ");
+	      print_address_numeric (SYMBOL_VALUE_ADDRESS (sym), 1, gdb_stdout);
+	      break;
+	    case LOC_BLOCK:
+	      printf_filtered ("a function at address ");
+	      print_address_numeric (BLOCK_START (SYMBOL_BLOCK_VALUE (sym)), 1,
+				     gdb_stdout);
+	      break;
+	    case LOC_BASEREG:
+	      printf_filtered ("a variable at offset %ld from register $%s",
+			       SYMBOL_VALUE (sym),
+			       REGISTER_NAME (SYMBOL_BASEREG (sym)));
+	      break;
+	    case LOC_BASEREG_ARG:
+	      printf_filtered ("an argument at offset %ld from register $%s",
+			       SYMBOL_VALUE (sym),
+			       REGISTER_NAME (SYMBOL_BASEREG (sym)));
+	      break;
+	    case LOC_UNRESOLVED:
+	      msym = lookup_minimal_symbol (SYMBOL_NAME (sym), NULL, NULL);
+	      if (msym == NULL)
+		printf_filtered ("Unresolved Static");
+	      else
 		{
-		default:
-		case LOC_UNDEF:	/* Messed up symbol?  */
-		  printf_filtered ("a bogus symbol, class %d.\n",
-				   SYMBOL_CLASS (sym));
-		  count--;		/* Don't count this one.  */
-		  continue;
-		case LOC_CONST:
-		  printf_filtered ("a constant with value %s (%s)",
-				   plongest (SYMBOL_VALUE (sym)),
-				   hex_string (SYMBOL_VALUE (sym)));
-		  break;
-		case LOC_CONST_BYTES:
-		  printf_filtered ("constant bytes: ");
-		  if (SYMBOL_TYPE (sym))
-		    for (j = 0; j < TYPE_LENGTH (SYMBOL_TYPE (sym)); j++)
-		      fprintf_filtered (gdb_stdout, " %02x",
-					(unsigned) SYMBOL_VALUE_BYTES (sym)[j]);
-		  break;
-		case LOC_STATIC:
-		  printf_filtered ("in static storage at address ");
-		  printf_filtered ("%s", paddress (gdbarch,
-						   SYMBOL_VALUE_ADDRESS (sym)));
-		  break;
-		case LOC_REGISTER:
-		  /* GDBARCH is the architecture associated with the objfile
-		     the symbol is defined in; the target architecture may be
-		     different, and may provide additional registers.  However,
-		     we do not know the target architecture at this point.
-		     We assume the objfile architecture will contain all the
-		     standard registers that occur in debug info in that
-		     objfile.  */
-		  regno = SYMBOL_REGISTER_OPS (sym)->register_number (sym,
-								      gdbarch);
-
-		  if (SYMBOL_IS_ARGUMENT (sym))
-		    printf_filtered ("an argument in register $%s",
-				     gdbarch_register_name (gdbarch, regno));
-		  else
-		    printf_filtered ("a local variable in register $%s",
-				     gdbarch_register_name (gdbarch, regno));
-		  break;
-		case LOC_ARG:
-		  printf_filtered ("an argument at stack/frame offset %s",
-				   plongest (SYMBOL_VALUE (sym)));
-		  break;
-		case LOC_LOCAL:
-		  printf_filtered ("a local variable at frame offset %s",
-				   plongest (SYMBOL_VALUE (sym)));
-		  break;
-		case LOC_REF_ARG:
-		  printf_filtered ("a reference argument at offset %s",
-				   plongest (SYMBOL_VALUE (sym)));
-		  break;
-		case LOC_REGPARM_ADDR:
-		  /* Note comment at LOC_REGISTER.  */
-		  regno = SYMBOL_REGISTER_OPS (sym)->register_number (sym,
-								      gdbarch);
-		  printf_filtered ("the address of an argument, in register $%s",
-				   gdbarch_register_name (gdbarch, regno));
-		  break;
-		case LOC_TYPEDEF:
-		  printf_filtered ("a typedef.\n");
-		  continue;
-		case LOC_LABEL:
-		  printf_filtered ("a label at address ");
-		  printf_filtered ("%s", paddress (gdbarch,
-						   SYMBOL_VALUE_ADDRESS (sym)));
-		  break;
-		case LOC_BLOCK:
-		  printf_filtered ("a function at address ");
-		  printf_filtered ("%s",
-				   paddress (gdbarch, BLOCK_ENTRY_PC (SYMBOL_BLOCK_VALUE (sym))));
-		  break;
-		case LOC_UNRESOLVED:
-		  msym = lookup_minimal_symbol (sym->linkage_name (),
-						NULL, NULL);
-		  if (msym.minsym == NULL)
-		    printf_filtered ("Unresolved Static");
-		  else
-		    {
-		      printf_filtered ("static storage at address ");
-		      printf_filtered ("%s",
-				       paddress (gdbarch,
-						 BMSYMBOL_VALUE_ADDRESS (msym)));
-		    }
-		  break;
-		case LOC_OPTIMIZED_OUT:
-		  printf_filtered ("optimized out.\n");
-		  continue;
-		case LOC_COMPUTED:
-		  gdb_assert_not_reached (_("LOC_COMPUTED variable missing a method"));
+		  printf_filtered ("static storage at address ");
+		  print_address_numeric (SYMBOL_VALUE_ADDRESS (msym), 1,
+					 gdb_stdout);
 		}
+	      break;
+	    case LOC_OPTIMIZED_OUT:
+	      printf_filtered ("optimized out.\n");
+	      continue;
 	    }
 	  if (SYMBOL_TYPE (sym))
-	    {
-	      struct type *t = check_typedef (SYMBOL_TYPE (sym));
-
-	      printf_filtered (", length %s.\n", pulongest (TYPE_LENGTH (t)));
-	    }
+	    printf_filtered (", length %d.\n",
+			   TYPE_LENGTH (check_typedef (SYMBOL_TYPE (sym))));
 	}
       if (BLOCK_FUNCTION (block))
 	break;
@@ -2646,26 +2466,64 @@ info_scope_command (const char *args_in, int from_tty)
 		     save_args);
 }
 
-/* Helper for trace_dump_command.  Dump the action list starting at
-   ACTION.  STEPPING_ACTIONS is true if we're iterating over the
-   actions of the body of a while-stepping action.  STEPPING_FRAME is
-   set if the current traceframe was determined to be a while-stepping
-   traceframe.  */
-
+/* worker function (cleanup) */
 static void
-trace_dump_actions (struct command_line *action,
-		    int stepping_actions, int stepping_frame,
-		    int from_tty)
+replace_comma (void *data)
 {
-  const char *action_exp, *next_comma;
+  char *comma = data;
+  *comma = ',';
+}
 
-  for (; action != NULL; action = action->next)
+/* tdump command */
+static void
+trace_dump_command (char *args, int from_tty)
+{
+  struct tracepoint *t;
+  struct action_line *action;
+  char *action_exp, *next_comma;
+  struct cleanup *old_cleanups;
+  int stepping_actions = 0;
+  int stepping_frame = 0;
+
+  if (!target_is_remote ())
+    {
+      error ("Trace can only be run on remote targets.");
+      return;
+    }
+
+  if (tracepoint_number == -1)
+    {
+      warning ("No current trace frame.");
+      return;
+    }
+
+  ALL_TRACEPOINTS (t)
+    if (t->number == tracepoint_number)
+    break;
+
+  if (t == NULL)
+    error ("No known tracepoint matches 'current' tracepoint #%d.",
+	   tracepoint_number);
+
+  old_cleanups = make_cleanup (null_cleanup, NULL);
+
+  printf_filtered ("Data collected at tracepoint %d, trace frame %d:\n",
+		   tracepoint_number, traceframe_number);
+
+  /* The current frame is a trap frame if the frame PC is equal
+     to the tracepoint PC.  If not, then the current frame was
+     collected during single-stepping.  */
+
+  stepping_frame = (t->address != read_pc ());
+
+  for (action = t->actions; action; action = action->next)
     {
       struct cmd_list_element *cmd;
 
-      QUIT;			/* Allow user to bail out with ^C.  */
-      action_exp = action->line;
-      action_exp = skip_spaces (action_exp);
+      QUIT;			/* allow user to bail out with ^C */
+      action_exp = action->action;
+      while (isspace ((int) *action_exp))
+	action_exp++;
 
       /* The collection actions to be done while stepping are
          bracketed by the commands "while-stepping" and "end".  */
@@ -2675,243 +2533,57 @@ trace_dump_actions (struct command_line *action,
 
       cmd = lookup_cmd (&action_exp, cmdlist, "", -1, 1);
       if (cmd == 0)
-	error (_("Bad action list item: %s"), action_exp);
+	error ("Bad action list item: %s", action_exp);
 
       if (cmd_cfunc_eq (cmd, while_stepping_pseudocommand))
-	{
-	  gdb_assert (action->body_list_1 == nullptr);
-	  trace_dump_actions (action->body_list_0.get (),
-			      1, stepping_frame, from_tty);
-	}
+	stepping_actions = 1;
+      else if (cmd_cfunc_eq (cmd, end_actions_pseudocommand))
+	stepping_actions = 0;
       else if (cmd_cfunc_eq (cmd, collect_pseudocommand))
 	{
 	  /* Display the collected data.
-	     For the trap frame, display only what was collected at
-	     the trap.  Likewise for stepping frames, display only
-	     what was collected while stepping.  This means that the
-	     two boolean variables, STEPPING_FRAME and
-	     STEPPING_ACTIONS should be equal.  */
+	     For the trap frame, display only what was collected at the trap.
+	     Likewise for stepping frames, display only what was collected
+	     while stepping.  This means that the two boolean variables,
+	     STEPPING_FRAME and STEPPING_ACTIONS should be equal.  */
 	  if (stepping_frame == stepping_actions)
 	    {
-	      int trace_string = 0;
-
-	      if (*action_exp == '/')
-		action_exp = decode_agent_options (action_exp, &trace_string);
-
 	      do
-		{		/* Repeat over a comma-separated list.  */
-		  QUIT;		/* Allow user to bail out with ^C.  */
+		{		/* repeat over a comma-separated list */
+		  QUIT;		/* allow user to bail out with ^C */
 		  if (*action_exp == ',')
 		    action_exp++;
-		  action_exp = skip_spaces (action_exp);
+		  while (isspace ((int) *action_exp))
+		    action_exp++;
 
 		  next_comma = strchr (action_exp, ',');
 
 		  if (0 == strncasecmp (action_exp, "$reg", 4))
 		    registers_info (NULL, from_tty);
-		  else if (0 == strncasecmp (action_exp, "$_ret", 5))
-		    ;
 		  else if (0 == strncasecmp (action_exp, "$loc", 4))
-		    info_locals_command (NULL, from_tty);
+		    locals_info (NULL, from_tty);
 		  else if (0 == strncasecmp (action_exp, "$arg", 4))
-		    info_args_command (NULL, from_tty);
+		    args_info (NULL, from_tty);
 		  else
 		    {		/* variable */
-		      std::string contents;
-		      const char *exp = action_exp;
-		      if (next_comma != NULL)
+		      if (next_comma)
 			{
-			  size_t len = next_comma - action_exp;
-			  contents = std::string (action_exp, len);
-			  exp = contents.c_str ();
+			  make_cleanup (replace_comma, next_comma);
+			  *next_comma = '\0';
 			}
-
-		      printf_filtered ("%s = ", exp);
-		      output_command (exp, from_tty);
+		      printf_filtered ("%s = ", action_exp);
+		      output_command (action_exp, from_tty);
 		      printf_filtered ("\n");
 		    }
+		  if (next_comma)
+		    *next_comma = ',';
 		  action_exp = next_comma;
 		}
 	      while (action_exp && *action_exp == ',');
 	    }
 	}
     }
-}
-
-/* Return bp_location of the tracepoint associated with the current
-   traceframe.  Set *STEPPING_FRAME_P to 1 if the current traceframe
-   is a stepping traceframe.  */
-
-struct bp_location *
-get_traceframe_location (int *stepping_frame_p)
-{
-  struct tracepoint *t;
-  struct bp_location *tloc;
-  struct regcache *regcache;
-
-  if (tracepoint_number == -1)
-    error (_("No current trace frame."));
-
-  t = get_tracepoint (tracepoint_number);
-
-  if (t == NULL)
-    error (_("No known tracepoint matches 'current' tracepoint #%d."),
-	   tracepoint_number);
-
-  /* The current frame is a trap frame if the frame PC is equal to the
-     tracepoint PC.  If not, then the current frame was collected
-     during single-stepping.  */
-  regcache = get_current_regcache ();
-
-  /* If the traceframe's address matches any of the tracepoint's
-     locations, assume it is a direct hit rather than a while-stepping
-     frame.  (FIXME this is not reliable, should record each frame's
-     type.)  */
-  for (tloc = t->loc; tloc; tloc = tloc->next)
-    if (tloc->address == regcache_read_pc (regcache))
-      {
-	*stepping_frame_p = 0;
-	return tloc;
-      }
-
-  /* If this is a stepping frame, we don't know which location
-     triggered.  The first is as good (or bad) a guess as any...  */
-  *stepping_frame_p = 1;
-  return t->loc;
-}
-
-/* Return the default collect actions of a tracepoint T.  */
-
-static counted_command_line
-all_tracepoint_actions (struct breakpoint *t)
-{
-  counted_command_line actions (nullptr, command_lines_deleter ());
-
-  /* If there are default expressions to collect, make up a collect
-     action and prepend to the action list to encode.  Note that since
-     validation is per-tracepoint (local var "xyz" might be valid for
-     one tracepoint and not another, etc), we make up the action on
-     the fly, and don't cache it.  */
-  if (*default_collect)
-    {
-      gdb::unique_xmalloc_ptr<char> default_collect_line
-	(xstrprintf ("collect %s", default_collect));
-
-      validate_actionline (default_collect_line.get (), t);
-      actions.reset (new struct command_line (simple_control,
-					      default_collect_line.release ()),
-		     command_lines_deleter ());
-    }
-
-  return actions;
-}
-
-/* The tdump command.  */
-
-static void
-tdump_command (const char *args, int from_tty)
-{
-  int stepping_frame = 0;
-  struct bp_location *loc;
-
-  /* This throws an error is not inspecting a trace frame.  */
-  loc = get_traceframe_location (&stepping_frame);
-
-  printf_filtered ("Data collected at tracepoint %d, trace frame %d:\n",
-		   tracepoint_number, traceframe_number);
-
-  /* This command only makes sense for the current frame, not the
-     selected frame.  */
-  scoped_restore_current_thread restore_thread;
-
-  select_frame (get_current_frame ());
-
-  counted_command_line actions = all_tracepoint_actions (loc->owner);
-
-  trace_dump_actions (actions.get (), 0, stepping_frame, from_tty);
-  trace_dump_actions (breakpoint_commands (loc->owner), 0, stepping_frame,
-		      from_tty);
-}
-
-/* Encode a piece of a tracepoint's source-level definition in a form
-   that is suitable for both protocol and saving in files.  */
-/* This version does not do multiple encodes for long strings; it should
-   return an offset to the next piece to encode.  FIXME  */
-
-int
-encode_source_string (int tpnum, ULONGEST addr,
-		      const char *srctype, const char *src,
-		      char *buf, int buf_size)
-{
-  if (80 + strlen (srctype) > buf_size)
-    error (_("Buffer too small for source encoding"));
-  sprintf (buf, "%x:%s:%s:%x:%x:",
-	   tpnum, phex_nz (addr, sizeof (addr)),
-	   srctype, 0, (int) strlen (src));
-  if (strlen (buf) + strlen (src) * 2 >= buf_size)
-    error (_("Source string too long for buffer"));
-  bin2hex ((gdb_byte *) src, buf + strlen (buf), strlen (src));
-  return -1;
-}
-
-/* Tell the target what to do with an ongoing tracing run if GDB
-   disconnects for some reason.  */
-
-static void
-set_disconnected_tracing (const char *args, int from_tty,
-			  struct cmd_list_element *c)
-{
-  target_set_disconnected_tracing (disconnected_tracing);
-}
-
-static void
-set_circular_trace_buffer (const char *args, int from_tty,
-			   struct cmd_list_element *c)
-{
-  target_set_circular_trace_buffer (circular_trace_buffer);
-}
-
-static void
-set_trace_buffer_size (const char *args, int from_tty,
-			   struct cmd_list_element *c)
-{
-  target_set_trace_buffer_size (trace_buffer_size);
-}
-
-static void
-set_trace_user (const char *args, int from_tty,
-		struct cmd_list_element *c)
-{
-  int ret;
-
-  ret = target_set_trace_notes (trace_user, NULL, NULL);
-
-  if (!ret)
-    warning (_("Target does not support trace notes, user ignored"));
-}
-
-static void
-set_trace_notes (const char *args, int from_tty,
-		 struct cmd_list_element *c)
-{
-  int ret;
-
-  ret = target_set_trace_notes (NULL, trace_notes, NULL);
-
-  if (!ret)
-    warning (_("Target does not support trace notes, note ignored"));
-}
-
-static void
-set_trace_stop_notes (const char *args, int from_tty,
-		      struct cmd_list_element *c)
-{
-  int ret;
-
-  ret = target_set_trace_notes (NULL, NULL, trace_stop_notes);
-
-  if (!ret)
-    warning (_("Target does not support trace notes, stop note ignored"));
+  discard_cleanups (old_cleanups);
 }
 
 /* Convert the memory pointed to by mem into hex, placing result in buf.
@@ -2921,10 +2593,10 @@ set_trace_stop_notes (const char *args, int from_tty,
 
 static const char hexchars[] = "0123456789abcdef";
 
-static char *
-mem2hex (gdb_byte *mem, char *buf, int count)
+static unsigned char *
+mem2hex (unsigned char *mem, unsigned char *buf, int count)
 {
-  gdb_byte ch;
+  unsigned char ch;
 
   while (count-- > 0)
     {
@@ -2945,1245 +2617,194 @@ get_traceframe_number (void)
   return traceframe_number;
 }
 
-int
-get_tracepoint_number (void)
-{
-  return tracepoint_number;
-}
-
-/* Make the traceframe NUM be the current trace frame.  Does nothing
-   if NUM is already current.  */
-
-void
-set_current_traceframe (int num)
-{
-  int newnum;
-
-  if (traceframe_number == num)
-    {
-      /* Nothing to do.  */
-      return;
-    }
-
-  newnum = target_trace_find (tfind_number, num, 0, 0, NULL);
-
-  if (newnum != num)
-    warning (_("could not change traceframe"));
-
-  set_traceframe_num (newnum);
-
-  /* Changing the traceframe changes our view of registers and of the
-     frame chain.  */
-  registers_changed ();
-
-  clear_traceframe_info ();
-}
-
-scoped_restore_current_traceframe::scoped_restore_current_traceframe ()
-: m_traceframe_number (traceframe_number)
-{}
-
-/* Given a number and address, return an uploaded tracepoint with that
-   number, creating if necessary.  */
-
-struct uploaded_tp *
-get_uploaded_tp (int num, ULONGEST addr, struct uploaded_tp **utpp)
-{
-  struct uploaded_tp *utp;
-
-  for (utp = *utpp; utp; utp = utp->next)
-    if (utp->number == num && utp->addr == addr)
-      return utp;
-
-  utp = new uploaded_tp;
-  utp->number = num;
-  utp->addr = addr;
-  utp->next = *utpp;
-  *utpp = utp;
-
-  return utp;
-}
-
-void
-free_uploaded_tps (struct uploaded_tp **utpp)
-{
-  struct uploaded_tp *next_one;
-
-  while (*utpp)
-    {
-      next_one = (*utpp)->next;
-      delete *utpp;
-      *utpp = next_one;
-    }
-}
-
-/* Given a number and address, return an uploaded tracepoint with that
-   number, creating if necessary.  */
-
-struct uploaded_tsv *
-get_uploaded_tsv (int num, struct uploaded_tsv **utsvp)
-{
-  struct uploaded_tsv *utsv;
-
-  for (utsv = *utsvp; utsv; utsv = utsv->next)
-    if (utsv->number == num)
-      return utsv;
-
-  utsv = XCNEW (struct uploaded_tsv);
-  utsv->number = num;
-  utsv->next = *utsvp;
-  *utsvp = utsv;
-
-  return utsv;
-}
-
-void
-free_uploaded_tsvs (struct uploaded_tsv **utsvp)
-{
-  struct uploaded_tsv *next_one;
-
-  while (*utsvp)
-    {
-      next_one = (*utsvp)->next;
-      xfree (*utsvp);
-      *utsvp = next_one;
-    }
-}
-
-/* FIXME this function is heuristic and will miss the cases where the
-   conditional is semantically identical but differs in whitespace,
-   such as "x == 0" vs "x==0".  */
-
-static int
-cond_string_is_same (char *str1, char *str2)
-{
-  if (str1 == NULL || str2 == NULL)
-    return (str1 == str2);
-
-  return (strcmp (str1, str2) == 0);
-}
-
-/* Look for an existing tracepoint that seems similar enough to the
-   uploaded one.  Enablement isn't compared, because the user can
-   toggle that freely, and may have done so in anticipation of the
-   next trace run.  Return the location of matched tracepoint.  */
-
-static struct bp_location *
-find_matching_tracepoint_location (struct uploaded_tp *utp)
-{
-  struct bp_location *loc;
-
-  for (breakpoint *b : all_tracepoints ())
-    {
-      struct tracepoint *t = (struct tracepoint *) b;
-
-      if (b->type == utp->type
-	  && t->step_count == utp->step
-	  && t->pass_count == utp->pass
-	  && cond_string_is_same (t->cond_string,
-				  utp->cond_string.get ())
-	  /* FIXME also test actions.  */
-	  )
-	{
-	  /* Scan the locations for an address match.  */
-	  for (loc = b->loc; loc; loc = loc->next)
-	    {
-	      if (loc->address == utp->addr)
-		return loc;
-	    }
-	}
-    }
-  return NULL;
-}
-
-/* Given a list of tracepoints uploaded from a target, attempt to
-   match them up with existing tracepoints, and create new ones if not
-   found.  */
-
-void
-merge_uploaded_tracepoints (struct uploaded_tp **uploaded_tps)
-{
-  struct uploaded_tp *utp;
-  /* A set of tracepoints which are modified.  */
-  std::vector<breakpoint *> modified_tp;
-
-  /* Look for GDB tracepoints that match up with our uploaded versions.  */
-  for (utp = *uploaded_tps; utp; utp = utp->next)
-    {
-      struct bp_location *loc;
-      struct tracepoint *t;
-
-      loc = find_matching_tracepoint_location (utp);
-      if (loc)
-	{
-	  int found = 0;
-
-	  /* Mark this location as already inserted.  */
-	  loc->inserted = 1;
-	  t = (struct tracepoint *) loc->owner;
-	  printf_filtered (_("Assuming tracepoint %d is same "
-			     "as target's tracepoint %d at %s.\n"),
-			   loc->owner->number, utp->number,
-			   paddress (loc->gdbarch, utp->addr));
-
-	  /* The tracepoint LOC->owner was modified (the location LOC
-	     was marked as inserted in the target).  Save it in
-	     MODIFIED_TP if not there yet.  The 'breakpoint-modified'
-	     observers will be notified later once for each tracepoint
-	     saved in MODIFIED_TP.  */
-	  for (breakpoint *b : modified_tp)
-	    if (b == loc->owner)
-	      {
-		found = 1;
-		break;
-	      }
-	  if (!found)
-	    modified_tp.push_back (loc->owner);
-	}
-      else
-	{
-	  t = create_tracepoint_from_upload (utp);
-	  if (t)
-	    printf_filtered (_("Created tracepoint %d for "
-			       "target's tracepoint %d at %s.\n"),
-			     t->number, utp->number,
-			     paddress (get_current_arch (), utp->addr));
-	  else
-	    printf_filtered (_("Failed to create tracepoint for target's "
-			       "tracepoint %d at %s, skipping it.\n"),
-			     utp->number,
-			     paddress (get_current_arch (), utp->addr));
-	}
-      /* Whether found or created, record the number used by the
-	 target, to help with mapping target tracepoints back to their
-	 counterparts here.  */
-      if (t)
-	t->number_on_target = utp->number;
-    }
-
-  /* Notify 'breakpoint-modified' observer that at least one of B's
-     locations was changed.  */
-  for (breakpoint *b : modified_tp)
-    gdb::observers::breakpoint_modified.notify (b);
-
-  free_uploaded_tps (uploaded_tps);
-}
-
-/* Trace state variables don't have much to identify them beyond their
-   name, so just use that to detect matches.  */
-
-static struct trace_state_variable *
-find_matching_tsv (struct uploaded_tsv *utsv)
-{
-  if (!utsv->name)
-    return NULL;
-
-  return find_trace_state_variable (utsv->name);
-}
-
-static struct trace_state_variable *
-create_tsv_from_upload (struct uploaded_tsv *utsv)
-{
-  const char *namebase;
-  std::string buf;
-  int try_num = 0;
-  struct trace_state_variable *tsv;
-
-  if (utsv->name)
-    {
-      namebase = utsv->name;
-      buf = namebase;
-    }
-  else
-    {
-      namebase = "__tsv";
-      buf = string_printf ("%s_%d", namebase, try_num++);
-    }
-
-  /* Fish for a name that is not in use.  */
-  /* (should check against all internal vars?)  */
-  while (find_trace_state_variable (buf.c_str ()))
-    buf = string_printf ("%s_%d", namebase, try_num++);
-
-  /* We have an available name, create the variable.  */
-  tsv = create_trace_state_variable (buf.c_str ());
-  tsv->initial_value = utsv->initial_value;
-  tsv->builtin = utsv->builtin;
-
-  gdb::observers::tsv_created.notify (tsv);
-
-  return tsv;
-}
-
-/* Given a list of uploaded trace state variables, try to match them
-   up with existing variables, or create additional ones.  */
-
-void
-merge_uploaded_trace_state_variables (struct uploaded_tsv **uploaded_tsvs)
-{
-  struct uploaded_tsv *utsv;
-  int highest;
-
-  /* Most likely some numbers will have to be reassigned as part of
-     the merge, so clear them all in anticipation.  */
-  for (trace_state_variable &tsv : tvariables)
-    tsv.number = 0;
-
-  for (utsv = *uploaded_tsvs; utsv; utsv = utsv->next)
-    {
-      struct trace_state_variable *tsv = find_matching_tsv (utsv);
-      if (tsv)
-	{
-	  if (info_verbose)
-	    printf_filtered (_("Assuming trace state variable $%s "
-			       "is same as target's variable %d.\n"),
-			     tsv->name.c_str (), utsv->number);
-	}
-      else
-	{
-	  tsv = create_tsv_from_upload (utsv);
-	  if (info_verbose)
-	    printf_filtered (_("Created trace state variable "
-			       "$%s for target's variable %d.\n"),
-			     tsv->name.c_str (), utsv->number);
-	}
-      /* Give precedence to numberings that come from the target.  */
-      if (tsv)
-	tsv->number = utsv->number;
-    }
-
-  /* Renumber everything that didn't get a target-assigned number.  */
-  highest = 0;
-  for (const trace_state_variable &tsv : tvariables)
-    highest = std::max (tsv.number, highest);
-
-  ++highest;
-  for (trace_state_variable &tsv : tvariables)
-    if (tsv.number == 0)
-      tsv.number = highest++;
-
-  free_uploaded_tsvs (uploaded_tsvs);
-}
-
-/* Parse the part of trace status syntax that is shared between
-   the remote protocol and the trace file reader.  */
-
-void
-parse_trace_status (const char *line, struct trace_status *ts)
-{
-  const char *p = line, *p1, *p2, *p3, *p_temp;
-  int end;
-  ULONGEST val;
-
-  ts->running_known = 1;
-  ts->running = (*p++ == '1');
-  ts->stop_reason = trace_stop_reason_unknown;
-  xfree (ts->stop_desc);
-  ts->stop_desc = NULL;
-  ts->traceframe_count = -1;
-  ts->traceframes_created = -1;
-  ts->buffer_free = -1;
-  ts->buffer_size = -1;
-  ts->disconnected_tracing = 0;
-  ts->circular_buffer = 0;
-  xfree (ts->user_name);
-  ts->user_name = NULL;
-  xfree (ts->notes);
-  ts->notes = NULL;
-  ts->start_time = ts->stop_time = 0;
-
-  while (*p++)
-    {
-      p1 = strchr (p, ':');
-      if (p1 == NULL)
-	error (_("Malformed trace status, at %s\n\
-Status line: '%s'\n"), p, line);
-      p3 = strchr (p, ';');
-      if (p3 == NULL)
-	p3 = p + strlen (p);
-      if (strncmp (p, stop_reason_names[trace_buffer_full], p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->stop_reason = trace_buffer_full;
-	}
-      else if (strncmp (p, stop_reason_names[trace_never_run], p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->stop_reason = trace_never_run;
-	}
-      else if (strncmp (p, stop_reason_names[tracepoint_passcount],
-			p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->stop_reason = tracepoint_passcount;
-	  ts->stopping_tracepoint = val;
-	}
-      else if (strncmp (p, stop_reason_names[trace_stop_command], p1 - p) == 0)
-	{
-	  p2 = strchr (++p1, ':');
-	  if (!p2 || p2 > p3)
-	    {
-	      /*older style*/
-	      p2 = p1;
-	    }
-	  else if (p2 != p1)
-	    {
-	      ts->stop_desc = (char *) xmalloc (strlen (line));
-	      end = hex2bin (p1, (gdb_byte *) ts->stop_desc, (p2 - p1) / 2);
-	      ts->stop_desc[end] = '\0';
-	    }
-	  else
-	    ts->stop_desc = xstrdup ("");
-
-	  p = unpack_varlen_hex (++p2, &val);
-	  ts->stop_reason = trace_stop_command;
-	}
-      else if (strncmp (p, stop_reason_names[trace_disconnected], p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->stop_reason = trace_disconnected;
-	}
-      else if (strncmp (p, stop_reason_names[tracepoint_error], p1 - p) == 0)
-	{
-	  p2 = strchr (++p1, ':');
-	  if (p2 != p1)
-	    {
-	      ts->stop_desc = (char *) xmalloc ((p2 - p1) / 2 + 1);
-	      end = hex2bin (p1, (gdb_byte *) ts->stop_desc, (p2 - p1) / 2);
-	      ts->stop_desc[end] = '\0';
-	    }
-	  else
-	    ts->stop_desc = xstrdup ("");
-
-	  p = unpack_varlen_hex (++p2, &val);
-	  ts->stopping_tracepoint = val;
-	  ts->stop_reason = tracepoint_error;
-	}
-      else if (strncmp (p, "tframes", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->traceframe_count = val;
-	}
-      else if (strncmp (p, "tcreated", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->traceframes_created = val;
-	}
-      else if (strncmp (p, "tfree", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->buffer_free = val;
-	}
-      else if (strncmp (p, "tsize", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->buffer_size = val;
-	}
-      else if (strncmp (p, "disconn", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->disconnected_tracing = val;
-	}
-      else if (strncmp (p, "circular", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->circular_buffer = val;
-	}
-      else if (strncmp (p, "starttime", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->start_time = val;
-	}
-      else if (strncmp (p, "stoptime", p1 - p) == 0)
-	{
-	  p = unpack_varlen_hex (++p1, &val);
-	  ts->stop_time = val;
-	}
-      else if (strncmp (p, "username", p1 - p) == 0)
-	{
-	  ++p1;
-	  ts->user_name = (char *) xmalloc (strlen (p) / 2);
-	  end = hex2bin (p1, (gdb_byte *) ts->user_name, (p3 - p1)  / 2);
-	  ts->user_name[end] = '\0';
-	  p = p3;
-	}
-      else if (strncmp (p, "notes", p1 - p) == 0)
-	{
-	  ++p1;
-	  ts->notes = (char *) xmalloc (strlen (p) / 2);
-	  end = hex2bin (p1, (gdb_byte *) ts->notes, (p3 - p1) / 2);
-	  ts->notes[end] = '\0';
-	  p = p3;
-	}
-      else
-	{
-	  /* Silently skip unknown optional info.  */
-	  p_temp = strchr (p1 + 1, ';');
-	  if (p_temp)
-	    p = p_temp;
-	  else
-	    /* Must be at the end.  */
-	    break;
-	}
-    }
-}
-
-void
-parse_tracepoint_status (const char *p, struct breakpoint *bp,
-			 struct uploaded_tp *utp)
-{
-  ULONGEST uval;
-  struct tracepoint *tp = (struct tracepoint *) bp;
-
-  p = unpack_varlen_hex (p, &uval);
-  if (tp)
-    tp->hit_count += uval;
-  else
-    utp->hit_count += uval;
-  p = unpack_varlen_hex (p + 1, &uval);
-  if (tp)
-    tp->traceframe_usage += uval;
-  else
-    utp->traceframe_usage += uval;
-  /* Ignore any extra, allowing for future extensions.  */
-}
-
-/* Given a line of text defining a part of a tracepoint, parse it into
-   an "uploaded tracepoint".  */
-
-void
-parse_tracepoint_definition (const char *line, struct uploaded_tp **utpp)
-{
-  const char *p;
-  char piece;
-  ULONGEST num, addr, step, pass, orig_size, xlen, start;
-  int enabled, end;
-  enum bptype type;
-  const char *srctype;
-  char *buf;
-  struct uploaded_tp *utp = NULL;
-
-  p = line;
-  /* Both tracepoint and action definitions start with the same number
-     and address sequence.  */
-  piece = *p++;
-  p = unpack_varlen_hex (p, &num);
-  p++;  /* skip a colon */
-  p = unpack_varlen_hex (p, &addr);
-  p++;  /* skip a colon */
-  if (piece == 'T')
-    {
-      gdb::unique_xmalloc_ptr<char[]> cond;
-
-      enabled = (*p++ == 'E');
-      p++;  /* skip a colon */
-      p = unpack_varlen_hex (p, &step);
-      p++;  /* skip a colon */
-      p = unpack_varlen_hex (p, &pass);
-      type = bp_tracepoint;
-      /* Thumb through optional fields.  */
-      while (*p == ':')
-	{
-	  p++;  /* skip a colon */
-	  if (*p == 'F')
-	    {
-	      type = bp_fast_tracepoint;
-	      p++;
-	      p = unpack_varlen_hex (p, &orig_size);
-	    }
-	  else if (*p == 'S')
-	    {
-	      type = bp_static_tracepoint;
-	      p++;
-	    }
-	  else if (*p == 'X')
-	    {
-	      p++;
-	      p = unpack_varlen_hex (p, &xlen);
-	      p++;  /* skip a comma */
-	      cond.reset ((char *) xmalloc (2 * xlen + 1));
-	      strncpy (&cond[0], p, 2 * xlen);
-	      cond[2 * xlen] = '\0';
-	      p += 2 * xlen;
-	    }
-	  else
-	    warning (_("Unrecognized char '%c' in tracepoint "
-		       "definition, skipping rest"), *p);
-	}
-      utp = get_uploaded_tp (num, addr, utpp);
-      utp->type = type;
-      utp->enabled = enabled;
-      utp->step = step;
-      utp->pass = pass;
-      utp->cond = std::move (cond);
-    }
-  else if (piece == 'A')
-    {
-      utp = get_uploaded_tp (num, addr, utpp);
-      utp->actions.emplace_back (xstrdup (p));
-    }
-  else if (piece == 'S')
-    {
-      utp = get_uploaded_tp (num, addr, utpp);
-      utp->step_actions.emplace_back (xstrdup (p));
-    }
-  else if (piece == 'Z')
-    {
-      /* Parse a chunk of source form definition.  */
-      utp = get_uploaded_tp (num, addr, utpp);
-      srctype = p;
-      p = strchr (p, ':');
-      p++;  /* skip a colon */
-      p = unpack_varlen_hex (p, &start);
-      p++;  /* skip a colon */
-      p = unpack_varlen_hex (p, &xlen);
-      p++;  /* skip a colon */
-
-      buf = (char *) alloca (strlen (line));
-
-      end = hex2bin (p, (gdb_byte *) buf, strlen (p) / 2);
-      buf[end] = '\0';
-
-      if (startswith (srctype, "at:"))
-	utp->at_string.reset (xstrdup (buf));
-      else if (startswith (srctype, "cond:"))
-	utp->cond_string.reset (xstrdup (buf));
-      else if (startswith (srctype, "cmd:"))
-	utp->cmd_strings.emplace_back (xstrdup (buf));
-    }
-  else if (piece == 'V')
-    {
-      utp = get_uploaded_tp (num, addr, utpp);
-
-      parse_tracepoint_status (p, NULL, utp);
-    }
-  else
-    {
-      /* Don't error out, the target might be sending us optional
-	 info that we don't care about.  */
-      warning (_("Unrecognized tracepoint piece '%c', ignoring"), piece);
-    }
-}
-
-/* Convert a textual description of a trace state variable into an
-   uploaded object.  */
-
-void
-parse_tsv_definition (const char *line, struct uploaded_tsv **utsvp)
-{
-  const char *p;
-  char *buf;
-  ULONGEST num, initval, builtin;
-  int end;
-  struct uploaded_tsv *utsv = NULL;
-
-  buf = (char *) alloca (strlen (line));
-
-  p = line;
-  p = unpack_varlen_hex (p, &num);
-  p++; /* skip a colon */
-  p = unpack_varlen_hex (p, &initval);
-  p++; /* skip a colon */
-  p = unpack_varlen_hex (p, &builtin);
-  p++; /* skip a colon */
-  end = hex2bin (p, (gdb_byte *) buf, strlen (p) / 2);
-  buf[end] = '\0';
-
-  utsv = get_uploaded_tsv (num, utsvp);
-  utsv->initial_value = initval;
-  utsv->builtin = builtin;
-  utsv->name = xstrdup (buf);
-}
-
-/* Given a line of text defining a static tracepoint marker, parse it
-   into a "static tracepoint marker" object.  Throws an error is
-   parsing fails.  If PP is non-null, it points to one past the end of
-   the parsed marker definition.  */
-
-void
-parse_static_tracepoint_marker_definition (const char *line, const char **pp,
-					   static_tracepoint_marker *marker)
-{
-  const char *p, *endp;
-  ULONGEST addr;
-
-  p = line;
-  p = unpack_varlen_hex (p, &addr);
-  p++;  /* skip a colon */
-
-  marker->gdbarch = target_gdbarch ();
-  marker->address = (CORE_ADDR) addr;
-
-  endp = strchr (p, ':');
-  if (endp == NULL)
-    error (_("bad marker definition: %s"), line);
-
-  marker->str_id = hex2str (p, (endp - p) / 2);
-
-  p = endp;
-  p++; /* skip a colon */
-
-  /* This definition may be followed by another one, separated by a comma.  */
-  int hex_len;
-  endp = strchr (p, ',');
-  if (endp != nullptr)
-    hex_len = endp - p;
-  else
-    hex_len = strlen (p);
-
-  marker->extra = hex2str (p, hex_len / 2);
-
-  if (pp != nullptr)
-    *pp = p + hex_len;
-}
-
-/* Print MARKER to gdb_stdout.  */
-
-static void
-print_one_static_tracepoint_marker (int count,
-				    const static_tracepoint_marker &marker)
-{
-  struct symbol *sym;
-
-  char wrap_indent[80];
-  char extra_field_indent[80];
-  struct ui_out *uiout = current_uiout;
-
-  symtab_and_line sal;
-  sal.pc = marker.address;
-
-  std::vector<breakpoint *> tracepoints
-    = static_tracepoints_here (marker.address);
-
-  ui_out_emit_tuple tuple_emitter (uiout, "marker");
-
-  /* A counter field to help readability.  This is not a stable
-     identifier!  */
-  uiout->field_signed ("count", count);
-
-  uiout->field_string ("marker-id", marker.str_id.c_str ());
-
-  uiout->field_fmt ("enabled", "%c",
-		    !tracepoints.empty () ? 'y' : 'n');
-  uiout->spaces (2);
-
-  strcpy (wrap_indent, "                                   ");
-
-  if (gdbarch_addr_bit (marker.gdbarch) <= 32)
-    strcat (wrap_indent, "           ");
-  else
-    strcat (wrap_indent, "                   ");
-
-  strcpy (extra_field_indent, "         ");
-
-  uiout->field_core_addr ("addr", marker.gdbarch, marker.address);
-
-  sal = find_pc_line (marker.address, 0);
-  sym = find_pc_sect_function (marker.address, NULL);
-  if (sym)
-    {
-      uiout->text ("in ");
-      uiout->field_string ("func", sym->print_name (),
-			   function_name_style.style ());
-      uiout->wrap_hint (wrap_indent);
-      uiout->text (" at ");
-    }
-  else
-    uiout->field_skip ("func");
-
-  if (sal.symtab != NULL)
-    {
-      uiout->field_string ("file",
-			   symtab_to_filename_for_display (sal.symtab),
-			   file_name_style.style ());
-      uiout->text (":");
-
-      if (uiout->is_mi_like_p ())
-	{
-	  const char *fullname = symtab_to_fullname (sal.symtab);
-
-	  uiout->field_string ("fullname", fullname);
-	}
-      else
-	uiout->field_skip ("fullname");
-
-      uiout->field_signed ("line", sal.line);
-    }
-  else
-    {
-      uiout->field_skip ("fullname");
-      uiout->field_skip ("line");
-    }
-
-  uiout->text ("\n");
-  uiout->text (extra_field_indent);
-  uiout->text (_("Data: \""));
-  uiout->field_string ("extra-data", marker.extra.c_str ());
-  uiout->text ("\"\n");
-
-  if (!tracepoints.empty ())
-    {
-      int ix;
-
-      {
-	ui_out_emit_tuple inner_tuple_emitter (uiout, "tracepoints-at");
-
-	uiout->text (extra_field_indent);
-	uiout->text (_("Probed by static tracepoints: "));
-	for (ix = 0; ix < tracepoints.size (); ix++)
-	  {
-	    if (ix > 0)
-	      uiout->text (", ");
-	    uiout->text ("#");
-	    uiout->field_signed ("tracepoint-id", tracepoints[ix]->number);
-	  }
-      }
-
-      if (uiout->is_mi_like_p ())
-	uiout->field_signed ("number-of-tracepoints", tracepoints.size ());
-      else
-	uiout->text ("\n");
-    }
-}
-
-static void
-info_static_tracepoint_markers_command (const char *arg, int from_tty)
-{
-  struct ui_out *uiout = current_uiout;
-  std::vector<static_tracepoint_marker> markers
-    = target_static_tracepoint_markers_by_strid (NULL);
-
-  /* We don't have to check target_can_use_agent and agent's capability on
-     static tracepoint here, in order to be compatible with older GDBserver.
-     We don't check USE_AGENT is true or not, because static tracepoints
-     don't work without in-process agent, so we don't bother users to type
-     `set agent on' when to use static tracepoint.  */
-
-  ui_out_emit_table table_emitter (uiout, 5, -1,
-				   "StaticTracepointMarkersTable");
-
-  uiout->table_header (7, ui_left, "counter", "Cnt");
-
-  uiout->table_header (40, ui_left, "marker-id", "ID");
-
-  uiout->table_header (3, ui_left, "enabled", "Enb");
-  if (gdbarch_addr_bit (target_gdbarch ()) <= 32)
-    uiout->table_header (10, ui_left, "addr", "Address");
-  else
-    uiout->table_header (18, ui_left, "addr", "Address");
-  uiout->table_header (40, ui_noalign, "what", "What");
-
-  uiout->table_body ();
-
-  for (int i = 0; i < markers.size (); i++)
-    print_one_static_tracepoint_marker (i + 1, markers[i]);
-}
-
-/* The $_sdata convenience variable is a bit special.  We don't know
-   for sure type of the value until we actually have a chance to fetch
-   the data --- the size of the object depends on what has been
-   collected.  We solve this by making $_sdata be an internalvar that
-   creates a new value on access.  */
-
-/* Return a new value with the correct type for the sdata object of
-   the current trace frame.  Return a void value if there's no object
-   available.  */
-
-static struct value *
-sdata_make_value (struct gdbarch *gdbarch, struct internalvar *var,
-		  void *ignore)
-{
-  /* We need to read the whole object before we know its size.  */
-  gdb::optional<gdb::byte_vector> buf
-    = target_read_alloc (current_top_target (), TARGET_OBJECT_STATIC_TRACE_DATA,
-			 NULL);
-  if (buf)
-    {
-      struct value *v;
-      struct type *type;
-
-      type = init_vector_type (builtin_type (gdbarch)->builtin_true_char,
-			       buf->size ());
-      v = allocate_value (type);
-      memcpy (value_contents_raw (v), buf->data (), buf->size ());
-      return v;
-    }
-  else
-    return allocate_value (builtin_type (gdbarch)->builtin_void);
-}
-
-#if !defined(HAVE_LIBEXPAT)
-
-struct std::unique_ptr<traceframe_info>
-parse_traceframe_info (const char *tframe_info)
-{
-  static int have_warned;
-
-  if (!have_warned)
-    {
-      have_warned = 1;
-      warning (_("Can not parse XML trace frame info; XML support "
-		 "was disabled at compile time"));
-    }
-
-  return NULL;
-}
-
-#else /* HAVE_LIBEXPAT */
-
-#include "xml-support.h"
-
-/* Handle the start of a <memory> element.  */
-
-static void
-traceframe_info_start_memory (struct gdb_xml_parser *parser,
-			      const struct gdb_xml_element *element,
-			      void *user_data,
-			      std::vector<gdb_xml_value> &attributes)
-{
-  struct traceframe_info *info = (struct traceframe_info *) user_data;
-  ULONGEST *start_p, *length_p;
-
-  start_p
-    = (ULONGEST *) xml_find_attribute (attributes, "start")->value.get ();
-  length_p
-    = (ULONGEST *) xml_find_attribute (attributes, "length")->value.get ();
-
-  info->memory.emplace_back (*start_p, *length_p);
-}
-
-/* Handle the start of a <tvar> element.  */
-
-static void
-traceframe_info_start_tvar (struct gdb_xml_parser *parser,
-			     const struct gdb_xml_element *element,
-			     void *user_data,
-			     std::vector<gdb_xml_value> &attributes)
-{
-  struct traceframe_info *info = (struct traceframe_info *) user_data;
-  const char *id_attrib
-    = (const char *) xml_find_attribute (attributes, "id")->value.get ();
-  int id = gdb_xml_parse_ulongest (parser, id_attrib);
-
-  info->tvars.push_back (id);
-}
-
-/* The allowed elements and attributes for an XML memory map.  */
-
-static const struct gdb_xml_attribute memory_attributes[] = {
-  { "start", GDB_XML_AF_NONE, gdb_xml_parse_attr_ulongest, NULL },
-  { "length", GDB_XML_AF_NONE, gdb_xml_parse_attr_ulongest, NULL },
-  { NULL, GDB_XML_AF_NONE, NULL, NULL }
-};
-
-static const struct gdb_xml_attribute tvar_attributes[] = {
-  { "id", GDB_XML_AF_NONE, NULL, NULL },
-  { NULL, GDB_XML_AF_NONE, NULL, NULL }
-};
-
-static const struct gdb_xml_element traceframe_info_children[] = {
-  { "memory", memory_attributes, NULL,
-    GDB_XML_EF_REPEATABLE | GDB_XML_EF_OPTIONAL,
-    traceframe_info_start_memory, NULL },
-  { "tvar", tvar_attributes, NULL,
-    GDB_XML_EF_REPEATABLE | GDB_XML_EF_OPTIONAL,
-    traceframe_info_start_tvar, NULL },
-  { NULL, NULL, NULL, GDB_XML_EF_NONE, NULL, NULL }
-};
-
-static const struct gdb_xml_element traceframe_info_elements[] = {
-  { "traceframe-info", NULL, traceframe_info_children, GDB_XML_EF_NONE,
-    NULL, NULL },
-  { NULL, NULL, NULL, GDB_XML_EF_NONE, NULL, NULL }
-};
-
-/* Parse a traceframe-info XML document.  */
-
-traceframe_info_up
-parse_traceframe_info (const char *tframe_info)
-{
-  traceframe_info_up result (new traceframe_info);
-
-  if (gdb_xml_parse_quick (_("trace frame info"),
-			   "traceframe-info.dtd", traceframe_info_elements,
-			   tframe_info, result.get ()) == 0)
-    return result;
-
-  return NULL;
-}
-
-#endif /* HAVE_LIBEXPAT */
-
-/* Returns the traceframe_info object for the current traceframe.
-   This is where we avoid re-fetching the object from the target if we
-   already have it cached.  */
-
-struct traceframe_info *
-get_traceframe_info (void)
-{
-  if (current_traceframe_info == NULL)
-    current_traceframe_info = target_traceframe_info ();
-
-  return current_traceframe_info.get ();
-}
-
-/* If the target supports the query, return in RESULT the set of
-   collected memory in the current traceframe, found within the LEN
-   bytes range starting at MEMADDR.  Returns true if the target
-   supports the query, otherwise returns false, and RESULT is left
-   undefined.  */
-
-int
-traceframe_available_memory (std::vector<mem_range> *result,
-			     CORE_ADDR memaddr, ULONGEST len)
-{
-  struct traceframe_info *info = get_traceframe_info ();
-
-  if (info != NULL)
-    {
-      result->clear ();
-
-      for (mem_range &r : info->memory)
-	if (mem_ranges_overlap (r.start, r.length, memaddr, len))
-	  {
-	    ULONGEST lo1, hi1, lo2, hi2;
-
-	    lo1 = memaddr;
-	    hi1 = memaddr + len;
-
-	    lo2 = r.start;
-	    hi2 = r.start + r.length;
-
-	    CORE_ADDR start = std::max (lo1, lo2);
-	    int length = std::min (hi1, hi2) - start;
-
-	    result->emplace_back (start, length);
-	  }
-
-      normalize_mem_ranges (result);
-      return 1;
-    }
-
-  return 0;
-}
-
-/* Implementation of `sdata' variable.  */
-
-static const struct internalvar_funcs sdata_funcs =
-{
-  sdata_make_value,
-  NULL,
-  NULL
-};
-
-/* See tracepoint.h.  */
-cmd_list_element *while_stepping_cmd_element = nullptr;
 
 /* module initialization */
-void _initialize_tracepoint ();
 void
-_initialize_tracepoint ()
+_initialize_tracepoint (void)
 {
   struct cmd_list_element *c;
 
-  /* Explicitly create without lookup, since that tries to create a
-     value with a void typed value, and when we get here, gdbarch
-     isn't initialized yet.  At this point, we're quite sure there
-     isn't another convenience variable of the same name.  */
-  create_internalvar_type_lazy ("_sdata", &sdata_funcs, NULL);
-
+  tracepoint_chain = 0;
+  tracepoint_count = 0;
   traceframe_number = -1;
   tracepoint_number = -1;
 
-  add_info ("scope", info_scope_command,
-	    _("List the variables local to a scope."));
+  set_internalvar (lookup_internalvar ("tpnum"),
+		   value_from_longest (builtin_type_int, (LONGEST) 0));
+  set_internalvar (lookup_internalvar ("trace_frame"),
+		   value_from_longest (builtin_type_int, (LONGEST) - 1));
 
-  add_cmd ("tracepoints", class_trace,
-	   _("Tracing of program execution without stopping the program."),
+  if (tracepoint_list.list == NULL)
+    {
+      tracepoint_list.listsize = 128;
+      tracepoint_list.list = xmalloc
+	(tracepoint_list.listsize * sizeof (struct memrange));
+    }
+  if (tracepoint_list.aexpr_list == NULL)
+    {
+      tracepoint_list.aexpr_listsize = 128;
+      tracepoint_list.aexpr_list = xmalloc
+	(tracepoint_list.aexpr_listsize * sizeof (struct agent_expr *));
+    }
+
+  if (stepping_list.list == NULL)
+    {
+      stepping_list.listsize = 128;
+      stepping_list.list = xmalloc
+	(stepping_list.listsize * sizeof (struct memrange));
+    }
+
+  if (stepping_list.aexpr_list == NULL)
+    {
+      stepping_list.aexpr_listsize = 128;
+      stepping_list.aexpr_list = xmalloc
+	(stepping_list.aexpr_listsize * sizeof (struct agent_expr *));
+    }
+
+  add_info ("scope", scope_info,
+	    "List the variables local to a scope");
+
+  add_cmd ("tracepoints", class_trace, NULL,
+	   "Tracing of program execution without stopping the program.",
 	   &cmdlist);
 
-  add_com ("tdump", class_trace, tdump_command,
-	   _("Print everything collected at the current tracepoint."));
+  add_info ("tracepoints", tracepoints_info,
+	    "Status of tracepoints, or tracepoint number NUMBER.\n\
+Convenience variable \"$tpnum\" contains the number of the\n\
+last tracepoint set.");
 
-  c = add_com ("tvariable", class_trace, trace_variable_command,_("\
-Define a trace state variable.\n\
-Argument is a $-prefixed name, optionally followed\n\
-by '=' and an expression that sets the initial value\n\
-at the start of tracing."));
-  set_cmd_completer (c, expression_completer);
+  add_info_alias ("tp", "tracepoints", 1);
 
-  add_cmd ("tvariable", class_trace, delete_trace_variable_command, _("\
-Delete one or more trace state variables.\n\
-Arguments are the names of the variables to delete.\n\
-If no arguments are supplied, delete all variables."), &deletelist);
-  /* FIXME add a trace variable completer.  */
+  c = add_com ("save-tracepoints", class_trace, tracepoint_save_command,
+	       "Save current tracepoint definitions as a script.\n\
+Use the 'source' command in another debug session to restore them.");
+  set_cmd_completer (c, filename_completer);
 
-  add_info ("tvariables", info_tvariables_command, _("\
-Status of trace state variables and their values."));
+  add_com ("tdump", class_trace, trace_dump_command,
+	   "Print everything collected at the current tracepoint.");
 
-  add_info ("static-tracepoint-markers",
-	    info_static_tracepoint_markers_command, _("\
-List target static tracepoints markers."));
-
-  add_prefix_cmd ("tfind", class_trace, tfind_command, _("\
-Select a trace frame.\n\
-No argument means forward by one frame; '-' means backward by one frame."),
+  add_prefix_cmd ("tfind", class_trace, trace_find_command,
+		  "Select a trace frame;\n\
+No argument means forward by one frame; '-' meand backward by one frame.",
 		  &tfindlist, "tfind ", 1, &cmdlist);
 
-  add_cmd ("outside", class_trace, tfind_outside_command, _("\
-Select a trace frame whose PC is outside the given range (exclusive).\n\
-Usage: tfind outside ADDR1, ADDR2"),
+  add_cmd ("outside", class_trace, trace_find_outside_command,
+	   "Select a trace frame whose PC is outside the given \
+range.\nUsage: tfind outside addr1, addr2",
 	   &tfindlist);
 
-  add_cmd ("range", class_trace, tfind_range_command, _("\
-Select a trace frame whose PC is in the given range (inclusive).\n\
-Usage: tfind range ADDR1, ADDR2"),
+  add_cmd ("range", class_trace, trace_find_range_command,
+	   "Select a trace frame whose PC is in the given range.\n\
+Usage: tfind range addr1,addr2",
 	   &tfindlist);
 
-  add_cmd ("line", class_trace, tfind_line_command, _("\
-Select a trace frame by source line.\n\
-Argument can be a line number (with optional source file),\n\
+  add_cmd ("line", class_trace, trace_find_line_command,
+	   "Select a trace frame by source line.\n\
+Argument can be a line number (with optional source file), \n\
 a function name, or '*' followed by an address.\n\
-Default argument is 'the next source line that was traced'."),
+Default argument is 'the next source line that was traced'.",
 	   &tfindlist);
 
-  add_cmd ("tracepoint", class_trace, tfind_tracepoint_command, _("\
-Select a trace frame by tracepoint number.\n\
-Default is the tracepoint for the current trace frame."),
+  add_cmd ("tracepoint", class_trace, trace_find_tracepoint_command,
+	   "Select a trace frame by tracepoint number.\n\
+Default is the tracepoint for the current trace frame.",
 	   &tfindlist);
 
-  add_cmd ("pc", class_trace, tfind_pc_command, _("\
-Select a trace frame by PC.\n\
-Default is the current PC, or the PC of the current trace frame."),
+  add_cmd ("pc", class_trace, trace_find_pc_command,
+	   "Select a trace frame by PC.\n\
+Default is the current PC, or the PC of the current trace frame.",
 	   &tfindlist);
 
-  add_cmd ("end", class_trace, tfind_end_command, _("\
-De-select any trace frame and resume 'live' debugging."),
+  add_cmd ("end", class_trace, trace_find_end_command,
+	   "Synonym for 'none'.\n\
+De-select any trace frame and resume 'live' debugging.",
 	   &tfindlist);
 
-  add_alias_cmd ("none", "end", class_trace, 0, &tfindlist);
-
-  add_cmd ("start", class_trace, tfind_start_command,
-	   _("Select the first trace frame in the trace buffer."),
+  add_cmd ("none", class_trace, trace_find_none_command,
+	   "De-select any trace frame and resume 'live' debugging.",
 	   &tfindlist);
 
-  add_com ("tstatus", class_trace, tstatus_command,
-	   _("Display the status of the current trace data collection."));
+  add_cmd ("start", class_trace, trace_find_start_command,
+	   "Select the first trace frame in the trace buffer.",
+	   &tfindlist);
 
-  add_com ("tstop", class_trace, tstop_command, _("\
-Stop trace data collection.\n\
-Usage: tstop [NOTES]...\n\
-Any arguments supplied are recorded with the trace as a stop reason and\n\
-reported by tstatus (if the target supports trace notes)."));
+  add_com ("tstatus", class_trace, trace_status_command,
+	   "Display the status of the current trace data collection.");
 
-  add_com ("tstart", class_trace, tstart_command, _("\
-Start trace data collection.\n\
-Usage: tstart [NOTES]...\n\
-Any arguments supplied are recorded with the trace as a note and\n\
-reported by tstatus (if the target supports trace notes)."));
+  add_com ("tstop", class_trace, trace_stop_command,
+	   "Stop trace data collection.");
 
-  add_com ("end", class_trace, end_actions_pseudocommand, _("\
-Ends a list of commands or actions.\n\
+  add_com ("tstart", class_trace, trace_start_command,
+	   "Start trace data collection.");
+
+  add_com ("passcount", class_trace, trace_pass_command,
+	   "Set the passcount for a tracepoint.\n\
+The trace will end when the tracepoint has been passed 'count' times.\n\
+Usage: passcount COUNT TPNUM, where TPNUM may also be \"all\";\n\
+if TPNUM is omitted, passcount refers to the last tracepoint defined.");
+
+  add_com ("end", class_trace, end_actions_pseudocommand,
+	   "Ends a list of commands or actions.\n\
 Several GDB commands allow you to enter a list of commands or actions.\n\
 Entering \"end\" on a line by itself is the normal way to terminate\n\
 such a list.\n\n\
-Note: the \"end\" command cannot be used at the gdb prompt."));
+Note: the \"end\" command cannot be used at the gdb prompt.");
 
-  while_stepping_cmd_element = add_com ("while-stepping", class_trace,
-					while_stepping_pseudocommand, _("\
-Specify single-stepping behavior at a tracepoint.\n\
+  add_com ("while-stepping", class_trace, while_stepping_pseudocommand,
+	   "Specify single-stepping behavior at a tracepoint.\n\
 Argument is number of instructions to trace in single-step mode\n\
 following the tracepoint.  This command is normally followed by\n\
 one or more \"collect\" commands, to specify what to collect\n\
 while single-stepping.\n\n\
-Note: this command can only be used in a tracepoint \"actions\" list."));
+Note: this command can only be used in a tracepoint \"actions\" list.");
 
   add_com_alias ("ws", "while-stepping", class_alias, 0);
   add_com_alias ("stepping", "while-stepping", class_alias, 0);
 
-  add_com ("collect", class_trace, collect_pseudocommand, _("\
-Specify one or more data items to be collected at a tracepoint.\n\
+  add_com ("collect", class_trace, collect_pseudocommand,
+	   "Specify one or more data items to be collected at a tracepoint.\n\
 Accepts a comma-separated list of (one or more) expressions.  GDB will\n\
 collect all data (variables, registers) referenced by that expression.\n\
 Also accepts the following special arguments:\n\
     $regs   -- all registers.\n\
     $args   -- all function arguments.\n\
     $locals -- all variables local to the block/function scope.\n\
-    $_sdata -- static tracepoint data (ignored for non-static tracepoints).\n\
-Note: this command can only be used in a tracepoint \"actions\" list."));
+Note: this command can only be used in a tracepoint \"actions\" list.");
 
-  add_com ("teval", class_trace, teval_pseudocommand, _("\
-Specify one or more expressions to be evaluated at a tracepoint.\n\
-Accepts a comma-separated list of (one or more) expressions.\n\
-The result of each evaluation will be discarded.\n\
-Note: this command can only be used in a tracepoint \"actions\" list."));
+  add_com ("actions", class_trace, trace_actions_command,
+	   "Specify the actions to be taken at a tracepoint.\n\
+Tracepoint actions may include collecting of specified data, \n\
+single-stepping, or enabling/disabling other tracepoints, \n\
+depending on target's capabilities.");
 
-  add_com ("actions", class_trace, actions_command, _("\
-Specify the actions to be taken at a tracepoint.\n\
-Tracepoint actions may include collecting of specified data,\n\
-single-stepping, or enabling/disabling other tracepoints,\n\
-depending on target's capabilities."));
+  add_cmd ("tracepoints", class_trace, delete_trace_command,
+	   "Delete specified tracepoints.\n\
+Arguments are tracepoint numbers, separated by spaces.\n\
+No argument means delete all tracepoints.",
+	   &deletelist);
 
-  default_collect = xstrdup ("");
-  add_setshow_string_cmd ("default-collect", class_trace,
-			  &default_collect, _("\
-Set the list of expressions to collect by default."), _("\
-Show the list of expressions to collect by default."), NULL,
-			  NULL, NULL,
-			  &setlist, &showlist);
+  add_cmd ("tracepoints", class_trace, disable_trace_command,
+	   "Disable specified tracepoints.\n\
+Arguments are tracepoint numbers, separated by spaces.\n\
+No argument means disable all tracepoints.",
+	   &disablelist);
 
-  add_setshow_boolean_cmd ("disconnected-tracing", no_class,
-			   &disconnected_tracing, _("\
-Set whether tracing continues after GDB disconnects."), _("\
-Show whether tracing continues after GDB disconnects."), _("\
-Use this to continue a tracing run even if GDB disconnects\n\
-or detaches from the target.  You can reconnect later and look at\n\
-trace data collected in the meantime."),
-			   set_disconnected_tracing,
-			   NULL,
-			   &setlist,
-			   &showlist);
+  add_cmd ("tracepoints", class_trace, enable_trace_command,
+	   "Enable specified tracepoints.\n\
+Arguments are tracepoint numbers, separated by spaces.\n\
+No argument means enable all tracepoints.",
+	   &enablelist);
 
-  add_setshow_boolean_cmd ("circular-trace-buffer", no_class,
-			   &circular_trace_buffer, _("\
-Set target's use of circular trace buffer."), _("\
-Show target's use of circular trace buffer."), _("\
-Use this to make the trace buffer into a circular buffer,\n\
-which will discard traceframes (oldest first) instead of filling\n\
-up and stopping the trace run."),
-			   set_circular_trace_buffer,
-			   NULL,
-			   &setlist,
-			   &showlist);
+  c = add_com ("trace", class_trace, trace_command,
+	       "Set a tracepoint at a specified line or function or address.\n\
+Argument may be a line number, function name, or '*' plus an address.\n\
+For a line number or function, trace at the start of its code.\n\
+If an address is specified, trace at that exact address.\n\n\
+Do \"help tracepoints\" for info on other tracepoint commands.");
+  set_cmd_completer (c, location_completer);
 
-  add_setshow_zuinteger_unlimited_cmd ("trace-buffer-size", no_class,
-				       &trace_buffer_size, _("\
-Set requested size of trace buffer."), _("\
-Show requested size of trace buffer."), _("\
-Use this to choose a size for the trace buffer.  Some targets\n\
-may have fixed or limited buffer sizes.  Specifying \"unlimited\" or -1\n\
-disables any attempt to set the buffer size and lets the target choose."),
-				       set_trace_buffer_size, NULL,
-				       &setlist, &showlist);
-
-  add_setshow_string_cmd ("trace-user", class_trace,
-			  &trace_user, _("\
-Set the user name to use for current and future trace runs."), _("\
-Show the user name to use for current and future trace runs."), NULL,
-			  set_trace_user, NULL,
-			  &setlist, &showlist);
-
-  add_setshow_string_cmd ("trace-notes", class_trace,
-			  &trace_notes, _("\
-Set notes string to use for current and future trace runs."), _("\
-Show the notes string to use for current and future trace runs."), NULL,
-			  set_trace_notes, NULL,
-			  &setlist, &showlist);
-
-  add_setshow_string_cmd ("trace-stop-notes", class_trace,
-			  &trace_stop_notes, _("\
-Set notes string to use for future tstop commands."), _("\
-Show the notes string to use for future tstop commands."), NULL,
-			  set_trace_stop_notes, NULL,
-			  &setlist, &showlist);
+  add_com_alias ("tp", "trace", class_alias, 0);
+  add_com_alias ("tr", "trace", class_alias, 1);
+  add_com_alias ("tra", "trace", class_alias, 1);
+  add_com_alias ("trac", "trace", class_alias, 1);
 }

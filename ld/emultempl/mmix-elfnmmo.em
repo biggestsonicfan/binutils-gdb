@@ -1,11 +1,11 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+#   Copyright 2001, 2002 Free Software Foundation, Inc.
 #
-# This file is part of the GNU Binutils.
+# This file is part of GLD, the Gnu Linker.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -15,29 +15,22 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-# This file is sourced from elf.em and mmo.em, used to define
+# This file is sourced from elf32.em and mmo.em, used to define
 # MMIX-specific things common to ELF and MMO.
 
-fragment <<EOF
+cat >>e${EMULATION_NAME}.c <<EOF
 #include "elf/mmix.h"
 
-static void gld${EMULATION_NAME}_before_parse (void);
-
-static void
-mmix_before_parse (void)
-{
-  link_info.check_relocs_after_open_input = TRUE;
-  gld${EMULATION_NAME}_before_parse ();
-}
+static void mmix_before_allocation PARAMS ((void));
+static void mmix_after_allocation PARAMS ((void));
 
 /* Set up handling of linker-allocated global registers.  */
 
 static void
-mmix_before_allocation (void)
+mmix_before_allocation ()
 {
   /* Call the default first.  */
   gld${EMULATION_NAME}_before_allocation ();
@@ -48,12 +41,12 @@ mmix_before_allocation (void)
      maintenance burden to keep them in sync.  (Of course we lose the
      maintenance burden of checking that it still does what we need.)  */
 
-  /* Force -relax on (regardless of whether we're doing a relocatable
-     link).  */
-  ENABLE_RELAXATION;
+  /* Force -relax on if not doing a relocatable link.  */
+  if (! link_info.relocateable)
+    command_line.relax = true;
 
-  if (!_bfd_mmix_before_linker_allocation (link_info.output_bfd, &link_info))
-    einfo (_("%X%P: internal problems setting up section %s"),
+  if (!_bfd_mmix_prepare_linker_allocated_gregs (output_bfd, &link_info))
+    einfo ("%X%P: Internal problems setting up section %s",
 	   MMIX_LD_ALLOCATED_REG_CONTENTS_SECTION_NAME);
 }
 
@@ -62,12 +55,11 @@ mmix_before_allocation (void)
    GREGs.  */
 
 static void
-mmix_after_allocation (void)
+mmix_after_allocation ()
 {
-  asection *sec;
+  asection *sec
+    = bfd_get_section_by_name (output_bfd, MMIX_REG_CONTENTS_SECTION_NAME);
   bfd_signed_vma regvma;
-
-  gld${EMULATION_NAME}_after_allocation ();
 
   /* If there's no register section, we don't need to do anything.  On the
      other hand, if there's a non-standard linker-script without a mapping
@@ -80,16 +72,14 @@ mmix_after_allocation (void)
      that's expected when you play tricks with linker scripts.  The
      "NOCROSSREFS 2" test does not run the output so it does not matter
      there.  */
-  sec = bfd_get_section_by_name (link_info.output_bfd,
-				 MMIX_REG_CONTENTS_SECTION_NAME);
   if (sec == NULL)
     sec
-      = bfd_get_section_by_name (link_info.output_bfd,
+      = bfd_get_section_by_name (output_bfd,
 				 MMIX_LD_ALLOCATED_REG_CONTENTS_SECTION_NAME);
   if (sec == NULL)
     return;
 
-  regvma = 256 * 8 - sec->size - 8;
+  regvma = 256 * 8 - sec->_raw_size - 8;
 
   /* If we start on a local register, we have too many global registers.
      We treat this error as nonfatal (meaning processing will continue in
@@ -97,29 +87,38 @@ mmix_after_allocation (void)
      as an undefined symbol.  */
   if (regvma < 32 * 8)
     {
-      einfo (_("%X%P: too many global registers: %u, max 223\n"),
-	     (unsigned) sec->size / 8);
+      einfo ("%X%P: Too many global registers: %u, max 223\n",
+	     (unsigned) sec->_raw_size / 8);
       regvma = 32 * 8;
     }
 
   /* Set vma to correspond to first such register number * 8.  */
-  bfd_set_section_vma (sec, (bfd_vma) regvma);
+  bfd_set_section_vma (output_bfd, sec, (bfd_vma) regvma);
+
+  /* ??? Why isn't the section size (_cooked_size) set?  Doesn't it get
+     set regardless of presence of relocations?  */
+  if (sec->_cooked_size == 0
+      && ! bfd_set_section_size (output_bfd, sec, sec->_raw_size))
+    {
+      /* This is a fatal error; make the einfo call not return.  */
+      einfo ("%F%P: Can't set section %s size to %u\n",
+	     MMIX_REG_CONTENTS_SECTION_NAME, (unsigned) sec->_raw_size);
+    }
 
   /* Simplify symbol output for the register section (without contents;
      created for register symbols) by setting the output offset to 0.
      This section is only present when there are register symbols.  */
-  sec = bfd_get_section_by_name (link_info.output_bfd, MMIX_REG_SECTION_NAME);
+  sec = bfd_get_section_by_name (output_bfd, MMIX_REG_SECTION_NAME);
   if (sec != NULL)
-    bfd_set_section_vma (sec, 0);
+    bfd_set_section_vma (abfd, sec, 0);
 
-  if (!_bfd_mmix_after_linker_allocation (link_info.output_bfd, &link_info))
+  if (!_bfd_mmix_finalize_linker_allocated_gregs (output_bfd, &link_info))
     {
       /* This is a fatal error; make einfo call not return.  */
-      einfo (_("%F%P: can't finalize linker-allocated global registers\n"));
+      einfo ("%F%P: Can't finalize linker-allocated global registers\n");
     }
 }
 EOF
 
-LDEMUL_BEFORE_PARSE=mmix_before_parse
 LDEMUL_AFTER_ALLOCATION=mmix_after_allocation
 LDEMUL_BEFORE_ALLOCATION=mmix_before_allocation

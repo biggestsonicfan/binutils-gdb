@@ -1,12 +1,11 @@
-/* Target-dependent code for the VAX.
-
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+/* Common target dependent code for GDB on VAX systems.
+   Copyright 2002 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,25 +14,50 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef VAX_TDEP_H
 #define VAX_TDEP_H
 
-/* Register numbers of various important registers.  */
+#include "osabi.h"
 
-enum vax_regnum
-{
-  VAX_R0_REGNUM,
-  VAX_R1_REGNUM,
-  VAX_AP_REGNUM = 12,		/* Argument pointer on user stack.  */
-  VAX_FP_REGNUM,		/* Address of executing stack frame.  */
-  VAX_SP_REGNUM,		/* Address of top of stack.  */
-  VAX_PC_REGNUM,		/* Program counter.  */
-  VAX_PS_REGNUM			/* Processor status.  */
-};
+/* Say how long (ordinary) registers are.  This is a piece of bogosity
+   used in push_word and a few other places;  REGISTER_RAW_SIZE is the
+   real way to know how big a register is.  */
+#define VAX_REGISTER_SIZE 4
 
 /* Number of machine registers.  */
 #define VAX_NUM_REGS 17
 
-#endif /* vax-tdep.h */
+/* Total amount of space needed to store our copies of the machine's
+   register state.  */
+#define VAX_REGISTER_BYTES (VAX_NUM_REGS * 4)
+
+/* Largest value REGISTER_RAW_SIZE can have.  */
+#define VAX_MAX_REGISTER_RAW_SIZE 4
+
+/* Largest value REGISTER_VIRTUAL_SIZE can have.  */
+#define VAX_MAX_REGISTER_VIRTUAL_SIZE 4
+
+/* Register numbers of various important registers.
+   Note that most of these values are "real" register numbers,
+   and correspond to the general registers of the machine,
+   and are "phony" register numbers which is too large
+   to be an actual register number as far as the user is concerned
+   but serves to get the desired value when passed to read_register.  */
+
+#define VAX_AP_REGNUM     12  /* argument pointer */
+#define VAX_FP_REGNUM     13  /* Contains address of executing stack frame */
+#define VAX_SP_REGNUM     14  /* Contains address of top of stack */
+#define VAX_PC_REGNUM     15  /* Contains program counter */
+#define VAX_PS_REGNUM     16  /* Contains processor status */
+
+/* Target-dependent structure in gdbarch.  */ 
+struct gdbarch_tdep
+{  
+  enum gdb_osabi osabi;		/* OS/ABI of inferior.  */
+};
+
+#endif /* VAX_TDEP_H */

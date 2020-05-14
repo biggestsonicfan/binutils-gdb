@@ -1,27 +1,27 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1996, Andrew Cagney <cagney@highland.com.au>
+    Copyright (C) 1997, Free Software Foundation, Inc.
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
-#ifndef SIM_BITS_H
-#define SIM_BITS_H
+#ifndef _SIM_BITS_H_
+#define _SIM_BITS_H_
 
 
 /* Bit manipulation routines:
@@ -501,14 +501,11 @@ INLINE_SIM_BITS(unsigned_word) MSINSERTED (unsigned_word val, int start, int sto
 
 #define EXTEND4(X)  (LSSEXT ((X), 3))
 #define EXTEND5(X)  (LSSEXT ((X), 4))
-#define EXTEND6(X)  (LSSEXT ((X), 5))
 #define EXTEND8(X)  ((signed_word)(signed8)(X))
 #define EXTEND11(X)  (LSSEXT ((X), 10))
-#define EXTEND12(X)  (LSSEXT ((X), 11))
 #define EXTEND15(X)  (LSSEXT ((X), 14))
 #define EXTEND16(X) ((signed_word)(signed16)(X))
 #define EXTEND24(X)  (LSSEXT ((X), 23))
-#define EXTEND25(X)  (LSSEXT ((X), 24))
 #define EXTEND32(X) ((signed_word)(signed32)(X))
 #define EXTEND64(X) ((signed_word)(signed64)(X))
 
@@ -608,4 +605,4 @@ INLINE_SIM_BITS(unsigned_word) MSSEXT (signed_word val, int sign_bit);
 #include "sim-bits.c"
 #endif
 
-#endif /* SIM_BITS_H */
+#endif /* _SIM_BITS_H_ */

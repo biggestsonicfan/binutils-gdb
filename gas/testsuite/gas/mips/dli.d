@@ -1,6 +1,6 @@
-#objdump: -dr --prefix-addresses
+#objdump: -dr --prefix-addresses -mmips:4000
 #name: MIPS dli
-#as: -64
+#as: -mips3
 
 # Test the dli macro.
 

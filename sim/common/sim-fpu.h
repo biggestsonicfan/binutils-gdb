@@ -1,23 +1,22 @@
 /* Simulator Floating-point support.
-
-   Copyright 1997-2020 Free Software Foundation, Inc.
-
+   Copyright (C) 1997, 1998, 2002 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 
 
@@ -146,12 +145,11 @@ typedef enum
   sim_fpu_status_invalid_div0 = 128, /* (X / 0) */
   sim_fpu_status_invalid_cmp = 256, /* compare */
   sim_fpu_status_invalid_sqrt = 512,
-  sim_fpu_status_invalid_irx = 1024, /* (inf % X) */
-  sim_fpu_status_rounded = 2048,
-  sim_fpu_status_inexact = 4096,
-  sim_fpu_status_overflow = 8192,
-  sim_fpu_status_underflow = 16384,
-  sim_fpu_status_denorm = 32768,
+  sim_fpu_status_rounded = 1024,
+  sim_fpu_status_inexact = 2048,
+  sim_fpu_status_overflow = 4096,
+  sim_fpu_status_underflow = 8192,
+  sim_fpu_status_denorm = 16384,
 } sim_fpu_status;
 
 
@@ -230,8 +228,6 @@ INLINE_SIM_FPU (int) sim_fpu_sub (sim_fpu *f,
 INLINE_SIM_FPU (int) sim_fpu_mul (sim_fpu *f,
 				  const sim_fpu *l, const sim_fpu *r);
 INLINE_SIM_FPU (int) sim_fpu_div (sim_fpu *f,
-				  const sim_fpu *l, const sim_fpu *r);
-INLINE_SIM_FPU (int) sim_fpu_rem (sim_fpu *f,
 				  const sim_fpu *l, const sim_fpu *r);
 INLINE_SIM_FPU (int) sim_fpu_max (sim_fpu *f,
 				  const sim_fpu *l, const sim_fpu *r);
@@ -320,8 +316,6 @@ INLINE_SIM_FPU (int) sim_fpu_is_denorm (const sim_fpu *s); /* !zero */
 
 INLINE_SIM_FPU (int) sim_fpu_sign (const sim_fpu *s);
 INLINE_SIM_FPU (int) sim_fpu_exp (const sim_fpu *s);
-INLINE_SIM_FPU (unsigned64) sim_fpu_fraction (const sim_fpu *s);
-INLINE_SIM_FPU (unsigned64) sim_fpu_guard (const sim_fpu *s, int is_double);
 
 
 
@@ -406,7 +400,7 @@ extern const sim_fpu sim_fpu_max64;
 
 /* For debugging */
 
-typedef void sim_fpu_print_func (void *, const char *, ...);
+typedef void sim_fpu_print_func (void *, char *, ...);
 
 /* Print a sim_fpu with full precision.  */
 INLINE_SIM_FPU (void) sim_fpu_print_fpu (const sim_fpu *f,

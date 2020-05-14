@@ -1,8 +1,8 @@
-# Copyright (C) 1999-2020 Free Software Foundation, Inc.
+# Copyright 1999, 2000, 2002 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 # 
 # This program is distributed in the hope that it will be useful,
@@ -12,8 +12,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.  
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
 
 # Please email any bugs, comments, and/or additions to this file to:
 # hp@axis.com
@@ -60,7 +59,7 @@ proc test_template_insn_reg_mem { args } {
     }
 
     # Any extra replacements (like modifying the test name to something
-    # else than the @OC@ modification).  Replaces occurrences of @OR@.
+    # else than the @OC@ modification).  Replaces occurences of @OR@.
     if { [llength $args] >= 11 } then {
 	set extra_OR_replace [lindex $args 10]
     } else {
@@ -497,6 +496,9 @@ if [istarget cris-*-*] then {
     run_dump_test "nosep"
     run_dump_test "labfloat"
     run_dump_test "bork"
+
+    # This seems like a generic expression evaluation problem.
+    setup_xfail "cris-*-*"
     run_dump_test "shexpr-1"
 
     # The "@" will be erroneously interpreted as a line-separator in a

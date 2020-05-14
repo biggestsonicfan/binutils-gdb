@@ -1,28 +1,26 @@
 /* ldemul.c -- clearing house for ld emulation states
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 2000
+   Free Software Foundation, Inc.
 
-   This file is part of the GNU Binutils.
+This file is part of GLD, the Gnu Linker.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+GLD is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+GLD is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with GLD; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
-#include "getopt.h"
-#include "bfdlink.h"
-#include "ctf-api.h"
+#include "sysdep.h"
 
 #include "ld.h"
 #include "ldmisc.h"
@@ -33,160 +31,147 @@
 #include "ldmain.h"
 #include "ldemul-list.h"
 
-static ld_emulation_xfer_type *ld_emulation;
+ld_emulation_xfer_type *ld_emulation;
 
 void
-ldemul_hll (char *name)
+ldemul_hll (name)
+     char *name;
 {
   ld_emulation->hll (name);
 }
 
 void
-ldemul_syslib (char *name)
+ldemul_syslib (name)
+     char *name;
 {
   ld_emulation->syslib (name);
 }
 
 void
-ldemul_after_parse (void)
+ldemul_after_parse ()
 {
   ld_emulation->after_parse ();
 }
 
 void
-ldemul_before_parse (void)
+ldemul_before_parse ()
 {
   ld_emulation->before_parse ();
 }
 
 void
-ldemul_after_open (void)
+ldemul_after_open ()
 {
   ld_emulation->after_open ();
 }
 
 void
-ldemul_after_check_relocs (void)
-{
-  ld_emulation->after_check_relocs ();
-}
-
-void
-ldemul_before_place_orphans (void)
-{
-  ld_emulation->before_place_orphans ();
-}
-
-void
-ldemul_after_allocation (void)
+ldemul_after_allocation ()
 {
   ld_emulation->after_allocation ();
 }
 
 void
-ldemul_before_allocation (void)
+ldemul_before_allocation ()
 {
-  ld_emulation->before_allocation ();
+  if (ld_emulation->before_allocation)
+    ld_emulation->before_allocation ();
 }
 
 void
-ldemul_set_output_arch (void)
+ldemul_set_output_arch ()
 {
   ld_emulation->set_output_arch ();
 }
 
 void
-ldemul_finish (void)
+ldemul_finish ()
 {
-  ld_emulation->finish ();
+  if (ld_emulation->finish)
+    ld_emulation->finish ();
 }
 
 void
-ldemul_set_symbols (void)
+ldemul_set_symbols ()
 {
   if (ld_emulation->set_symbols)
     ld_emulation->set_symbols ();
 }
 
 void
-ldemul_create_output_section_statements (void)
+ldemul_create_output_section_statements ()
 {
   if (ld_emulation->create_output_section_statements)
     ld_emulation->create_output_section_statements ();
 }
 
 char *
-ldemul_get_script (int *isfile)
+ldemul_get_script (isfile)
+     int *isfile;
 {
   return ld_emulation->get_script (isfile);
 }
 
-bfd_boolean
-ldemul_open_dynamic_archive (const char *arch, search_dirs_type *search,
-			     lang_input_statement_type *entry)
+boolean
+ldemul_open_dynamic_archive (arch, search, entry)
+     const char *arch;
+     search_dirs_type *search;
+     lang_input_statement_type *entry;
 {
   if (ld_emulation->open_dynamic_archive)
     return (*ld_emulation->open_dynamic_archive) (arch, search, entry);
-  return FALSE;
+  return false;
 }
 
-lang_output_section_statement_type *
-ldemul_place_orphan (asection *s, const char *name, int constraint)
+boolean
+ldemul_place_orphan (file, s)
+     lang_input_statement_type *file;
+     asection *s;
 {
   if (ld_emulation->place_orphan)
-    return (*ld_emulation->place_orphan) (s, name, constraint);
-  return NULL;
+    return (*ld_emulation->place_orphan) (file, s);
+  return false;
 }
 
-void
-ldemul_add_options (int ns, char **shortopts, int nl,
-		    struct option **longopts, int nrl,
-		    struct option **really_longopts)
-{
-  if (ld_emulation->add_options)
-    (*ld_emulation->add_options) (ns, shortopts, nl, longopts,
-				  nrl, really_longopts);
-}
-
-bfd_boolean
-ldemul_handle_option (int optc)
-{
-  if (ld_emulation->handle_option)
-    return (*ld_emulation->handle_option) (optc);
-  return FALSE;
-}
-
-bfd_boolean
-ldemul_parse_args (int argc, char **argv)
+int
+ldemul_parse_args (argc, argv)
+     int argc;
+     char **argv;
 {
   /* Try and use the emulation parser if there is one.  */
   if (ld_emulation->parse_args)
-    return (*ld_emulation->parse_args) (argc, argv);
-  return FALSE;
+    {
+      return ld_emulation->parse_args (argc, argv);
+    }
+  return 0;
 }
 
 /* Let the emulation code handle an unrecognized file.  */
 
-bfd_boolean
-ldemul_unrecognized_file (lang_input_statement_type *entry)
+boolean
+ldemul_unrecognized_file (entry)
+     lang_input_statement_type *entry;
 {
   if (ld_emulation->unrecognized_file)
     return (*ld_emulation->unrecognized_file) (entry);
-  return FALSE;
+  return false;
 }
 
 /* Let the emulation code handle a recognized file.  */
 
-bfd_boolean
-ldemul_recognized_file (lang_input_statement_type *entry)
+boolean
+ldemul_recognized_file (entry)
+     lang_input_statement_type *entry;
 {
   if (ld_emulation->recognized_file)
     return (*ld_emulation->recognized_file) (entry);
-  return FALSE;
+  return false;
 }
 
 char *
-ldemul_choose_target (int argc, char **argv)
+ldemul_choose_target (argc, argv)
+     int argc;
+     char **argv;
 {
   return ld_emulation->choose_target (argc, argv);
 }
@@ -195,7 +180,9 @@ ldemul_choose_target (int argc, char **argv)
 /* The default choose_target function.  */
 
 char *
-ldemul_default_target (int argc ATTRIBUTE_UNUSED, char **argv ATTRIBUTE_UNUSED)
+ldemul_default_target (argc, argv)
+     int argc ATTRIBUTE_UNUSED;
+     char **argv ATTRIBUTE_UNUSED;
 {
   char *from_outside = getenv (TARGET_ENVIRON);
   if (from_outside != (char *) NULL)
@@ -203,127 +190,53 @@ ldemul_default_target (int argc ATTRIBUTE_UNUSED, char **argv ATTRIBUTE_UNUSED)
   return ld_emulation->target_name;
 }
 
-/* If the entry point was not specified as an address, then add the
-   symbol as undefined.  This will cause ld to extract an archive
-   element defining the entry if ld is linking against such an archive.
-
-   We don't do this when generating shared libraries unless given -e
-   on the command line, because most shared libs are not designed to
-   be run as an executable.  However, some are, eg. glibc ld.so and
-   may rely on the default linker script supplying ENTRY.  So we can't
-   remove the ENTRY from the script, but would rather not insert
-   undefined _start syms.  */
-
 void
-after_parse_default (void)
-{
-  if (entry_symbol.name != NULL
-      && (bfd_link_executable (&link_info) || entry_from_cmdline))
-    {
-      bfd_boolean is_vma = FALSE;
-
-      if (entry_from_cmdline)
-	{
-	  const char *send;
-
-	  bfd_scan_vma (entry_symbol.name, &send, 0);
-	  is_vma = *send == '\0';
-	}
-      if (!is_vma)
-	ldlang_add_undef (entry_symbol.name, entry_from_cmdline);
-    }
-  if (config.maxpagesize == 0)
-    config.maxpagesize = bfd_emul_get_maxpagesize (default_target);
-  if (config.commonpagesize == 0)
-    config.commonpagesize = bfd_emul_get_commonpagesize (default_target,
-							 link_info.relro);
-}
-
-void
-after_open_default (void)
-{
-  link_info.big_endian = TRUE;
-
-  if (bfd_big_endian (link_info.output_bfd))
-    ;
-  else if (bfd_little_endian (link_info.output_bfd))
-    link_info.big_endian = FALSE;
-  else
-    {
-      if (command_line.endian == ENDIAN_BIG)
-	;
-      else if (command_line.endian == ENDIAN_LITTLE)
-	link_info.big_endian = FALSE;
-      else if (command_line.endian == ENDIAN_UNSET)
-	{
-	  LANG_FOR_EACH_INPUT_STATEMENT (s)
-	    if (s->the_bfd != NULL)
-	      {
-		if (bfd_little_endian (s->the_bfd))
-		  link_info.big_endian = FALSE;
-		break;
-	      }
-	}
-    }
-}
-
-void
-after_check_relocs_default (void)
+after_parse_default ()
 {
 }
 
 void
-before_place_orphans_default (void)
+after_open_default ()
 {
 }
 
 void
-after_allocation_default (void)
+after_allocation_default ()
 {
-  lang_relax_sections (FALSE);
 }
 
 void
-before_allocation_default (void)
+before_allocation_default ()
 {
-  if (!bfd_link_relocatable (&link_info))
-    strip_excluded_output_sections ();
 }
 
 void
-finish_default (void)
-{
-  if (!bfd_link_relocatable (&link_info))
-    _bfd_fix_excluded_sec_syms (link_info.output_bfd, &link_info);
-}
-
-void
-set_output_arch_default (void)
+set_output_arch_default ()
 {
   /* Set the output architecture and machine if possible.  */
-  bfd_set_arch_mach (link_info.output_bfd,
+  bfd_set_arch_mach (output_bfd,
 		     ldfile_output_architecture, ldfile_output_machine);
-
-  bfd_emul_set_maxpagesize (output_target, config.maxpagesize);
-  bfd_emul_set_commonpagesize (output_target, config.commonpagesize);
 }
 
 void
-syslib_default (char *ignore ATTRIBUTE_UNUSED)
+syslib_default (ignore)
+     char *ignore ATTRIBUTE_UNUSED;
 {
-  info_msg (_("%pS SYSLIB ignored\n"), NULL);
+  info_msg (_("%S SYSLIB ignored\n"));
 }
 
 void
-hll_default (char *ignore ATTRIBUTE_UNUSED)
+hll_default (ignore)
+     char *ignore ATTRIBUTE_UNUSED;
 {
-  info_msg (_("%pS HLL ignored\n"), NULL);
+  info_msg (_("%S HLL ignored\n"));
 }
 
 ld_emulation_xfer_type *ld_emulations[] = { EMULATION_LIST };
 
 void
-ldemul_choose_mode (char *target)
+ldemul_choose_mode (target)
+     char *target;
 {
   ld_emulation_xfer_type **eptr = ld_emulations;
   /* Ignore "gld" prefix.  */
@@ -344,15 +257,16 @@ ldemul_choose_mode (char *target)
 }
 
 void
-ldemul_list_emulations (FILE *f)
+ldemul_list_emulations (f)
+     FILE *f;
 {
   ld_emulation_xfer_type **eptr = ld_emulations;
-  bfd_boolean first = TRUE;
+  boolean first = true;
 
   for (; *eptr; eptr++)
     {
       if (first)
-	first = FALSE;
+	first = false;
       else
 	fprintf (f, " ");
       fprintf (f, "%s", (*eptr)->emulation_name);
@@ -360,7 +274,8 @@ ldemul_list_emulations (FILE *f)
 }
 
 void
-ldemul_list_emulation_options (FILE *f)
+ldemul_list_emulation_options (f)
+     FILE *f;
 {
   ld_emulation_xfer_type **eptr;
   int options_found = 0;
@@ -379,12 +294,14 @@ ldemul_list_emulation_options (FILE *f)
 	}
     }
 
-  if (!options_found)
+  if (! options_found)
     fprintf (f, _("  no emulation specific options.\n"));
 }
 
 int
-ldemul_find_potential_libraries (char *name, lang_input_statement_type *entry)
+ldemul_find_potential_libraries (name, entry)
+     char *name;
+     lang_input_statement_type *entry;
 {
   if (ld_emulation->find_potential_libraries)
     return ld_emulation->find_potential_libraries (name, entry);
@@ -393,38 +310,10 @@ ldemul_find_potential_libraries (char *name, lang_input_statement_type *entry)
 }
 
 struct bfd_elf_version_expr *
-ldemul_new_vers_pattern (struct bfd_elf_version_expr *entry)
+ldemul_new_vers_pattern (entry)
+     struct bfd_elf_version_expr *entry;
 {
   if (ld_emulation->new_vers_pattern)
     entry = (*ld_emulation->new_vers_pattern) (entry);
   return entry;
-}
-
-void
-ldemul_extra_map_file_text (bfd *abfd, struct bfd_link_info *info, FILE *mapf)
-{
-  if (ld_emulation->extra_map_file_text)
-    ld_emulation->extra_map_file_text (abfd, info, mapf);
-}
-
-int
-ldemul_emit_ctf_early (void)
-{
-  if (ld_emulation->emit_ctf_early)
-    return ld_emulation->emit_ctf_early ();
-  /* If the emulation doesn't know if it wants to emit CTF early, it is going
-     to do so.  */
-  return 1;
-}
-
-void
-ldemul_examine_strtab_for_ctf (struct ctf_file *ctf_output,
-			       struct elf_sym_strtab *syms,
-			       bfd_size_type symcount,
-			       struct elf_strtab_hash *symstrtab)
-
-{
-  if (ld_emulation->examine_strtab_for_ctf)
-    ld_emulation->examine_strtab_for_ctf (ctf_output, syms,
-					  symcount, symstrtab);
 }

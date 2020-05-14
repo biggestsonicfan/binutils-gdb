@@ -1,12 +1,12 @@
 /* MI Option Parser.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions (a Red Hat company).
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,20 +15,12 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
-#ifndef MI_MI_GETOPT_H
-#define MI_MI_GETOPT_H
-
-/* The option list.  Terminated by NAME==NULL.  ARG_P that the option
-   requires an argument.  INDEX is returned to identify the option.  */
-
-struct mi_opt
-  {
-    const char *name;
-    int index;
-    int arg_p;
-  };
+#ifndef MI_GETOPT_H
+#define MI_GETOPT_H
 
 /* Like getopt() but with simpler semantics.
 
@@ -46,33 +38,23 @@ struct mi_opt
    If ARGV[OPTIND] is not an option, -1 is returned and OPTIND updated
    to specify the non-option argument.  OPTARG is set to NULL.
 
-   If an unknown option is encountered, mi_getopt() calls
-   ``error("%s: Unknown option %c", prefix, option)'' while
-   mi_getopt_allow_unknown returns -1.  */
+   mi_getopt() calls ``error("%s: Unknown option %c", prefix,
+   option)'' if an unknown option is encountered. */
 
+struct mi_opt;
 extern int mi_getopt (const char *prefix, int argc, char **argv,
-		      const struct mi_opt *opt, int *optind, char **optarg);
-extern int mi_getopt_allow_unknown (const char *prefix, int argc,
-				    char **argv, const struct mi_opt *opts,
-				    int *oind, char **oarg);
+		      struct mi_opt *opt, int *optind, char **optarg);
 
-/* mi_valid_noargs determines if ARGC/ARGV are a valid set of
-   parameters to satisfy an MI function that is not supposed to
-   receive any arguments.
-   
-   An MI function that should not receive arguments can still be 
-   passed parameters after the special option '--' such as below.
+/* The option list.  Terminated by NAME==NULL.  ARG_P that the option
+   requires an argument.  INDEX is returned to identify th option. */
 
-   Example: The MI function -exec-run takes no args.
-   However, the client may pass '-exec-run -- -a ...'
-   See PR-783
+struct mi_opt
+  {
+    const char *name;
+    int index;
+    int arg_p;
+  };
 
-   PREFIX is passed to mi_getopt for an error message.
-    
-   This function Returns 1 if the parameter pair ARGC/ARGV are valid
-   for an MI function that takes no arguments. Otherwise, it returns 0
-   and the appropriate error message is displayed by mi_getopt.  */
+struct mi_opt;
 
-extern int mi_valid_noargs (const char *prefix, int argc, char **argv);
-
-#endif /* MI_MI_GETOPT_H */
+#endif

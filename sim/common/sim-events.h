@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #ifndef SIM_EVENTS_H
@@ -55,7 +54,7 @@
 	   if (events-were-next)
 	     next-cpu-nr = 0;
 
-           .... // prime main loop
+           .... // prime main loop 
 
            while (1)
              {
@@ -93,7 +92,8 @@ struct _sim_events {
   unsigned long elapsed_wallclock;
   SIM_ELAPSED_TIME resume_wallclock;
   signed64 time_of_event;
-  signed64 time_from_event;
+  int time_from_event;
+  int trace;
 };
 
 
@@ -154,8 +154,7 @@ extern sim_event *sim_events_watch_clock
    true.
 
    HOST_ADDR: pointer into the host address space.
-   BYTE_ORDER: BFD_ENDIAN_UNKNOWN - host endian; BFD_ENDIAN_BIG;
-	       BFD_ENDIAN_LITTLE.  */
+   BYTE_ORDER: 0 - host endian; BIG_ENDIAN; LITTLE_ENDIAN */
 
 extern sim_event *sim_events_watch_sim
 (SIM_DESC sd,
@@ -174,8 +173,7 @@ extern sim_event *sim_events_watch_sim
    true.
 
    CORE_ADDR/MAP: pointer into the target address space.
-   BYTE_ORDER: BFD_ENDIAN_UNKNOWN - host endian; BFD_ENDIAN_BIG;
-	       BFD_ENDIAN_LITTLE.  */
+   BYTE_ORDER: 0 - current target endian; BIG_ENDIAN; LITTLE_ENDIAN */
 
 extern sim_event *sim_events_watch_core
 (SIM_DESC sd,

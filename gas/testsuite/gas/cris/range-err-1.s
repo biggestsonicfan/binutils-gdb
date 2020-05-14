@@ -9,7 +9,6 @@
  .set three2767, 32767
 
  .text
- .syntax no_register_prefix
 start:
  moveq 32,r0 ; { dg-error "Immediate value not in 6 bit range: 32" }
  moveq 63,r0 ; { dg-error "Immediate value not in 6 bit range: 63" }
@@ -26,7 +25,7 @@ start:
  movs.b -129,r0 ; { dg-error "Immediate value not in 8 bit range: -129" }
  movs.b 128,r0 ; { dg-error "Immediate value not in 8 bit range: 128" "" { xfail *-*-* } }
  movs.b -32769,r0 ; { dg-error "Immediate value not in (8|16) bit range: -32769" }
- movs.b 0xffffffff,r0 ; { dg-error "Immediate value not in (8|16) bit range: (4294967295|-1)" }
+ movs.b 0xffffffff,r0 ; { dg-error "Immediate value not in (8|16) bit range: (4294967295|-1)" "" { xfail *-*-* } }
 
  movs.w 32768,r0 ; { dg-error "Immediate value not in 16 bit range: 32768" "" { xfail *-*-* } }
  movs.w 0x8000,r0 ; { dg-error "Immediate value not in 16 bit range: 32768" "" { xfail *-*-* } }
@@ -35,7 +34,7 @@ start:
  movs.w -32769,r0 ; { dg-error "Immediate value not in 16 bit range: -32769" }
  movs.w 65536,r0 ; { dg-error "Immediate value not in 16 bit range: 65536" }
  movs.w -32769,r0 ; { dg-error "Immediate value not in 16 bit range: -32769" }
- movs.w 0xffffffff,r0 ; { dg-error "Immediate value not in 16 bit range: (4294967295|-1)" }
+ movs.w 0xffffffff,r0 ; { dg-error "Immediate value not in 16 bit range: (4294967295|-1)" "" { xfail *-*-* } }
 
  movu.b 256,r0 ; { dg-error "Immediate value not in 8 bit range: 256" }
  movu.b 0x100,r0 ; { dg-error "Immediate value not in 8 bit range: 256" }
@@ -47,7 +46,7 @@ start:
  movu.w 65536,r0 ; { dg-error "Immediate value not in 16 bit range: 65536" }
  movu.w -32769,r0 ; { dg-error "Immediate value not in 16 bit range: -32769" }
  movu.w -1,r0 ; { dg-error "Immediate value not in 16 bit unsigned range: -1" "" { xfail *-*-* } }
- movu.w 0xffffffff,r0 ; { dg-error "Immediate value not in 16 bit (unsigned )?range: (4294967295|-1)" }
+ movu.w 0xffffffff,r0 ; { dg-error "Immediate value not in 16 bit (unsigned )?range: (4294967295|-1)" "" { xfail *-*-* } }
 
  add.b -129,r5 ; { dg-error "Immediate value not in 8 bit range: -129" }
  add.b -255,r5 ; { dg-error "Immediate value not in 8 bit range: -255" }
@@ -61,9 +60,9 @@ start:
  add.w 2781868,r13 ; { dg-error "Immediate value not in 16 bit range: 2781868" }
  add.w -2701867,r13 ; { dg-error "Immediate value not in 16 bit range: -2701867" }
 
- add.w 0x9ec0ceac,r13 ; { dg-error "Immediate value not in 16 bit range: (2663435948|-1631531348)" }
+ add.w 0x9ec0ceac,r13 ; { dg-error "Immediate value not in 16 bit range: -1631531348" }
  add.w -0x7ec0cead,r13 ; { dg-error "Immediate value not in 16 bit range: -2126565037" }
 
- add.w const_int_m32,r13 ; { dg-error "Immediate value not in 16 bit range: (-3513208907|781758389)" }
+ add.w const_int_m32,r13 ; { dg-error "Immediate value not in 16 bit range: 781758389" }
  add.w const_int_32,r13 ; { dg-error "Immediate value not in 16 bit range: 462701867" }
  add.w -(three2767+2),r5 ; { dg-error "Immediate value not in 16 bit range: -32769" }

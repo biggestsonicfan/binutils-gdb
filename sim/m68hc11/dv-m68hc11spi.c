@@ -1,22 +1,23 @@
 /*  dv-m68hc11spi.c -- Simulation of the 68HC11 SPI
-    Copyright (C) 2000-2020 Free Software Foundation, Inc.
-    Written by Stephane Carrez (stcarrez@nerim.fr)
+    Copyright (C) 2000, 2002 Free Software Foundation, Inc.
+    Written by Stephane Carrez (stcarrez@worldnet.fr)
     (From a driver model Contributed by Cygnus Solutions.)
 
     This file is part of the program GDB, the GNU debugger.
     
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+    
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+    
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
     
     */
 
@@ -156,7 +157,7 @@ m68hc11spi_port_event (struct hw *me,
 {
   SIM_DESC sd;
   struct m68hc11spi *controller;
-  sim_cpu *cpu;
+  sim_cpu* cpu;
   unsigned8 val;
   
   controller = hw_data (me);
@@ -234,7 +235,7 @@ set_bit_port (struct hw *me, sim_cpu *cpu, int port, int mask, int value)
 #define SPI_START_BIT  1
 #define SPI_MIDDLE_BIT 2
 
-static void
+void
 m68hc11spi_clock (struct hw *me, void *data)
 {
   SIM_DESC sd;
@@ -357,11 +358,11 @@ m68hc11spi_info (struct hw *me)
                      controller->tx_bit + 1);
       t = hw_event_remain_time (me, controller->spi_event);
       sim_io_printf (sd, "  SPI current bit-cycle finished in %s\n",
-		     cycle_to_string (cpu, t, PRINT_TIME | PRINT_CYCLE));
+		     cycle_to_string (cpu, t));
 
       t += (controller->tx_bit + 1) * 2 * controller->clock;
       sim_io_printf (sd, "  SPI operation finished in %s\n",
-		     cycle_to_string (cpu, t, PRINT_TIME | PRINT_CYCLE));
+		     cycle_to_string (cpu, t));
     }
 }
 

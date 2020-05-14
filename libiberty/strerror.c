@@ -2,6 +2,9 @@
    Written by Fred Fish.  fnf@cygnus.com
    This file is in the public domain.  --Per Bothner.  */
 
+#include "ansidecl.h"
+#include "libiberty.h"
+
 #include "config.h"
 
 #ifdef HAVE_SYS_ERRLIST
@@ -13,9 +16,6 @@
 #define sys_nerr sys_nerr__
 #define sys_errlist sys_errlist__
 #endif
-
-#include "ansidecl.h"
-#include "libiberty.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -43,7 +43,7 @@ extern PTR memset ();
 #  define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
-static void init_error_tables (void);
+static void init_error_tables PARAMS ((void));
 
 /* Translation table for errno values.  See intro(2) in most UNIX systems
    Programmers Reference Manuals.
@@ -299,7 +299,7 @@ static const struct error_info error_table[] =
   ENTRY(EREMCHG, "EREMCHG", "Remote address changed"),
 #endif
 #if defined (ELIBACC)
-  ENTRY(ELIBACC, "ELIBACC", "Cannot access a needed shared library"),
+  ENTRY(ELIBACC, "ELIBACC", "Can not access a needed shared library"),
 #endif
 #if defined (ELIBBAD)
   ENTRY(ELIBBAD, "ELIBBAD", "Accessing a corrupted shared library"),
@@ -462,22 +462,16 @@ static int num_error_names = 0;
 
 #ifndef HAVE_SYS_ERRLIST
 
-#define sys_nerr sys_nerr__
-#define sys_errlist sys_errlist__
 static int sys_nerr;
 static const char **sys_errlist;
 
 #else
 
-
-#ifndef sys_nerr
 extern int sys_nerr;
-#endif
-#ifndef sys_errlist
 extern char *sys_errlist[];
-#endif
 
 #endif
+
 
 /*
 
@@ -508,7 +502,7 @@ BUGS
 */
 
 static void
-init_error_tables (void)
+init_error_tables ()
 {
   const struct error_info *eip;
   int nbytes;
@@ -589,7 +583,7 @@ symbolic name or message.
 */
 
 int
-errno_max (void)
+errno_max ()
 {
   int maxsize;
 
@@ -628,7 +622,8 @@ next call to @code{strerror}.
 */
 
 char *
-strerror (int errnoval)
+strerror (errnoval)
+  int errnoval;
 {
   const char *msg;
   static char buf[32];
@@ -694,7 +689,8 @@ valid until the next call to @code{strerrno}.
 */
 
 const char *
-strerrno (int errnoval)
+strerrno (errnoval)
+  int errnoval;
 {
   const char *name;
   static char buf[32];
@@ -741,7 +737,8 @@ to an errno value.  If no translation is found, returns 0.
 */
 
 int
-strtoerrno (const char *name)
+strtoerrno (name)
+     const char *name;
 {
   int errnoval = 0;
 
@@ -781,7 +778,7 @@ strtoerrno (const char *name)
 #include <stdio.h>
 
 int
-main (void)
+main ()
 {
   int errn;
   int errnmax;

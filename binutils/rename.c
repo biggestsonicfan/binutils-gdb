@@ -1,11 +1,11 @@
 /* rename.c -- rename a file, preserving symlinks.
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,12 +15,13 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
 #include "bucomm.h"
+
+#include <sys/stat.h>
 
 #ifdef HAVE_GOOD_UTIME_H
 #include <utime.h>
@@ -30,8 +31,13 @@
 #endif /* HAVE_UTIMES */
 #endif /* ! HAVE_GOOD_UTIME_H */
 
-#if ! defined (_WIN32) || defined (__CYGWIN32__)
-static int simple_copy (const char *, const char *);
+/* We need to open the file in binary modes on system where that makes
+   a difference.  */
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
+static int simple_copy PARAMS ((const char *, const char *));
 
 /* The number of bytes to copy at once.  */
 #define COPY_BUF 8192
@@ -40,7 +46,9 @@ static int simple_copy (const char *, const char *);
    Return 0 if ok, -1 if error.  */
 
 static int
-simple_copy (const char *from, const char *to)
+simple_copy (from, to)
+     const char *from;
+     const char *to;
 {
   int fromfd, tofd, nread;
   int saved;
@@ -82,13 +90,14 @@ simple_copy (const char *from, const char *to)
     }
   return 0;
 }
-#endif /* __CYGWIN32__ or not _WIN32 */
 
 /* Set the times of the file DESTINATION to be the same as those in
    STATBUF.  */
 
 void
-set_times (const char *destination, const struct stat *statbuf)
+set_times (destination, statbuf)
+     const char *destination;
+     const struct stat *statbuf;
 {
   int result;
 
@@ -135,9 +144,12 @@ set_times (const char *destination, const struct stat *statbuf)
    Return 0 if ok, -1 if error.  */
 
 int
-smart_rename (const char *from, const char *to, int preserve_dates ATTRIBUTE_UNUSED)
+smart_rename (from, to, preserve_dates)
+     const char *from;
+     const char *to;
+     int preserve_dates;
 {
-  bfd_boolean exists;
+  boolean exists;
   struct stat s;
   int ret = 0;
 
@@ -154,18 +166,14 @@ smart_rename (const char *from, const char *to, int preserve_dates ATTRIBUTE_UNU
   if (ret != 0)
     {
       /* We have to clean up here.  */
-      non_fatal (_("unable to rename '%s'; reason: %s"), to, strerror (errno));
+
+      non_fatal (_("%s: rename: %s"), to, strerror (errno));
       unlink (from);
     }
 #else
   /* Use rename only if TO is not a symbolic link and has
-     only one hard link, and we have permission to write to it.  */
-  if (! exists
-      || (!S_ISLNK (s.st_mode)
-	  && S_ISREG (s.st_mode)
-	  && (s.st_mode & S_IWUSR)
-	  && s.st_nlink == 1)
-      )
+     only one hard link.  */
+  if (! exists || (!S_ISLNK (s.st_mode) && s.st_nlink == 1))
     {
       ret = rename (from, to);
       if (ret == 0)
@@ -192,7 +200,7 @@ smart_rename (const char *from, const char *to, int preserve_dates ATTRIBUTE_UNU
       else
 	{
 	  /* We have to clean up here.  */
-	  non_fatal (_("unable to rename '%s'; reason: %s"), to, strerror (errno));
+	  non_fatal (_("%s: rename: %s"), to, strerror (errno));
 	  unlink (from);
 	}
     }
@@ -200,7 +208,7 @@ smart_rename (const char *from, const char *to, int preserve_dates ATTRIBUTE_UNU
     {
       ret = simple_copy (from, to);
       if (ret != 0)
-	non_fatal (_("unable to copy file '%s'; reason: %s"), to, strerror (errno));
+	non_fatal (_("%s: simple_copy: %s"), to, strerror (errno));
 
       if (preserve_dates)
 	set_times (to, &s);

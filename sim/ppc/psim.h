@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -23,7 +24,6 @@
 
 #include "basics.h"
 
-#include "gdb/remote-sim.h"
 
 /* the system object */
 /* typedef struct _psim psim; */
@@ -49,8 +49,7 @@ extern device *psim_tree
 
 extern char **psim_options
 (device *root,
- char **argv,
- SIM_OPEN_KIND kind);
+ char **argv);
 
 extern void psim_command
 (device *root,
@@ -62,7 +61,7 @@ extern void psim_merge_device_file
  const char *file_name);
 
 extern void psim_usage
-(int verbose, int help, SIM_OPEN_KIND kind);
+(int verbose);
 
 
 /* create a new simulator from the device tree */
@@ -139,24 +138,21 @@ extern event_queue *psim_event_queue
  
 
 
-/* Manipulate the state (registers or memory) of a processor within
+/* manipulate the state (registers or memory) of a processor within
    the system.  In the case of memory, the read/write is performed
    using the specified processors address translation tables.
 
    Where applicable, WHICH_CPU == -1 indicates all processors and
-   WHICH_CPU == <nr_cpus> indicates the `current' processor.
+   WHICH_CPU == <nr_cpus> indicates the `current' processor. */
 
-   The register functions return the size of the register, or 0 if the
-   register's name is not recognized.  */
-
-extern int psim_read_register
+extern void psim_read_register
 (psim *system,
  int which_cpu,
  void *host_ordered_buf,
  const char reg[],
  transfer_mode mode);
 
-extern int psim_write_register
+extern void psim_write_register
 (psim *system,
  int which_cpu,
  const void *buf,

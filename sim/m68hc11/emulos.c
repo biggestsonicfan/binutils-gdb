@@ -1,21 +1,22 @@
 /* emulos.c -- Small OS emulation
-   Copyright 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000 Free Software Foundation, Inc.
    Written by Stephane Carrez (stcarrez@worldnet.fr)
 
 This file is part of GDB, GAS, and the GNU binutils.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "sim-main.h"
 #ifdef HAVE_UNISTD_H
@@ -33,8 +34,8 @@ static int bench_mode = -1;
 static struct timeval bench_start;
 static struct timeval bench_stop;
 
-static void
-emul_bench (sim_cpu *cpu)
+void
+emul_bench (struct _sim_cpu* cpu)
 {
   int op;
 
@@ -90,19 +91,19 @@ emul_bench (sim_cpu *cpu)
 }
 #endif
 
-static void
-emul_write (sim_cpu *cpu)
+void
+emul_write(struct _sim_cpu* state)
 {
-  int addr = cpu_get_x (cpu) & 0x0FFFF;
-  int size = cpu_get_d (cpu) & 0x0FFFF;
+  int addr = cpu_get_x (state) & 0x0FFFF;
+  int size = cpu_get_d (state) & 0x0FFFF;
 
   if (addr + size > 0x0FFFF) {
     size = 0x0FFFF - addr;
   }
-  cpu->cpu_running = 0;
+  state->cpu_running = 0;
   while (size)
     {
-      uint8 val = memory_read8 (cpu, addr);
+      uint8 val = memory_read8 (state, addr);
         
       write(0, &val, 1);
       addr ++;
@@ -115,7 +116,7 @@ emul_write (sim_cpu *cpu)
    But doing an exit () on a real target is really a non-sense.
    exit () is important for the validation of GCC.  The exit status
    is passed in 'D' register.  */
-static void
+void
 emul_exit (sim_cpu *cpu)
 {
   sim_engine_halt (CPU_STATE (cpu), cpu,
@@ -124,9 +125,9 @@ emul_exit (sim_cpu *cpu)
 }
 
 void
-emul_os (int code, sim_cpu *cpu)
+emul_os (int code, sim_cpu *proc)
 {
-  cpu->cpu_current_cycle = 8;
+  proc->cpu_current_cycle = 8;
   switch (code)
     {
     case 0x0:
@@ -134,7 +135,7 @@ emul_os (int code, sim_cpu *cpu)
 
       /* 0xCD 0x01 */
     case 0x01:
-      emul_write (cpu);
+      emul_write (proc);
       break;
 
       /* 0xCD 0x02 */
@@ -143,13 +144,13 @@ emul_os (int code, sim_cpu *cpu)
 
       /* 0xCD 0x03 */
     case 0x03:
-      emul_exit (cpu);
+      emul_exit (proc);
       break;
 
       /* 0xCD 0x04 */
     case 0x04:
 #ifndef WIN32
-      emul_bench (cpu);
+      emul_bench (proc);
 #endif
       break;
         

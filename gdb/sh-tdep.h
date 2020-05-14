@@ -1,11 +1,12 @@
-/* Target-specific definition for a Renesas Super-H.
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+/* Target-specific definition for a Hitachi Super-H.
+   Copyright 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002
+   Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,103 +15,97 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef SH_TDEP_H
 #define SH_TDEP_H
 
-/* Contributed by Steve Chamberlain sac@cygnus.com.  */
+#include "osabi.h"
 
-/* Registers for all SH variants.  Used also by sh3-rom.c.  */
+/* Contributed by Steve Chamberlain sac@cygnus.com */
+
+/* Information that is dependent on the processor variant. */
+
+enum sh_abi
+  {
+    SH_ABI_UNKNOWN,
+    SH_ABI_32,
+    SH_ABI_64
+  };
+
+struct gdbarch_tdep
+  {
+    int PR_REGNUM;
+    int FPUL_REGNUM;  /*                       sh3e, sh4 */
+    int FPSCR_REGNUM; /*                       sh3e, sh4 */
+    int SR_REGNUM;    /* sh-dsp, sh3, sh3-dsp, sh3e, sh4 */
+    int DSR_REGNUM;   /* sh-dsp,      sh3-dsp            */
+    int FP_LAST_REGNUM; /*                     sh3e, sh4 */
+    int A0G_REGNUM;   /* sh-dsp,      sh3-dsp            */
+    int A0_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int A1G_REGNUM;   /* sh-dsp,      sh3-dsp            */
+    int A1_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int M0_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int M1_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int X0_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int X1_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int Y0_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int Y1_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int MOD_REGNUM;   /* sh-dsp,      sh3-dsp            */
+    int SSR_REGNUM;   /*         sh3, sh3-dsp, sh3e, sh4 */
+    int SPC_REGNUM;   /*         sh3, sh3-dsp, sh3e, sh4 */
+    int RS_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int RE_REGNUM;    /* sh-dsp,      sh3-dsp            */
+    int DR0_REGNUM;   /*                             sh4 */
+    int DR_LAST_REGNUM; /*                           sh4 */
+    int FV0_REGNUM;   /*                             sh4 */
+    int FV_LAST_REGNUM; /*                           sh4 */
+    /* FPP stands for Floating Point Pair, to avoid confusion with
+       GDB's FP0_REGNUM, which is the number of the first Floating
+       point register. Unfortunately on the sh5, the floating point
+       registers are called FR, and the floating point pairs are called FP. */
+    int TR7_REGNUM;       /*                            sh5-media*/
+    int FPP0_REGNUM;      /*                            sh5-media*/
+    int FPP_LAST_REGNUM;  /*                            sh5-media*/
+    int R0_C_REGNUM;      /*                            sh5-compact*/
+    int R_LAST_C_REGNUM;  /*                            sh5-compact*/
+    int PC_C_REGNUM;      /*                            sh5-compact*/
+    int GBR_C_REGNUM;     /*                            sh5-compact*/
+    int MACH_C_REGNUM;    /*                            sh5-compact*/
+    int MACL_C_REGNUM;    /*                            sh5-compact*/
+    int PR_C_REGNUM;      /*                            sh5-compact*/
+    int T_C_REGNUM;       /*                            sh5-compact*/
+    int FPSCR_C_REGNUM;   /*                            sh5-compact*/
+    int FPUL_C_REGNUM;    /*                            sh5-compact*/
+    int FP0_C_REGNUM;     /*                            sh5-compact*/
+    int FP_LAST_C_REGNUM; /*                            sh5-compact*/
+    int DR0_C_REGNUM;     /*                            sh5-compact*/
+    int DR_LAST_C_REGNUM; /*                            sh5-compact*/
+    int FV0_C_REGNUM;     /*                            sh5-compact*/
+    int FV_LAST_C_REGNUM; /*                            sh5-compact*/
+    int ARG0_REGNUM;
+    int ARGLAST_REGNUM;
+    int FLOAT_ARGLAST_REGNUM;
+    int RETURN_REGNUM;
+    enum gdb_osabi osabi;	/* OS/ABI of the inferior */
+    enum sh_abi sh_abi;
+  };
+
+/* Registers common to all the SH variants. */
 enum
   {
     R0_REGNUM = 0,
     STRUCT_RETURN_REGNUM = 2,
-    ARG0_REGNUM = 4,
-    ARGLAST_REGNUM = 7,
-    FP_REGNUM = 14,
-    PC_REGNUM = 16,
-    PR_REGNUM = 17,
+    ARG0_REGNUM = 4, /* Used in h8300-tdep.c */
+    ARGLAST_REGNUM = 7, /* Used in h8300-tdep.c */
+    PR_REGNUM = 17, /* used in sh3-rom.c */
     GBR_REGNUM = 18,
     VBR_REGNUM = 19,
     MACH_REGNUM = 20,
     MACL_REGNUM = 21,
-    SR_REGNUM = 22,
-    FPUL_REGNUM = 23,
-    /* Floating point registers */
-    FPSCR_REGNUM = 24,
-    FR0_REGNUM = 25,
-    FLOAT_ARG0_REGNUM = 29,
-    FLOAT_ARGLAST_REGNUM = 36,
-    FP_LAST_REGNUM = 40,
-    /* sh3,sh4 registers */
-    SSR_REGNUM = 41,
-    SPC_REGNUM = 42,
-    /* DSP registers */
-    DSR_REGNUM = 24,
-    A0G_REGNUM = 25,
-    A0_REGNUM = 26,
-    A1G_REGNUM = 27,
-    A1_REGNUM = 28,
-    M0_REGNUM = 29,
-    M1_REGNUM = 30,
-    X0_REGNUM = 31,
-    X1_REGNUM = 32,
-    Y0_REGNUM = 33,
-    Y1_REGNUM = 34,
-    MOD_REGNUM = 40,
-    RS_REGNUM = 43,
-    RE_REGNUM = 44,
-    DSP_R0_BANK_REGNUM = 51,
-    DSP_R7_BANK_REGNUM = 58,
-    /* sh2a register */
-    R0_BANK0_REGNUM = 43,
-    MACHB_REGNUM = 58,
-    IVNB_REGNUM = 59,
-    PRB_REGNUM = 60,
-    GBRB_REGNUM = 61,
-    MACLB_REGNUM = 62,
-    BANK_REGNUM = 63,
-    IBCR_REGNUM = 64,
-    IBNR_REGNUM = 65,
-    TBR_REGNUM = 66,
-    PSEUDO_BANK_REGNUM = 67,
-    /* Floating point pseudo registers */
-    DR0_REGNUM = 68,
-    DR_LAST_REGNUM = 75,
-    FV0_REGNUM = 76,
-    FV_LAST_REGNUM = 79
+    SR_REGNUM = 22
   };
 
-/* This structure describes a register in a core-file.  */
-struct sh_corefile_regmap
-{
-  int regnum;
-  unsigned int offset;
-};
-
-struct gdbarch_tdep
-{
-  /* Non-NULL when debugging from a core file.  Provides the offset
-     where each general-purpose register is stored inside the associated
-     core file section.  */
-  struct sh_corefile_regmap *core_gregmap;
-  int sizeof_gregset;
-  /* Non-NULL when debugging from a core file and when FP registers are
-     available.  Provides the offset where each FP register is stored
-     inside the associated core file section.  */
-  struct sh_corefile_regmap *core_fpregmap;
-  int sizeof_fpregset;
-  /* ISA-specific data types.  */
-  struct type *sh_littlebyte_bigword_type;
-};
-
-extern const struct regset sh_corefile_gregset;
-
-void sh_corefile_supply_regset (const struct regset *regset,
-				struct regcache *regcache,
-				int regnum, const void *regs, size_t len);
-void sh_corefile_collect_regset (const struct regset *regset,
-				 const struct regcache *regcache,
-				 int regnum, void *regs, size_t len);
 #endif /* SH_TDEP_H */

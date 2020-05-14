@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1998, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #include "hw-main.h"
@@ -26,8 +25,7 @@
 #include "sim-io.h"
 #include "sim-assert.h"
 
-struct hw_instance_data
-{
+struct hw_instance_data {
   hw_finish_instance_method *to_finish;
   struct hw_instance *instances;
 };
@@ -87,11 +85,11 @@ hw_instance_delete (struct hw_instance *instance)
   struct hw *me = hw_instance_hw (instance);
   if (instance->to_instance_delete == NULL)
     hw_abort (me, "no delete method");
-  instance->method->delete (instance);
+  instance->method->delete(instance);
   if (instance->args != NULL)
-    free (instance->args);
+    zfree (instance->args);
   if (instance->path != NULL)
-    free (instance->path);
+    zfree (instance->path);
   if (instance->child == NULL)
     {
       /* only remove leaf nodes */
@@ -109,7 +107,7 @@ hw_instance_delete (struct hw_instance *instance)
       struct hw_instance *curr = me->instances;
       while (curr != NULL)
 	{
-	  ASSERT (curr != instance);
+	  ASSERT(curr != instance);
 	  curr = curr->next;
 	}
       /* unlink the child */
@@ -117,7 +115,7 @@ hw_instance_delete (struct hw_instance *instance)
       instance->child->parent = NULL;
     }
   cap_remove (me->ihandles, instance);
-  free (instance);
+  zfree (instance);
 #endif
 }
 
@@ -157,7 +155,7 @@ int
 hw_instance_call_method (struct hw_instance *instance,
 			 const char *method_name,
 			 int n_stack_args,
-			 unsigned_cell stack_args[/*n_stack_args*/],
+			 unsigned_cell stack_args[/*n_stack_args*/],	
 			 int n_stack_returns,
 			 unsigned_cell stack_returns[/*n_stack_args*/])
 {
@@ -173,7 +171,7 @@ hw_instance_call_method (struct hw_instance *instance,
     }
   while (method->name != NULL)
     {
-      if (strcmp (method->name, method_name) == 0)
+      if (strcmp(method->name, method_name) == 0)
 	{
 	  return method->method (instance,
 				 n_stack_args, stack_args,
@@ -280,8 +278,8 @@ hw_instance_interceed (struct hw_instance *parent,
       *previous = instance;
     }
   instance->data = data;
-  instance->args = (args == NULL ? NULL : (char *) strdup (args));
-  instance->path = (path == NULL ? NULL : (char *) strdup (path));
+  instance->args = (args == NULL ? NULL : (char *) strdup(args));
+  instance->path = (path == NULL ? NULL : (char *) strdup(path));
   cap_add (instance->owner->ihandles, instance);
   return instance;
 #endif

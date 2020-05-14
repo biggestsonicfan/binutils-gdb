@@ -1,7 +1,8 @@
 %%%%%%%%%%%%%%%% gdb-refcard.tex %%%%%%%%%%%%%%%%
 
 %This file is TeX source for a reference card describing GDB, the GNU debugger.
-%Copyright (C) 1991--2020 Free Software Foundation, Inc.
+%Copyright 1991, 1992, 1993, 1996, 1998, 1999, 2000
+%Free Software Foundation, Inc.
 %Permission is granted to make and distribute verbatim copies of
 %this reference provided the copyright notices and permission notices
 %are preserved on all copies.
@@ -11,7 +12,7 @@
 %
 %This program is free software; you can redistribute it and/or modify
 %it under the terms of the GNU General Public License as published by
-%the Free Software Foundation; either version 3, or (at your option)
+%the Free Software Foundation; either version 2, or (at your option)
 %any later version.
 %
 %This program is distributed in the hope that it will be useful, but
@@ -19,8 +20,9 @@
 %MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 %General Public License for more details.
 %
-%You should have received a copy of the GNU General Public License
-%along with this program.  If not, see <http://www.gnu.org/licenses/>.
+%You can find a copy of the GNU General Public License at the URL
+%http://www.gnu.org/copyleft/gpl.html; or write to the Free Software
+%Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 %
 %You can contact the maintainer at:  doc@cygnus.com
 %
@@ -66,7 +68,7 @@
 % all variations of a command.
 % The GDB-under-Emacs section omits gdb-mode functions without default
 % keybindings.  GDB startup options are not described.
-% set print sevenbit-strings omitted.
+% set print sevenbit-strings, set symbol-reloading omitted.
 % printsyms, printpsyms, omitted since they're for GDB maintenance primarily
 % share omitted due to obsolescence
 % set check range/type omitted at least til code is in GDB.
@@ -96,10 +98,6 @@
 \vmargin=.25in      % vertical margin width
 \secskip=1pc        % space between refcard secs
 \lskip=2pt          % extra skip between \sec entries
-\ifx\pdfoutput\undefined\else   % check if we are using pdfTeX
-  \pdfpagewidth=\totalwidth     % width of paper in pdf output
-  \pdfpageheight=\totalheight   % height of paper in pdf output
-\fi
 %------- end papersize params
 %%
 %%  change according to personal taste, not papersize dependent
@@ -307,7 +305,7 @@ shell {\it cmd}&execute arbitrary shell command string\cr
 \line{\smrm \opt{ } surround optional arguments \hfill $\ldots$ show
 one or more arguments}
 \vskip\baselineskip
-\centerline{\smrm \copyright 1998-2020 Free Software Foundation, Inc.\qquad Permissions on back}
+\centerline{\smrm \copyright 1998,2000 Free Software Foundation, Inc.\qquad Permissions on back}
 \eject
 \sec Breakpoints and Watchpoints;
 break \opt{\it file\tt:}{\it line}\par
@@ -323,8 +321,7 @@ break $\ldots$ if {\it expr}&break conditionally on nonzero {\it expr}\cr
 cond {\it n} \opt{\it expr}&new conditional expression on breakpoint
 {\it n}; make unconditional if no {\it expr}\cr
 tbreak $\ldots$&temporary break; disable when reached\cr
-rbreak \opt{\it file\tt:}{\it regex}&break on all functions matching {\it
-regex} \opt{in \it file}\cr
+rbreak {\it regex}&break on all functions matching {\it regex}\cr
 watch {\it expr}&set a watchpoint for expression {\it expr}\cr
 catch {\it event}&break at {\it event}, which may be {\tt catch}, {\tt throw},
 {\tt exec}, {\tt fork}, {\tt vfork}, {\tt load}, or {\tt unload}.\cr
@@ -632,7 +629,7 @@ statement.\cr
 
 \vfill
 {\smrm\parskip=6pt
-Copyright \copyright 1991-2020 Free Software Foundation, Inc.
+Copyright \copyright 1991,'92,'93,'98,2000 Free Software Foundation, Inc. 
 Author: Roland H. Pesch
 
 The author assumes no responsibility for any errors on this card.

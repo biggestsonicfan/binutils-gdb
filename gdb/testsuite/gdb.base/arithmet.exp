@@ -1,17 +1,21 @@
-# Copyright 1998-2020 Free Software Foundation, Inc.
+# Copyright 1998, 1999, 2001 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Elena Zannoni (ezannoni@cygnus.com)
 # Rewritten to use gdb_test by Michael Chastain (chastain@redhat.com)
@@ -22,15 +26,28 @@
 # with integer type variables
 # 
 
+if $tracelevel then {
+	strace $tracelevel
+	}
+
 #
 # test running programs
 #
+set prms_id 0
+set bug_id 0
 
-standard_testfile int-type.c
+set testfile "int-type"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
 
-if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug nowarnings}]} {
-    return -1
-}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug additional_flags=-w}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+    }
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
 
 
 #
@@ -46,10 +63,10 @@ if ![runto_main] then {
 # test expressions with "int" types
 #
 
-gdb_test_no_output "set variable x=14"
-gdb_test_no_output "set variable y=2"
-gdb_test_no_output "set variable z=2"
-gdb_test_no_output "set variable w=3"
+gdb_test "set variable x=14" ""
+gdb_test "set variable y=2"  ""
+gdb_test "set variable z=2"  ""
+gdb_test "set variable w=3"  ""
 
 gdb_test "print x" "14"
 gdb_test "print y"  "2"
@@ -75,8 +92,8 @@ gdb_test "print x%y%z"  "0"
 
 # test precedence rules on pairs of arithmetic operators
 
-gdb_test_no_output "set variable x=10"
-gdb_test_no_output "set variable y=4"
+gdb_test "set variable x=10" ""
+gdb_test "set variable y=4"  ""
 
 #  x  y  z  w
 # 10  4  2  3

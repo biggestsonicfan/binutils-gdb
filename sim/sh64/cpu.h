@@ -2,22 +2,23 @@
 
 THIS FILE IS MACHINE GENERATED WITH CGEN.
 
-Copyright 1996-2020 Free Software Foundation, Inc.
+Copyright (C) 1996, 1997, 1998, 1999, 2000 Free Software Foundation, Inc.
 
-This file is part of the GNU simulators.
+This file is part of the GNU Simulators.
 
-   This file is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 */
 
@@ -30,12 +31,6 @@ This file is part of the GNU simulators.
 
 /* Maximum number of instructions that can be executed in parallel.  */
 #define MAX_PARALLEL_INSNS 1
-
-/* The size of an "int" needed to hold an instruction word.
-   This is usually 32 bits, but some architectures needs 64 bits.  */
-typedef CGEN_INSN_INT CGEN_INSN_WORD;
-
-#include "cgen-engine.h"
 
 /* CPU state information.  */
 typedef struct {
@@ -53,7 +48,7 @@ CPU (h_pc) = ANDDI ((x), INVDI (1));\
 ;} while (0)
   /* General purpose integer registers */
   DI h_gr[64];
-#define GET_H_GR(index) ((((index) == (63))) ? (MAKEDI (0, 0)) : (CPU (h_gr[index])))
+#define GET_H_GR(index) ((((index) == (63))) ? (0) : (CPU (h_gr[index])))
 #define SET_H_GR(index, x) \
 do { \
 if ((((index)) != (63))) {\
@@ -85,32 +80,10 @@ CPU (h_cr[(index)]) = (x);\
   SF h_fr[64];
 #define GET_H_FR(a1) CPU (h_fr)[a1]
 #define SET_H_FR(a1, x) (CPU (h_fr)[a1] = (x))
-  /* Single/Double precision floating point registers */
-  DF h_fsd[16];
-#define GET_H_FSD(index) ((GET_H_PRBIT ()) ? (GET_H_DRC (index)) : (CGEN_CPU_FPU (current_cpu)->ops->fextsfdf (CGEN_CPU_FPU (current_cpu), FPCONV_DEFAULT, CPU (h_fr[index]))))
-#define SET_H_FSD(index, x) \
-do { \
-if (GET_H_PRBIT ()) {\
-SET_H_DRC ((index), (x));\
-} else {\
-SET_H_FRC ((index), CGEN_CPU_FPU (current_cpu)->ops->ftruncdfsf (CGEN_CPU_FPU (current_cpu), FPCONV_DEFAULT, (x)));\
-}\
-;} while (0)
-  /* floating point registers for fmov */
-  DF h_fmov[16];
-#define GET_H_FMOV(index) ((NOTBI (GET_H_SZBIT ())) ? (CGEN_CPU_FPU (current_cpu)->ops->fextsfdf (CGEN_CPU_FPU (current_cpu), FPCONV_DEFAULT, GET_H_FRC (index))) : (((((((index) & (1))) == (1))) ? (GET_H_XD (((index) & ((~ (1)))))) : (GET_H_DR (index)))))
-#define SET_H_FMOV(index, x) \
-do { \
-if (NOTBI (GET_H_SZBIT ())) {\
-SET_H_FRC ((index), CGEN_CPU_FPU (current_cpu)->ops->ftruncdfsf (CGEN_CPU_FPU (current_cpu), FPCONV_DEFAULT, (x)));\
-} else {\
-if ((((((index)) & (1))) == (1))) {\
-SET_H_XD ((((index)) & ((~ (1)))), (x));\
-} else {\
-SET_H_DR ((index), (x));\
-}\
-}\
-;} while (0)
+  /* Single precision floating point register pairs */
+  DF h_fp[32];
+#define GET_H_FP(a1) CPU (h_fp)[a1]
+#define SET_H_FP(a1, x) (CPU (h_fp)[a1] = (x))
   /* Branch target registers */
   DI h_tr[8];
 #define GET_H_TR(a1) CPU (h_tr)[a1]
@@ -133,20 +106,20 @@ cgen_rtx_error (current_cpu, "cannot set ism directly");\
 do { \
 CPU (h_gr[(index)]) = EXTSIDI ((x));\
 ;} while (0)
-#define GET_H_FRBIT() ANDSI (SRLSI (CPU (h_fpscr), 21), 1)
+#define GET_H_FRBIT() ANDSI (SRLSI (CPU (h_sr), 14), 1)
 #define SET_H_FRBIT(x) \
 do { \
-CPU (h_fpscr) = ORSI (ANDSI (CPU (h_fpscr), (~ (((1) << (21))))), SLLSI ((x), 21));\
+CPU (h_sr) = ORSI (ANDSI (CPU (h_sr), (~ (((1) << (14))))), SLLSI ((x), 14));\
 ;} while (0)
-#define GET_H_SZBIT() ANDSI (SRLSI (CPU (h_fpscr), 20), 1)
+#define GET_H_SZBIT() ANDSI (SRLSI (CPU (h_sr), 13), 1)
 #define SET_H_SZBIT(x) \
 do { \
-CPU (h_fpscr) = ORSI (ANDSI (CPU (h_fpscr), (~ (((1) << (20))))), SLLSI ((x), 20));\
+CPU (h_sr) = ORSI (ANDSI (CPU (h_sr), (~ (((1) << (13))))), SLLSI ((x), 13));\
 ;} while (0)
-#define GET_H_PRBIT() ANDSI (SRLSI (CPU (h_fpscr), 19), 1)
+#define GET_H_PRBIT() ANDSI (SRLSI (CPU (h_sr), 12), 1)
 #define SET_H_PRBIT(x) \
 do { \
-CPU (h_fpscr) = ORSI (ANDSI (CPU (h_fpscr), (~ (((1) << (19))))), SLLSI ((x), 19));\
+CPU (h_sr) = ORSI (ANDSI (CPU (h_sr), (~ (((1) << (12))))), SLLSI ((x), 12));\
 ;} while (0)
 #define GET_H_SBIT() ANDSI (SRLSI (CPU (h_sr), 1), 1)
 #define SET_H_SBIT(x) \
@@ -163,20 +136,15 @@ CPU (h_sr) = ORSI (ANDSI (CPU (h_sr), (~ (((1) << (9))))), SLLSI ((x), 9));\
 do { \
 CPU (h_sr) = ORSI (ANDSI (CPU (h_sr), (~ (((1) << (8))))), SLLSI ((x), 8));\
 ;} while (0)
-#define GET_H_FP(index) CPU (h_fr[index])
-#define SET_H_FP(index, x) \
-do { \
-CPU (h_fr[(index)]) = (x);\
-;} while (0)
-#define GET_H_FV(index) CPU (h_fr[index])
+#define GET_H_FV(index) CPU (h_fr[MULQI (ANDQI (index, 15), 4)])
 #define SET_H_FV(index, x) \
 do { \
-CPU (h_fr[(index)]) = (x);\
+CPU (h_fr[MULQI (ANDQI ((index), 15), 4)]) = (x);\
 ;} while (0)
-#define GET_H_FMTX(index) CPU (h_fr[index])
+#define GET_H_FMTX(index) CPU (h_fr[MULQI (ANDQI (index, 3), 16)])
 #define SET_H_FMTX(index, x) \
 do { \
-CPU (h_fr[(index)]) = (x);\
+CPU (h_fr[MULQI (ANDQI ((index), 3), 16)]) = (x);\
 ;} while (0)
 #define GET_H_DR(index) SUBWORDDIDF (ORDI (SLLDI (ZEXTSIDI (SUBWORDSFSI (CPU (h_fr[index]))), 32), ZEXTSIDI (SUBWORDSFSI (CPU (h_fr[((index) + (1))])))))
 #define SET_H_DR(index, x) \
@@ -216,15 +184,20 @@ SET_H_DR (((((16) * (NOTBI (GET_H_FRBIT ())))) + ((index))), (x));\
 do { \
 CPU (h_fr[((((16) * (GET_H_FRBIT ()))) + ((index)))]) = (x);\
 ;} while (0)
+#define GET_H_FPCCR() ORSI (ORSI (ORSI (CPU (h_fpscr), SLLSI (GET_H_PRBIT (), 19)), SLLSI (GET_H_SZBIT (), 20)), SLLSI (GET_H_FRBIT (), 21))
+#define SET_H_FPCCR(x) \
+do { \
+{\
+CPU (h_fpscr) = (x);\
+SET_H_PRBIT (ANDSI (SRLSI ((x), 19), 1));\
+SET_H_SZBIT (ANDSI (SRLSI ((x), 20), 1));\
+SET_H_FRBIT (ANDSI (SRLSI ((x), 21), 1));\
+}\
+;} while (0)
 #define GET_H_GBR() SUBWORDDISI (CPU (h_gr[((UINT) 16)]), 1)
 #define SET_H_GBR(x) \
 do { \
 CPU (h_gr[((UINT) 16)]) = EXTSIDI ((x));\
-;} while (0)
-#define GET_H_VBR() SUBWORDDISI (CPU (h_gr[((UINT) 20)]), 1)
-#define SET_H_VBR(x) \
-do { \
-CPU (h_gr[((UINT) 20)]) = EXTSIDI ((x));\
 ;} while (0)
 #define GET_H_PR() SUBWORDDISI (CPU (h_gr[((UINT) 18)]), 1)
 #define SET_H_PR(x) \
@@ -274,18 +247,14 @@ BI sh64_h_qbit_get (SIM_CPU *);
 void sh64_h_qbit_set (SIM_CPU *, BI);
 SF sh64_h_fr_get (SIM_CPU *, UINT);
 void sh64_h_fr_set (SIM_CPU *, UINT, SF);
-SF sh64_h_fp_get (SIM_CPU *, UINT);
-void sh64_h_fp_set (SIM_CPU *, UINT, SF);
+DF sh64_h_fp_get (SIM_CPU *, UINT);
+void sh64_h_fp_set (SIM_CPU *, UINT, DF);
 SF sh64_h_fv_get (SIM_CPU *, UINT);
 void sh64_h_fv_set (SIM_CPU *, UINT, SF);
 SF sh64_h_fmtx_get (SIM_CPU *, UINT);
 void sh64_h_fmtx_set (SIM_CPU *, UINT, SF);
 DF sh64_h_dr_get (SIM_CPU *, UINT);
 void sh64_h_dr_set (SIM_CPU *, UINT, DF);
-DF sh64_h_fsd_get (SIM_CPU *, UINT);
-void sh64_h_fsd_set (SIM_CPU *, UINT, DF);
-DF sh64_h_fmov_get (SIM_CPU *, UINT);
-void sh64_h_fmov_set (SIM_CPU *, UINT, DF);
 DI sh64_h_tr_get (SIM_CPU *, UINT);
 void sh64_h_tr_set (SIM_CPU *, UINT, DI);
 BI sh64_h_endian_get (SIM_CPU *);
@@ -302,10 +271,10 @@ DF sh64_h_xd_get (SIM_CPU *, UINT);
 void sh64_h_xd_set (SIM_CPU *, UINT, DF);
 SF sh64_h_fvc_get (SIM_CPU *, UINT);
 void sh64_h_fvc_set (SIM_CPU *, UINT, SF);
+SI sh64_h_fpccr_get (SIM_CPU *);
+void sh64_h_fpccr_set (SIM_CPU *, SI);
 SI sh64_h_gbr_get (SIM_CPU *);
 void sh64_h_gbr_set (SIM_CPU *, SI);
-SI sh64_h_vbr_get (SIM_CPU *);
-void sh64_h_vbr_set (SIM_CPU *, SI);
 SI sh64_h_pr_get (SIM_CPU *);
 void sh64_h_pr_set (SIM_CPU *, SI);
 SI sh64_h_macl_get (SIM_CPU *);
@@ -321,15 +290,7 @@ extern CPUREG_STORE_FN sh64_store_register;
 
 typedef struct {
   int empty;
-} MODEL_SH4_DATA;
-
-typedef struct {
-  int empty;
 } MODEL_SH5_DATA;
-
-typedef struct {
-  int empty;
-} MODEL_SH5_MEDIA_DATA;
 
 /* Collection of various things for the trace handler to use.  */
 

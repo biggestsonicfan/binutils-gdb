@@ -4,4 +4,4 @@
 #source: a.s
 #as: -x
 #ld: -m mmo
-#error: relocation truncated to fit: R_MMIX_REG against `areg'
+#error: relocation truncated to fit: R_MMIX_REG areg$

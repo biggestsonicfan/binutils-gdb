@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
     */
 
@@ -42,6 +43,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/errno.h>
 #include <sys/param.h>
 #include <sys/time.h>
 
@@ -92,14 +94,6 @@ int getrusage();
 #include <sys/sysctl.h>
 #include <sys/mount.h>
 extern int getdirentries(int fd, char *buf, int nbytes, long *basep);
-
-/* NetBSD post 2.0 has the statfs system call (if COMPAT_20), but does
-   not have struct statfs.  In this case don't implement fstatfs.
-   FIXME: Should implement fstatvfs.  */
-#ifndef HAVE_STRUCT_STATFS
-#undef HAVE_FSTATFS
-#endif
-
 #else
 
 /* If this is not netbsd, don't allow fstatfs or getdirentries at this time */
@@ -222,7 +216,7 @@ write_timeval(unsigned_word addr,
   emul_write_buffer(&t, addr, sizeof(t), processor, cia);
 }
 
-#ifdef HAVE_GETTIMEOFDAY
+
 STATIC_INLINE_EMUL_NETBSD void
 write_timezone(unsigned_word addr,
 	       struct timezone tz,
@@ -233,7 +227,7 @@ write_timezone(unsigned_word addr,
   H2T(tz.tz_dsttime);
   emul_write_buffer(&tz, addr, sizeof(tz), processor, cia);
 }
-#endif
+
 
 #ifdef HAVE_GETDIRENTRIES
 STATIC_INLINE_EMUL_NETBSD void
@@ -257,7 +251,7 @@ write_direntries(unsigned_word addr,
     nbytes -= in->d_reclen;
     addr += in->d_reclen;
     buf += in->d_reclen;
-    free(out);
+    zfree(out);
   }
 }
 #endif
@@ -291,31 +285,6 @@ write_rusage(unsigned_word addr,
   emul_write_buffer(&rusage, addr, sizeof(rusage), processor, cia);
 }
 #endif
-
-
-/* File descriptors 0, 1, and 2 should not be closed.  fd_closed[]
-   tracks whether these descriptors have been closed in do_close()
-   below.  */
-
-static int fd_closed[3];
-
-/* Check for some occurrences of bad file descriptors.  We only check
-   whether fd 0, 1, or 2 are "closed".  By "closed" we mean that these
-   descriptors aren't actually closed, but are considered to be closed
-   by this layer.
-
-   Other checks are performed by the underlying OS call.  */
-
-static int
-fdbad (int fd)
-{
-  if (fd >=0 && fd <= 2 && fd_closed[fd])
-    {
-      errno = EBADF;
-      return -1;
-    }
-  return 0;
-}
 
 static void
 do_exit(os_emul_data *emul,
@@ -364,15 +333,13 @@ do_read(os_emul_data *emul,
       status = -1;
   }
 #endif
-  status = fdbad (d);
-  if (status == 0)
-    status = read (d, scratch_buffer, nbytes);
+  status = read (d, scratch_buffer, nbytes);
 
   emul_write_status(processor, status, errno);
   if (status > 0)
     emul_write_buffer(scratch_buffer, buf, status, processor, cia);
 
-  free(scratch_buffer);
+  zfree(scratch_buffer);
 }
 
 
@@ -401,12 +368,9 @@ do_write(os_emul_data *emul,
 		   processor, cia);
 
   /* write */
-  status = fdbad (d);
-  if (status == 0)
-    status = write(d, scratch_buffer, nbytes);
-
+  status = write(d, scratch_buffer, nbytes);
   emul_write_status(processor, status, errno);
-  free(scratch_buffer);
+  zfree(scratch_buffer);
 
   flush_stdoutput();
 }
@@ -470,20 +434,8 @@ do_close(os_emul_data *emul,
 
   SYS(close);
 
-  status = fdbad (d);
-  if (status == 0)
-    {
-      /* Do not close stdin, stdout, or stderr. GDB may still need access to
-	 these descriptors.  */
-      if (d == 0 || d == 1 || d == 2)
-	{
-	  fd_closed[d] = 1;
-	  status = 0;
-	}
-      else
-	status = close(d);
-    }
-
+  /* Can't combine these statements, cuz close sets errno. */
+  status = close(d);
   emul_write_status(processor, status, errno);
 }
 
@@ -591,7 +543,7 @@ do_dup(os_emul_data *emul,
        unsigned_word cia)
 {
   int oldd = cpu_registers(processor)->gpr[arg0];
-  int status = (fdbad (oldd) < 0) ? -1 : dup(oldd);
+  int status = dup(oldd);
   int err = errno;
 
   if (WITH_TRACE && ppc_trace[trace_os_emul])
@@ -682,9 +634,7 @@ do_ioctl(os_emul_data *emul,
       || dir & IOC_OUT
       || !(dir & IOC_VOID))
     error("do_ioctl() read or write of parameter not implemented\n");
-  status = fdbad (d);
-  if (status == 0)
-    status = ioctl(d, request, NULL);
+  status = ioctl(d, request, NULL);
   emul_write_status(processor, status, errno);
 #endif
 
@@ -725,7 +675,7 @@ do_dup2(os_emul_data *emul,
 {
   int oldd = cpu_registers(processor)->gpr[arg0];
   int newd = cpu_registers(processor)->gpr[arg0+1];
-  int status = (fdbad (oldd) < 0) ? -1 : dup2(oldd, newd);
+  int status = dup2(oldd, newd);
   int err = errno;
 
   if (WITH_TRACE && ppc_trace[trace_os_emul])
@@ -755,9 +705,7 @@ do_fcntl(os_emul_data *emul,
     printf_filtered ("%d, %d, %d", fd, cmd, arg);
 
   SYS(fcntl);
-  status = fdbad (fd);
-  if (status == 0)
-    status = fcntl(fd, cmd, arg);
+  status = fcntl(fd, cmd, arg);
   emul_write_status(processor, status, errno);
 }
 #endif
@@ -842,9 +790,7 @@ do_fstatfs(os_emul_data *emul,
     printf_filtered ("%d, 0x%lx", fd, (long)buf_addr);
 
   SYS(fstatfs);
-  status = fdbad (fd);
-  if (status == 0)
-    status = fstatfs(fd, (buf_addr == 0 ? NULL : &buf));
+  status = fstatfs(fd, (buf_addr == 0 ? NULL : &buf));
   emul_write_status(processor, status, errno);
   if (status == 0) {
     if (buf_addr != 0)
@@ -897,9 +843,7 @@ do_fstat(os_emul_data *emul,
   SYS(fstat);
 #endif
   /* Can't combine these statements, cuz fstat sets errno. */
-  status = fdbad (fd);
-  if (status == 0)
-    status = fstat(fd, &buf);
+  status = fstat(fd, &buf);
   emul_write_status(processor, status, errno);
   write_stat(stat_buf_addr, buf, processor, cia);
 }
@@ -965,7 +909,7 @@ do_getdirentries(os_emul_data *emul,
   if (status > 0)
     write_direntries(buf_addr, buf, status, processor, cia);
   if (buf != NULL)
-    free(buf);
+    zfree(buf);
 }
 #endif
 
@@ -1001,9 +945,7 @@ do_lseek(os_emul_data *emul,
   int whence = cpu_registers(processor)->gpr[arg0+4];
   off_t status;
   SYS(lseek);
-  status = fdbad (fildes);
-  if (status == 0)
-    status = lseek(fildes, offset, whence);
+  status = lseek(fildes, offset, whence);
   if (status == -1)
     emul_write_status(processor, -1, errno);
   else {
@@ -1373,24 +1315,7 @@ static char *(netbsd_error_names[]) = {
   /* 79 */ "EFTYPE",
   /* 80 */ "EAUTH",
   /* 81 */ "ENEEDAUTH",
-  /* 82 */ "EIDRM",
-  /* 83 */ "ENOMSG",
-  /* 84 */ "EOVERFLOW",
-  /* 85 */ "EILSEQ",
-  /* 86 */ "ENOTSUP",
-  /* 87 */ "ECANCELED",
-  /* 88 */ "EBADMSG",
-  /* 89 */ "ENODATA",
-  /* 90 */ "ENOSR",
-  /* 91 */ "ENOSTR",
-  /* 92 */ "ETIME",
-  /* 93 */ "ENOATTR",
-  /* 94 */ "EMULTIHOP",
-  /* 95 */ "ENOLINK",
-  /* 96 */ "EPROTO",
-  /* 97 */ "EOWNERDEAD",
-  /* 98 */ "ENOTRECOVERABLE",
-  /* 98 */ "ELAST",
+  /* 81 */ "ELAST",
 };
 
 static char *(netbsd_signal_names[]) = {
@@ -1426,47 +1351,15 @@ static char *(netbsd_signal_names[]) = {
   /* 29 */ "SIGINFO",
   /* 30 */ "SIGUSR1",
   /* 31 */ "SIGUSR2",
-  /* 32 */ "SIGPWR",
-  /* 33 */ "SIGRTMIN",
-  /* 34 */ "SIGRTMIN+1",
-  /* 35 */ "SIGRTMIN+2",
-  /* 36 */ "SIGRTMIN+3",
-  /* 37 */ "SIGRTMIN+4",
-  /* 38 */ "SIGRTMIN+5",
-  /* 39 */ "SIGRTMIN+6",
-  /* 40 */ "SIGRTMIN+7",
-  /* 41 */ "SIGRTMIN+8",
-  /* 42 */ "SIGRTMIN+9",
-  /* 43 */ "SIGRTMIN+10",
-  /* 44 */ "SIGRTMIN+11",
-  /* 45 */ "SIGRTMIN+12",
-  /* 46 */ "SIGRTMIN+13",
-  /* 47 */ "SIGRTMIN+14",
-  /* 48 */ "SIGRTMIN+15",
-  /* 49 */ "SIGRTMIN+16",
-  /* 50 */ "SIGRTMIN+17",
-  /* 51 */ "SIGRTMIN+18",
-  /* 52 */ "SIGRTMIN+19",
-  /* 53 */ "SIGRTMIN+20",
-  /* 54 */ "SIGRTMIN+21",
-  /* 55 */ "SIGRTMIN+22",
-  /* 56 */ "SIGRTMIN+23",
-  /* 57 */ "SIGRTMIN+24",
-  /* 58 */ "SIGRTMIN+25",
-  /* 59 */ "SIGRTMIN+26",
-  /* 60 */ "SIGRTMIN+27",
-  /* 61 */ "SIGRTMIN+28",
-  /* 62 */ "SIGRTMIN+29",
-  /* 63 */ "SIGRTMAX",
 };
 
 static emul_syscall emul_netbsd_syscalls = {
   netbsd_descriptors,
-  ARRAY_SIZE (netbsd_descriptors),
+  sizeof(netbsd_descriptors) / sizeof(netbsd_descriptors[0]),
   netbsd_error_names,
-  ARRAY_SIZE (netbsd_error_names),
+  sizeof(netbsd_error_names) / sizeof(netbsd_error_names[0]),
   netbsd_signal_names,
-  ARRAY_SIZE (netbsd_signal_names),
+  sizeof(netbsd_signal_names) / sizeof(netbsd_signal_names[0]),
 };
 
 
@@ -1483,7 +1376,6 @@ emul_netbsd_create(device *root,
   int elf_binary;
   os_emul_data *bsd_data;
   device *vm;
-  char *filename;
 
   /* check that this emulation is really for us */
   if (name != NULL && strcmp(name, "netbsd") != 0)
@@ -1518,10 +1410,8 @@ emul_netbsd_create(device *root,
 	     (unsigned long)(top_of_stack - stack_size));
   tree_parse(vm, "./nr-bytes 0x%x", stack_size);
 
-  filename = tree_quote_property (bfd_get_filename(image));
   tree_parse(root, "/openprom/vm/map-binary/file-name %s",
-	     filename);
-  free (filename);
+	     bfd_get_filename(image));
 
   /* finish the init */
   tree_parse(root, "/openprom/init/register/pc 0x%lx",
@@ -1551,9 +1441,7 @@ static void
 emul_netbsd_init(os_emul_data *emul_data,
 		 int nr_cpus)
 {
-  fd_closed[0] = 0;
-  fd_closed[1] = 0;
-  fd_closed[2] = 0;
+  /* nothing yet */
 }
 
 static void
@@ -1578,4 +1466,4 @@ const os_emul emul_netbsd = {
   0 /*data*/
 };
 
-#endif	/* _EMUL_NETBSD_C_ */
+#endif _EMUL_NETBSD_C_

@@ -1,20 +1,24 @@
-/* This file is part of SIS (SPARC instruction simulator)
-
-   Copyright (C) 1995-2020 Free Software Foundation, Inc.
-   Contributed by Jiri Gaisler, European Space Agency
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+/*
+ * This file is part of SIS.
+ * 
+ * SIS, SPARC instruction simulator. Copyright (C) 1995 Jiri Gaisler, European
+ * Space Agency
+ * 
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ * 
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ * 
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 675
+ * Mass Ave, Cambridge, MA 02139, USA.
+ * 
+ */
 
 #include "config.h"
 #include <signal.h>
@@ -23,18 +27,31 @@
 #include <stdlib.h>
 #endif
 #include <stdio.h>
+#include <time.h>
 #include <sys/fcntl.h>
 #include "sis.h"
 #include <dis-asm.h>
 #include "sim-config.h"
-#include <inttypes.h>
+
+#ifndef fprintf
+extern          fprintf();
+#endif
 
 #define	VAL(x)	strtol(x,(char **)NULL,0)
 
 /* Structures and functions from readline library */
 
-#include "readline/readline.h"
-#include "readline/history.h"
+typedef struct {
+  char *line;
+  char *data;
+} HIST_ENTRY;
+
+extern char *	readline PARAMS ((char *prompt));
+extern void	using_history PARAMS ((void));
+extern void	add_history PARAMS ((char *string));
+extern HIST_ENTRY *remove_history PARAMS ((int which));
+
+
 
 /* Command history buffer length - MUST be binary */
 #define HIST_LEN	64
@@ -69,19 +86,23 @@ extern int era;
 int
 run_sim(sregs, icount, dis)
     struct pstate  *sregs;
-    uint64          icount;
+    unsigned int    icount;
     int             dis;
 {
-    int             irq, mexc, deb;
+    int             irq, mexc, deb, asi;
 
-    sregs->starttime = get_time();
+    sregs->starttime = time(NULL);
     init_stdio();
     if (sregs->err_mode) icount = 0;
     deb = dis || sregs->histlen || sregs->bptnum;
     irq = 0;
     while (icount > 0) {
 
-	mexc = memory_iread (sregs->pc, &sregs->inst, &sregs->hold);
+	if (sregs->psr & 0x080)
+	    asi = 9;
+   	else
+	    asi = 8;
+	mexc = memory_read(asi, sregs->pc, &sregs->inst, 2, &sregs->hold);
 	sregs->icnt = 1;
 	if (sregs->annul) {
 	    sregs->annul = 0;
@@ -97,7 +118,7 @@ run_sim(sregs, icount, dis)
 		    if (deb) {
 	    		if ((sregs->bphit = check_bpt(sregs)) != 0) {
             		    restore_stdio();
-	    		    return BPT_HIT;
+	    		    return (BPT_HIT);
 	    		}
 		        if (sregs->histlen) {
 			    sregs->histbuf[sregs->histind].addr = sregs->pc;
@@ -107,7 +128,7 @@ run_sim(sregs, icount, dis)
 			        sregs->histind = 0;
 		        }
 		        if (dis) {
-			    printf(" %8" PRIu64 " ", ebase.simtime);
+			    printf(" %8u ", ebase.simtime);
 			    dis_mem(sregs->pc, 1, &dinfo);
 		        }
 		    }
@@ -130,15 +151,15 @@ run_sim(sregs, icount, dis)
 	    if (sregs->tlimit <= ebase.simtime) sregs->tlimit = -1;
 	}
     }
-    sregs->tottime += get_time() - sregs->starttime;
+    sregs->tottime += time(NULL) - sregs->starttime;
     restore_stdio();
     if (sregs->err_mode)
-	return ERROR;
+	return (ERROR);
     if (ctrl_c) {
 	ctrl_c = 0;
-	return CTRL_C;
+	return (CTRL_C);
     }
-    return TIME_OUT;
+    return (TIME_OUT);
 }
 
 int
@@ -156,17 +177,16 @@ main(argc, argv)
     char           *cmdq[HIST_LEN];
     int             cmdi = 0;
     int             i;
-    int             lfile = 0;
 
     cfile = 0;
     for (i = 0; i < 64; i++)
 	cmdq[i] = 0;
-    printf("\n SIS - SPARC instruction simulator %s,  copyright Jiri Gaisler 1995\n", sis_version);
+    printf("\n SIS - SPARC intruction simulator %s,  copyright Jiri Gaisler 1995\n", sis_version);
     printf(" Bug-reports to jgais@wd.estec.esa.nl\n\n");
     while (stat < argc) {
 	if (argv[stat][0] == '-') {
 	    if (strcmp(argv[stat], "-v") == 0) {
-		sis_verbose += 1;
+		sis_verbose = 1;
 	    } else if (strcmp(argv[stat], "-c") == 0) {
 		if ((stat + 1) < argc) {
 		    copt = 1;
@@ -205,7 +225,7 @@ main(argc, argv)
 		exit(1);
 	    }
 	} else {
-	    lfile = stat;
+	    last_load_addr = bfd_load(argv[stat]);
 	}
 	stat++;
     }
@@ -218,11 +238,7 @@ main(argc, argv)
     sregs.freq = freq;
 
     INIT_DISASSEMBLE_INFO(dinfo, stdout, (fprintf_ftype) fprintf);
-#ifdef HOST_LITTLE_ENDIAN
-    dinfo.endian = BFD_ENDIAN_LITTLE;
-#else
     dinfo.endian = BFD_ENDIAN_BIG;
-#endif
 
     termsave = fcntl(0, F_GETFL, 0);
     using_history();
@@ -231,8 +247,6 @@ main(argc, argv)
     reset_all();
     init_bpt(&sregs);
     init_sim();
-    if (lfile)
-        last_load_addr = bfd_load(argv[lfile]);
 #ifdef STAT
     reset_stat(&sregs);
 #endif
@@ -269,7 +283,7 @@ main(argc, argv)
 	case CTRL_C:
 	    printf("\b\bInterrupt!\n");
 	case TIME_OUT:
-	    printf(" Stopped at time %" PRIu64 " (%.3f ms)\n", ebase.simtime,
+	    printf(" Stopped at time %d (%.3f ms)\n", ebase.simtime, 
 	      ((double) ebase.simtime / (double) sregs.freq) / 1000.0);
 	    break;
 	case BPT_HIT:
@@ -279,7 +293,7 @@ main(argc, argv)
 	case ERROR:
 	    printf("IU in error mode (%d)\n", sregs.trap);
 	    stat = 0;
-	    printf(" %8" PRIu64 " ", ebase.simtime);
+	    printf(" %8d ", ebase.simtime);
 	    dis_mem(sregs.pc, 1, &dinfo);
 	    break;
 	default:

@@ -1,7 +1,9 @@
-#as: -mcpu=arc700
-#objdump: -dr --prefix-addresses --show-raw-insn
+#as: -EL
+#objdump: -dr -EL
 
-.*: +file format .*arc.*
+.*: +file format elf32-.*arc
 
 Disassembly of section .text:
-0x00000000 78e0                	nop_s
+
+00000000 <.text>:
+   0:	ff ff ff 7f 	7fffffff     nop        

@@ -824,14 +824,3 @@
 	{ .bbb; nop.b 0; nop.b 0; epc ;; }
 
 .L1:
-
-	# instructions added by SDM2.1:
-
-	break.b 0x1ffff
-	hint.b	@pause
-	hint.b	0x1ffff
-	nop.b	0x1ffff
-
-	# instructions added by SDM2.2:
-	vmsw.0
-	vmsw.1

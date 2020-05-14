@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -24,8 +25,6 @@
 #ifndef STATIC_INLINE_HW_MEMORY
 #define STATIC_INLINE_HW_MEMORY STATIC_INLINE
 #endif
-
-#include <stdlib.h>
 
 #include "device_table.h"
 
@@ -139,7 +138,7 @@ hw_memory_set_available(device *me,
   }
   /* update */
   device_set_array_property(me, "available", available, sizeof_available);
-  free(available);
+  zfree(available);
 }
 
 
@@ -156,7 +155,7 @@ hw_memory_init_address(device *me)
       hw_memory_chunk *dead_chunk = curr_chunk;
       curr_chunk = dead_chunk->next;
       dead_chunk->next = NULL;
-      free(dead_chunk);
+      zfree(dead_chunk);
     }
   }
 
@@ -484,7 +483,7 @@ hw_memory_instance_release(device_instance *instance,
       ASSERT(chunk->address + chunk->size == delete->address);
       chunk->size += delete->size;
       chunk->next = delete->next;
-      free(delete);
+      zfree(delete);
     }
     else {
       chunk = chunk->next;

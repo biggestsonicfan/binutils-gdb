@@ -1,33 +1,31 @@
 /* unwind-ia64.c -- utility routines to dump IA-64 unwind info for readelf.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001 Free Software Foundation, Inc.
+	Contributed by David Mosberger-Tang <davidm@hpl.hp.com>
 
-   Contributed by David Mosberger-Tang <davidm@hpl.hp.com>
+This file is part of GNU Binutils.
 
-   This file is part of GNU Binutils.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
-
-#include "config.h"
-#include "sysdep.h"
 #include "unwind-ia64.h"
+#include <stdio.h>
+#include <string.h>
 
 #if __GNUC__ >= 2
 /* Define BFD64 here, even if our default architecture is 32 bit ELF
    as this will allow us to read in and parse 64bit and 32bit ELF files.
-   Only do this if we believe that the compiler can support a 64 bit
+   Only do this if we belive that the compiler can support a 64 bit
    data type.  For now we only rely on GCC being able to do this.  */
 #define BFD64
 #endif
@@ -35,14 +33,16 @@
 
 static bfd_vma unw_rlen = 0;
 
-static void unw_print_brmask (char *, unsigned int);
-static void unw_print_grmask (char *, unsigned int);
-static void unw_print_frmask (char *, unsigned int);
-static void unw_print_abreg (char *, unsigned int);
-static void unw_print_xyreg (char *, unsigned int, unsigned int);
+static void unw_print_brmask PARAMS ((char *, unsigned int));
+static void unw_print_grmask PARAMS ((char *, unsigned int));
+static void unw_print_frmask PARAMS ((char *, unsigned int));
+static void unw_print_abreg PARAMS ((char *, unsigned int));
+static void unw_print_xyreg PARAMS ((char *, unsigned int, unsigned int));
 
 static void
-unw_print_brmask (char *cp, unsigned int mask)
+unw_print_brmask (cp, mask)
+     char * cp;
+     unsigned int mask;
 {
   int sep = 0;
   int i;
@@ -63,7 +63,9 @@ unw_print_brmask (char *cp, unsigned int mask)
 }
 
 static void
-unw_print_grmask (char *cp, unsigned int mask)
+unw_print_grmask (cp, mask)
+     char * cp;
+     unsigned int mask;
 {
   int sep = 0;
   int i;
@@ -84,7 +86,9 @@ unw_print_grmask (char *cp, unsigned int mask)
 }
 
 static void
-unw_print_frmask (char *cp, unsigned int mask)
+unw_print_frmask (cp, mask)
+     char * cp;
+     unsigned int mask;
 {
   int sep = 0;
   int i;
@@ -111,9 +115,11 @@ unw_print_frmask (char *cp, unsigned int mask)
 }
 
 static void
-unw_print_abreg (char *cp, unsigned int abreg)
+unw_print_abreg (cp, abreg)
+     char * cp;
+     unsigned int abreg;
 {
-  static const char * const special_reg[16] =
+  static const char *special_reg[16] =
   {
     "pr", "psp", "@priunat", "rp", "ar.bsp", "ar.bspstore", "ar.rnat",
     "ar.unat", "ar.fpsr", "ar.pfs", "ar.lc",
@@ -141,7 +147,10 @@ unw_print_abreg (char *cp, unsigned int abreg)
 }
 
 static void
-unw_print_xyreg (char *cp, unsigned int x, unsigned int ytreg)
+unw_print_xyreg (cp, x, ytreg)
+     char *        cp;
+     unsigned int x;
+     unsigned int ytreg;
 {
   switch ((x << 1) | ((ytreg >> 7) & 1))
     {
@@ -173,7 +182,7 @@ unw_print_xyreg (char *cp, unsigned int x, unsigned int ytreg)
 typedef bfd_vma unw_word;
 
 #define UNW_DEC_BAD_CODE(code)			\
-  printf (_("Unknown code 0x%02x\n"), code)
+    printf ("Unknown code 0x%02x\n", code)
 
 #define UNW_DEC_PROLOGUE(fmt, body, rlen, arg)					\
   do										\
@@ -243,13 +252,13 @@ typedef bfd_vma unw_word;
     }								\
   while (0)
 
-#define UNW_DEC_FRGR_MEM(fmt, grmask, frmask, arg)				\
+#define UNW_DEC_FRGR_MEM(fmt, grmask, frmask, arg)			     	\
   do										\
-    {										\
+    {									     	\
       char frstr[200], grstr[20];						\
-										\
-      unw_print_grmask (grstr, grmask);						\
-      unw_print_frmask (frstr, frmask);						\
+									     	\
+      unw_print_grmask (grstr, grmask);					     	\
+      unw_print_frmask (frstr, frmask);					     	\
       printf ("\t%s:frgr_mem(grmask=[%s],frmask=[%s])\n", fmt, grstr, frstr);	\
     }										\
   while (0)
@@ -304,7 +313,7 @@ typedef bfd_vma unw_word;
 #define UNW_DEC_ABI(fmt, abi, context, arg)			\
   do								\
     {								\
-      static const char * const abiname[] =			\
+      static const char *abiname[] =				\
       {								\
 	"@svr4", "@hpux", "@nt"					\
       };							\
@@ -348,22 +357,14 @@ typedef bfd_vma unw_word;
   printf ("\t%s:spill_base(pspoff=0x10-0x%lx)\n",		\
 	  fmt, 4*(unsigned long)pspoff)
 
-#define UNW_DEC_SPILL_MASK(fmt, dp, arg, end)				\
-  do									\
-    {									\
-      static const char *spill_type = "-frb";				\
-      unsigned const char *imaskp = dp;					\
-      unsigned char mask = 0;						\
-      bfd_vma insn = 0;							\
-      									\
-      /* PR 18420.  */							\
-      if ((dp + (unw_rlen / 4)) > end)					\
-	{								\
-	  printf (_("\nERROR: unwind length too long (0x%lx > 0x%lx)\n\n"), \
-		  (long) (unw_rlen / 4), (long)(end - dp));		\
-	  /* FIXME: Should we reset unw_rlen ?  */			\
-	  break;							\
-	}								\
+#define UNW_DEC_SPILL_MASK(fmt, dp, arg)					\
+  do										\
+    {										\
+      static const char * spill_type = "-frb";					\
+      unsigned const char * imaskp = dp;					\
+      unsigned char mask = 0;							\
+      bfd_vma insn = 0;								\
+										\
       printf ("\t%s:spill_mask(imask=[", fmt);					\
       for (insn = 0; insn < unw_rlen; ++insn)					\
 	{									\
@@ -381,7 +382,7 @@ typedef bfd_vma unw_word;
 #define UNW_DEC_SPILL_SPREL(fmt, t, abreg, spoff, arg)				\
   do										\
     {										\
-      char regname[20];								\
+      char regname[10];								\
 										\
       unw_print_abreg (regname, abreg);						\
       printf ("\t%s:spill_sprel(reg=%s,t=%lu,spoff=0x%lx)\n",			\
@@ -389,13 +390,13 @@ typedef bfd_vma unw_word;
     }										\
   while (0)
 
-#define UNW_DEC_SPILL_PSPREL(fmt, t, abreg, pspoff, arg)			\
+#define UNW_DEC_SPILL_PSPREL(fmt, t, abreg, pspoff, arg)		 	\
   do										\
-    {										\
-      char regname[20];								\
-										\
-      unw_print_abreg (regname, abreg);						\
-      printf ("\t%s:spill_psprel(reg=%s,t=%lu,pspoff=0x10-0x%lx)\n",		\
+    {									 	\
+      char regname[10];							 	\
+									 	\
+      unw_print_abreg (regname, abreg);					 	\
+      printf ("\t%s:spill_psprel(reg=%s,t=%lu,pspoff=0x10-0x%lx)\n", 		\
 	      fmt, regname, (unsigned long) t, 4*(unsigned long)pspoff);	\
     }										\
   while (0)
@@ -403,7 +404,7 @@ typedef bfd_vma unw_word;
 #define UNW_DEC_RESTORE(fmt, t, abreg, arg)			\
   do								\
     {								\
-      char regname[20];						\
+      char regname[10];						\
 								\
       unw_print_abreg (regname, abreg);				\
       printf ("\t%s:restore(t=%lu,reg=%s)\n",			\
@@ -414,7 +415,7 @@ typedef bfd_vma unw_word;
 #define UNW_DEC_SPILL_REG(fmt, t, abreg, x, ytreg, arg)		\
   do								\
     {								\
-      char abregname[20], tregname[20];				\
+      char abregname[10], tregname[10];				\
 								\
       unw_print_abreg (abregname, abreg);			\
       unw_print_xyreg (tregname, x, ytreg);			\
@@ -423,12 +424,12 @@ typedef bfd_vma unw_word;
     }								\
   while (0)
 
-#define UNW_DEC_SPILL_SPREL_P(fmt, qp, t, abreg, spoff, arg)			    \
+#define UNW_DEC_SPILL_SPREL_P(fmt, qp, t, abreg, spoff, arg)		   	    \
   do										    \
-    {										    \
-      char regname[20];								    \
-										    \
-      unw_print_abreg (regname, abreg);						    \
+    {									   	    \
+      char regname[20];							   	    \
+									   	    \
+      unw_print_abreg (regname, abreg);					   	    \
       printf ("\t%s:spill_sprel_p(qp=p%u,t=%lu,reg=%s,spoff=0x%lx)\n",		    \
 	      fmt, qp, (unsigned long) t, regname, 4 * (unsigned long)spoff);	    \
     }										    \
@@ -540,58 +541,72 @@ typedef bfd_vma unw_word;
  *	UNW_DEC_SPILL_SPREL_P(fmt,qp,t,abreg,pspoff,arg)
  */
 
+static unw_word unw_decode_uleb128 PARAMS ((const unsigned char **));
+static const unsigned char *unw_decode_x1 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_x2 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_x3 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_x4 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_r1 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_r2 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_r3 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_p1 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_p2_p5 PARAMS ((const unsigned char *,
+						      unsigned int, void *));
+static const unsigned char *unw_decode_p6 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_p7_p10 PARAMS ((const unsigned char *,
+						       unsigned int, void *));
+static const unsigned char *unw_decode_b1 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_b2 PARAMS ((const unsigned char *,
+						   unsigned int, void *));
+static const unsigned char *unw_decode_b3_x4 PARAMS ((const unsigned char *,
+						      unsigned int, void *));
+
 static unw_word
-unw_decode_uleb128 (const unsigned char **dpp, const unsigned char * end)
+unw_decode_uleb128 (dpp)
+     const unsigned char **dpp;
 {
   unsigned shift = 0;
-  int status = 1;
   unw_word byte, result = 0;
   const unsigned char *bp = *dpp;
 
-  while (bp < end)
+  while (1)
     {
       byte = *bp++;
-      if (shift < sizeof (result) * 8)
-	{
-	  result |= (byte & 0x7f) << shift;
-	  if ((result >> shift) != (byte & 0x7f))
-	    /* Overflow.  */
-	    status |= 2;
-	  shift += 7;
-	}
-      else if ((byte & 0x7f) != 0)
-	status |= 2;
+      result |= (byte & 0x7f) << shift;
 
       if ((byte & 0x80) == 0)
-	{
-	  status &= ~1;
-	  break;
-	}
+	break;
+
+      shift += 7;
     }
 
   *dpp = bp;
-  if (status != 0)
-    printf (_("Bad uleb128\n"));
 
   return result;
 }
 
 static const unsigned char *
-unw_decode_x1 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
-	       void *arg ATTRIBUTE_UNUSED, const unsigned char * end)
+unw_decode_x1 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code ATTRIBUTE_UNUSED;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   unsigned char byte1, abreg;
   unw_word t, off;
 
-  if ((end - dp) < 3)
-    {
-      printf (_("\t<corrupt X1>\n"));
-      return end;
-    }
-
   byte1 = *dp++;
-  t = unw_decode_uleb128 (&dp, end);
-  off = unw_decode_uleb128 (&dp, end);
+  t = unw_decode_uleb128 (&dp);
+  off = unw_decode_uleb128 (&dp);
   abreg = (byte1 & 0x7f);
   if (byte1 & 0x80)
     UNW_DEC_SPILL_SPREL ("X1", t, abreg, off, arg);
@@ -601,21 +616,17 @@ unw_decode_x1 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
 }
 
 static const unsigned char *
-unw_decode_x2 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
-	       void *arg ATTRIBUTE_UNUSED, const unsigned char * end)
+unw_decode_x2 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code ATTRIBUTE_UNUSED;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   unsigned char byte1, byte2, abreg, x, ytreg;
   unw_word t;
 
-  if ((end - dp) < 3)
-    {
-      printf (_("\t<corrupt X2>\n"));
-      return end;
-    }
-
   byte1 = *dp++;
   byte2 = *dp++;
-  t = unw_decode_uleb128 (&dp, end);
+  t = unw_decode_uleb128 (&dp);
   abreg = (byte1 & 0x7f);
   ytreg = byte2;
   x = (byte1 >> 7) & 1;
@@ -627,22 +638,18 @@ unw_decode_x2 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
 }
 
 static const unsigned char *
-unw_decode_x3 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
-	       void *arg ATTRIBUTE_UNUSED, const unsigned char * end)
+unw_decode_x3 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code ATTRIBUTE_UNUSED;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   unsigned char byte1, byte2, abreg, qp;
   unw_word t, off;
 
-  if ((end - dp) < 4)
-    {
-      printf (_("\t<corrupt X3>\n"));
-      return end;
-    }
-
   byte1 = *dp++;
   byte2 = *dp++;
-  t = unw_decode_uleb128 (&dp, end);
-  off = unw_decode_uleb128 (&dp, end);
+  t = unw_decode_uleb128 (&dp);
+  off = unw_decode_uleb128 (&dp);
 
   qp = (byte1 & 0x3f);
   abreg = (byte2 & 0x7f);
@@ -655,22 +662,18 @@ unw_decode_x3 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
 }
 
 static const unsigned char *
-unw_decode_x4 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
-	       void *arg ATTRIBUTE_UNUSED, const unsigned char * end)
+unw_decode_x4 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code ATTRIBUTE_UNUSED;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   unsigned char byte1, byte2, byte3, qp, abreg, x, ytreg;
   unw_word t;
 
-  if ((end - dp) < 4)
-    {
-      printf (_("\t<corrupt X4>\n"));
-      return end;
-    }
-
   byte1 = *dp++;
   byte2 = *dp++;
   byte3 = *dp++;
-  t = unw_decode_uleb128 (&dp, end);
+  t = unw_decode_uleb128 (&dp);
 
   qp = (byte1 & 0x3f);
   abreg = (byte2 & 0x7f);
@@ -685,8 +688,10 @@ unw_decode_x4 (const unsigned char *dp, unsigned int code ATTRIBUTE_UNUSED,
 }
 
 static const unsigned char *
-unw_decode_r1 (const unsigned char *dp, unsigned int code, void *arg,
-	       const unsigned char * end ATTRIBUTE_UNUSED)
+unw_decode_r1 (dp, code, arg)
+     const unsigned char *dp;
+     unsigned int code;
+     void *arg;
 {
   int body = (code & 0x20) != 0;
   unw_word rlen;
@@ -697,42 +702,41 @@ unw_decode_r1 (const unsigned char *dp, unsigned int code, void *arg,
 }
 
 static const unsigned char *
-unw_decode_r2 (const unsigned char *dp, unsigned int code, void *arg,
-	       const unsigned char * end)
+unw_decode_r2 (dp, code, arg)
+     const unsigned char *dp;
+     unsigned int code;
+     void *arg;
 {
   unsigned char byte1, mask, grsave;
   unw_word rlen;
-
-  if ((end - dp) < 2)
-    {
-      printf (_("\t<corrupt R2>\n"));
-      return end;
-    }
 
   byte1 = *dp++;
 
   mask = ((code & 0x7) << 1) | ((byte1 >> 7) & 1);
   grsave = (byte1 & 0x7f);
-  rlen = unw_decode_uleb128 (& dp, end);
+  rlen = unw_decode_uleb128 (& dp);
   UNW_DEC_PROLOGUE_GR ("R2", rlen, mask, grsave, arg);
   return dp;
 }
 
 static const unsigned char *
-unw_decode_r3 (const unsigned char *dp, unsigned int code, void *arg,
-	       const unsigned char * end)
+unw_decode_r3 (dp, code, arg)
+     const unsigned char *dp;
+     unsigned int code;
+     void *arg;
 {
   unw_word rlen;
 
-  rlen = unw_decode_uleb128 (& dp, end);
+  rlen = unw_decode_uleb128 (& dp);
   UNW_DEC_PROLOGUE ("R3", ((code & 0x3) == 1), rlen, arg);
   return dp;
 }
 
 static const unsigned char *
-unw_decode_p1 (const unsigned char *dp, unsigned int code,
-	       void *arg ATTRIBUTE_UNUSED,
-	       const unsigned char * end ATTRIBUTE_UNUSED)
+unw_decode_p1 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   unsigned char brmask = (code & 0x1f);
 
@@ -741,36 +745,21 @@ unw_decode_p1 (const unsigned char *dp, unsigned int code,
 }
 
 static const unsigned char *
-unw_decode_p2_p5 (const unsigned char *dp, unsigned int code,
-		  void *arg ATTRIBUTE_UNUSED,
-		  const unsigned char * end)
+unw_decode_p2_p5 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   if ((code & 0x10) == 0)
     {
-      unsigned char byte1;
-
-      if ((end - dp) < 1)
-	{
-	  printf (_("\t<corrupt P2>\n"));
-	  return end;
-	}
-
-      byte1 = *dp++;
+      unsigned char byte1 = *dp++;
 
       UNW_DEC_BR_GR ("P2", ((code & 0xf) << 1) | ((byte1 >> 7) & 1),
 		     (byte1 & 0x7f), arg);
     }
   else if ((code & 0x08) == 0)
     {
-      unsigned char byte1, r, dst;
-
-      if ((end - dp) < 1)
-	{
-	  printf (_("\t<corrupt P3>\n"));
-	  return end;
-	}
-
-      byte1 = *dp++;
+      unsigned char byte1 = *dp++, r, dst;
 
       r = ((code & 0x7) << 1) | ((byte1 >> 7) & 1);
       dst = (byte1 & 0x7f);
@@ -818,16 +807,11 @@ unw_decode_p2_p5 (const unsigned char *dp, unsigned int code,
 	}
     }
   else if ((code & 0x7) == 0)
-    UNW_DEC_SPILL_MASK ("P4", dp, arg, end);
+    UNW_DEC_SPILL_MASK ("P4", dp, arg);
   else if ((code & 0x7) == 1)
     {
       unw_word grmask, frmask, byte1, byte2, byte3;
 
-      if ((end - dp) < 3)
-	{
-	  printf (_("\t<corrupt P5>\n"));
-	  return end;
-	}
       byte1 = *dp++;
       byte2 = *dp++;
       byte3 = *dp++;
@@ -842,9 +826,10 @@ unw_decode_p2_p5 (const unsigned char *dp, unsigned int code,
 }
 
 static const unsigned char *
-unw_decode_p6 (const unsigned char *dp, unsigned int code,
-	       void *arg ATTRIBUTE_UNUSED,
-	       const unsigned char * end ATTRIBUTE_UNUSED)
+unw_decode_p6 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   int gregs = (code & 0x10) != 0;
   unsigned char mask = (code & 0x0f);
@@ -857,8 +842,10 @@ unw_decode_p6 (const unsigned char *dp, unsigned int code,
 }
 
 static const unsigned char *
-unw_decode_p7_p10 (const unsigned char *dp, unsigned int code, void *arg,
-		   const unsigned char * end)
+unw_decode_p7_p10 (dp, code, arg)
+     const unsigned char *dp;
+     unsigned int code;
+     void *arg;
 {
   unsigned char r, byte1, byte2;
   unw_word t, size;
@@ -866,11 +853,11 @@ unw_decode_p7_p10 (const unsigned char *dp, unsigned int code, void *arg,
   if ((code & 0x10) == 0)
     {
       r = (code & 0xf);
-      t = unw_decode_uleb128 (&dp, end);
+      t = unw_decode_uleb128 (&dp);
       switch (r)
 	{
 	case 0:
-	  size = unw_decode_uleb128 (&dp, end);
+	  size = unw_decode_uleb128 (&dp);
 	  UNW_DEC_MEM_STACK_F ("P7", t, size, arg);
 	  break;
 
@@ -930,14 +917,8 @@ unw_decode_p7_p10 (const unsigned char *dp, unsigned int code, void *arg,
 	{
 	case 0x0:		/* p8 */
 	  {
-	    if ((end - dp) < 2)
-	      {
-		printf (_("\t<corrupt P8>\n"));
-		return end;
-	      }
-
 	    r = *dp++;
-	    t = unw_decode_uleb128 (&dp, end);
+	    t = unw_decode_uleb128 (&dp);
 	    switch (r)
 	      {
 	      case 1:
@@ -1005,40 +986,28 @@ unw_decode_p7_p10 (const unsigned char *dp, unsigned int code, void *arg,
 	  break;
 
 	case 0x1:
-	  if ((end - dp) < 2)
-	    {
-	      printf (_("\t<corrupt P9>\n"));
-	      return end;
-	    }
-
 	  byte1 = *dp++;
 	  byte2 = *dp++;
 	  UNW_DEC_GR_GR ("P9", (byte1 & 0xf), (byte2 & 0x7f), arg);
 	  break;
 
 	case 0xf:		/* p10 */
-	  if ((end - dp) < 2)
-	    {
-	      printf (_("\t<corrupt P10>\n"));
-	      return end;
-	    }
-
 	  byte1 = *dp++;
 	  byte2 = *dp++;
 	  UNW_DEC_ABI ("P10", byte1, byte2, arg);
 	  break;
 
 	case 0x9:
-	  return unw_decode_x1 (dp, code, arg, end);
+	  return unw_decode_x1 (dp, code, arg);
 
 	case 0xa:
-	  return unw_decode_x2 (dp, code, arg, end);
+	  return unw_decode_x2 (dp, code, arg);
 
 	case 0xb:
-	  return unw_decode_x3 (dp, code, arg, end);
+	  return unw_decode_x3 (dp, code, arg);
 
 	case 0xc:
-	  return unw_decode_x4 (dp, code, arg, end);
+	  return unw_decode_x4 (dp, code, arg);
 
 	default:
 	  UNW_DEC_BAD_CODE (code);
@@ -1049,9 +1018,10 @@ unw_decode_p7_p10 (const unsigned char *dp, unsigned int code, void *arg,
 }
 
 static const unsigned char *
-unw_decode_b1 (const unsigned char *dp, unsigned int code,
-	       void *arg ATTRIBUTE_UNUSED,
-	       const unsigned char * end ATTRIBUTE_UNUSED)
+unw_decode_b1 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   unw_word label = (code & 0x1f);
 
@@ -1063,32 +1033,35 @@ unw_decode_b1 (const unsigned char *dp, unsigned int code,
 }
 
 static const unsigned char *
-unw_decode_b2 (const unsigned char *dp, unsigned int code,
-	       void *arg ATTRIBUTE_UNUSED,
-	       const unsigned char * end)
+unw_decode_b2 (dp, code, arg)
+     const unsigned char * dp;
+     unsigned int         code;
+     void *                arg ATTRIBUTE_UNUSED;
 {
   unw_word t;
 
-  t = unw_decode_uleb128 (& dp, end);
+  t = unw_decode_uleb128 (& dp);
   UNW_DEC_EPILOGUE ("B2", t, (code & 0x1f), arg);
   return dp;
 }
 
 static const unsigned char *
-unw_decode_b3_x4 (const unsigned char *dp, unsigned int code, void *arg,
-		  const unsigned char * end)
+unw_decode_b3_x4 (dp, code, arg)
+     const unsigned char *dp;
+     unsigned int code;
+     void *arg;
 {
   unw_word t, ecount, label;
 
   if ((code & 0x10) == 0)
     {
-      t = unw_decode_uleb128 (&dp, end);
-      ecount = unw_decode_uleb128 (&dp, end);
+      t = unw_decode_uleb128 (&dp);
+      ecount = unw_decode_uleb128 (&dp);
       UNW_DEC_EPILOGUE ("B3", t, ecount, arg);
     }
   else if ((code & 0x07) == 0)
     {
-      label = unw_decode_uleb128 (&dp, end);
+      label = unw_decode_uleb128 (&dp);
       if ((code & 0x08) != 0)
 	UNW_DEC_COPY_STATE ("B4", label, arg);
       else
@@ -1098,13 +1071,13 @@ unw_decode_b3_x4 (const unsigned char *dp, unsigned int code, void *arg,
     switch (code & 0x7)
       {
       case 1:
-	return unw_decode_x1 (dp, code, arg, end);
+	return unw_decode_x1 (dp, code, arg);
       case 2:
-	return unw_decode_x2 (dp, code, arg, end);
+	return unw_decode_x2 (dp, code, arg);
       case 3:
-	return unw_decode_x3 (dp, code, arg, end);
+	return unw_decode_x3 (dp, code, arg);
       case 4:
-	return unw_decode_x4 (dp, code, arg, end);
+	return unw_decode_x4 (dp, code, arg);
       default:
 	UNW_DEC_BAD_CODE (code);
 	break;
@@ -1113,9 +1086,9 @@ unw_decode_b3_x4 (const unsigned char *dp, unsigned int code, void *arg,
 }
 
 typedef const unsigned char *(*unw_decoder)
-  (const unsigned char *, unsigned int, void *, const unsigned char *);
+     PARAMS ((const unsigned char *, unsigned int, void *));
 
-static const unw_decoder unw_decode_table[2][8] =
+static unw_decoder unw_decode_table[2][8] =
   {
     /* prologue table: */
     {
@@ -1142,19 +1115,15 @@ static const unw_decoder unw_decode_table[2][8] =
 
 /* Decode one descriptor and return address of next descriptor.  */
 const unsigned char *
-unw_decode (const unsigned char *dp, int inside_body,
-	    void *ptr_inside_body, const unsigned char * end)
+unw_decode (dp, inside_body, ptr_inside_body)
+     const unsigned char * dp;
+     int                   inside_body;
+     void *                ptr_inside_body;
 {
   unw_decoder decoder;
   unsigned char code;
 
-  if ((end - dp) < 1)
-    {
-      printf (_("\t<corrupt IA64 descriptor>\n"));
-      return end;
-    }
-
   code = *dp++;
   decoder = unw_decode_table[inside_body][code >> 5];
-  return (*decoder) (dp, code, ptr_inside_body, end);
+  return (*decoder) (dp, code, ptr_inside_body);
 }

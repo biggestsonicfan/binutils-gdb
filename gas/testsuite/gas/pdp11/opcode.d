@@ -1,7 +1,7 @@
 #name: pdp11 opcode
 #objdump: -drw
 
-.*: +file format .*
+dump.o: +file format .*
 
 Disassembly of section .text:
 
@@ -32,7 +32,7 @@ Disassembly of section .text:
   20:	00a4 [	 ]*clz
   22:	00a8 [	 ]*cln
   24:	00af [	 ]*ccc
-  26:	00b1 [	 ]*sec
+  26:	00a1 [	 ]*clc
   28:	00b2 [	 ]*sev
   2a:	00b4 [	 ]*sez
   2c:	00b8 [	 ]*sen
@@ -134,7 +134,7 @@ Disassembly of section .text:
  108:	7c7f [	 ]*cvtlpi
  10a:	7d80 [	 ]*med
  10c:	7dea [	 ]*xfc	52
- 10e:	7e02 [	 ]*sob	r0, 10c <start2\+0x106>
+ 10e:	7e3e [	 ]*sob	r0, 10c <start2\+0x106>
  110:	80fd [	 ]*bpl	10c <start2\+0x106>
  112:	81fc [	 ]*bmi	10c <start2\+0x106>
  114:	82fb [	 ]*bhi	10c <start2\+0x106>

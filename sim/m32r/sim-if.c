@@ -1,21 +1,20 @@
 /* Main simulator entry points specific to the M32R.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
-   This file is part of GDB, the GNU debugger.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "sim-main.h"
 #include "sim-options.h"
@@ -33,10 +32,12 @@
 #include <stdlib.h>
 #endif
 
-#include "dv-m32r_uart.h"
-
 static void free_state (SIM_DESC);
 static void print_m32r_misc_cpu (SIM_CPU *cpu, int verbose);
+
+/* Records simulator descriptor so utilities like m32r_dump_regs can be
+   called from gdb.  */
+SIM_DESC current_state;
 
 /* Cover function of sim_state_free to free the cpu buffers as well.  */
 
@@ -55,8 +56,8 @@ SIM_DESC
 sim_open (kind, callback, abfd, argv)
      SIM_OPEN_KIND kind;
      host_callback *callback;
-     struct bfd *abfd;
-     char * const *argv;
+     struct _bfd *abfd;
+     char **argv;
 {
   SIM_DESC sd = sim_state_alloc (kind, callback);
   char c;
@@ -84,7 +85,25 @@ sim_open (kind, callback, abfd, argv)
       return 0;
     }
 
-  /* The parser will print an error message for us, so we silently return.  */
+#ifdef HAVE_DV_SOCKSER /* FIXME: was done differently before */
+  if (dv_sockser_install (sd) != SIM_RC_OK)
+    {
+      free_state (sd);
+      return 0;
+    }
+#endif
+
+#if 0 /* FIXME: 'twould be nice if we could do this */
+  /* These options override any module options.
+     Obviously ambiguity should be avoided, however the caller may wish to
+     augment the meaning of an option.  */
+  if (extra_options != NULL)
+    sim_add_option_table (sd, extra_options);
+#endif
+
+  /* getopt will print the error message so we just have to exit if this fails.
+     FIXME: Hmmm...  in the case of gdb we need getopt to call
+     print_filtered.  */
   if (sim_parse_args (sd, argv) != SIM_RC_OK)
     {
       free_state (sd);
@@ -94,10 +113,16 @@ sim_open (kind, callback, abfd, argv)
   /* Allocate a handler for the control registers and other devices
      if no memory for that range has been allocated by the user.
      All are allocated in one chunk to keep things from being
-     unnecessarily complicated.
-     TODO: Move these to the sim-model framework.  */
-  sim_hw_parse (sd, "/core/%s/reg %#x %i", "m32r_uart", UART_BASE_ADDR, 0x100);
-  sim_hw_parse (sd, "/core/%s/reg %#x %i", "m32r_cache", 0xfffffff0, 0x10);
+     unnecessarily complicated.  */
+  if (sim_core_read_buffer (sd, NULL, read_map, &c, M32R_DEVICE_ADDR, 1) == 0)
+    sim_core_attach (sd, NULL,
+		     0 /*level*/,
+		     access_read_write,
+		     0 /*space ???*/,
+		     M32R_DEVICE_ADDR, M32R_DEVICE_LEN /*nr_bytes*/,
+		     0 /*modulo*/,
+		     &m32r_devices,
+		     NULL /*buffer*/);
 
   /* Allocate core managed memory if none specified by user.
      Use address 4 here in case the user wanted address 0 unmapped.  */
@@ -155,15 +180,28 @@ sim_open (kind, callback, abfd, argv)
 	= print_m32r_misc_cpu;
     }
 
+  /* Store in a global so things like sparc32_dump_regs can be invoked
+     from the gdb command line.  */
+  current_state = sd;
+
   return sd;
+}
+
+void
+sim_close (sd, quitting)
+     SIM_DESC sd;
+     int quitting;
+{
+  m32r_cgen_cpu_close (CPU_CPU_DESC (STATE_CPU (sd, 0)));
+  sim_module_uninstall (sd);
 }
 
 SIM_RC
 sim_create_inferior (sd, abfd, argv, envp)
      SIM_DESC sd;
-     struct bfd *abfd;
-     char * const *argv;
-     char * const *envp;
+     struct _bfd *abfd;
+     char **argv;
+     char **envp;
 {
   SIM_CPU *current_cpu = STATE_CPU (sd, 0);
   SIM_ADDR addr;
@@ -174,22 +212,10 @@ sim_create_inferior (sd, abfd, argv, envp)
     addr = 0;
   sim_pc_set (current_cpu, addr);
 
-#ifdef M32R_LINUX
-  m32rbf_h_cr_set (current_cpu,
-                    m32r_decode_gdb_ctrl_regnum(SPI_REGNUM), 0x1f00000);
-  m32rbf_h_cr_set (current_cpu,
-                    m32r_decode_gdb_ctrl_regnum(SPU_REGNUM), 0x1f00000);
+#if 0
+  STATE_ARGV (sd) = sim_copy_argv (argv);
+  STATE_ENVP (sd) = sim_copy_argv (envp);
 #endif
-
-  /* Standalone mode (i.e. `run`) will take care of the argv for us in
-     sim_open() -> sim_parse_args().  But in debug mode (i.e. 'target sim'
-     with `gdb`), we need to handle it because the user can change the
-     argv on the fly via gdb's 'run'.  */
-  if (STATE_PROG_ARGV (sd) != argv)
-    {
-      freeargv (STATE_PROG_ARGV (sd));
-      STATE_PROG_ARGV (sd) = dupargv (argv);
-    }
 
   return SIM_RC_OK;
 }
@@ -214,10 +240,53 @@ print_m32r_misc_cpu (SIM_CPU *cpu, int verbose)
 		       PROFILE_LABEL_WIDTH, "Parallel insns:",
 		       sim_add_commas (buf, sizeof (buf),
 				       CPU_M32R_MISC_PROFILE (cpu)->parallel_count));
-      if (STATE_ARCHITECTURE (sd)->mach == bfd_mach_m32r2)
-	sim_io_printf (sd, "  %-*s %s\n\n",
-		       PROFILE_LABEL_WIDTH, "Parallel insns:",
-		       sim_add_commas (buf, sizeof (buf),
-				       CPU_M32R_MISC_PROFILE (cpu)->parallel_count));
     }
+}
+
+void
+sim_do_command (sd, cmd)
+     SIM_DESC sd;
+     char *cmd;
+{ 
+  char **argv;
+
+  if (cmd == NULL)
+    return;
+
+  argv = buildargv (cmd);
+
+  if (argv[0] != NULL
+      && strcasecmp (argv[0], "info") == 0
+      && argv[1] != NULL
+      && strncasecmp (argv[1], "reg", 3) == 0)
+    {
+      SI val;
+
+      /* We only support printing bbpsw,bbpc here as there is no equivalent
+	 functionality in gdb.  */
+      if (argv[2] == NULL)
+	sim_io_eprintf (sd, "Missing register in `%s'\n", cmd);
+      else if (argv[3] != NULL)
+	sim_io_eprintf (sd, "Too many arguments in `%s'\n", cmd);
+      else if (strcasecmp (argv[2], "bbpsw") == 0)
+	{
+	  val = a_m32r_h_cr_get (STATE_CPU (sd, 0), H_CR_BBPSW);
+	  sim_io_printf (sd, "bbpsw 0x%x %d\n", val, val);
+	}
+      else if (strcasecmp (argv[2], "bbpc") == 0)
+	{
+	  val = a_m32r_h_cr_get (STATE_CPU (sd, 0), H_CR_BBPC);
+	  sim_io_printf (sd, "bbpc 0x%x %d\n", val, val);
+	}
+      else
+	sim_io_eprintf (sd, "Printing of register `%s' not supported with `sim info'\n",
+			argv[2]);
+    }
+  else
+    {
+      if (sim_args_command (sd, cmd) != SIM_RC_OK)
+	sim_io_eprintf (sd, "Unknown sim command `%s'\n", cmd);
+    }
+
+  freeargv (argv);
 }

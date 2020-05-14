@@ -437,7 +437,7 @@ _start:
 	{ .mii;
 	mov gp = r0
 	mov sp = r0
-	mov tp = r0;; }
+	nop.i 0;; }
 
 // Floating point registers
 	{ .mfi; mov f2 = f0 ;; }
@@ -714,8 +714,8 @@ _start:
 //	{ .mmi; nop.m 0; mov r1 = ar41 ;; }		// reserved
 //	{ .mmi; nop.m 0; mov r1 = ar42 ;; }		// reserved
 //	{ .mmi; nop.m 0; mov r1 = ar43 ;; }		// reserved
-	{ .mmi; nop.m 0; mov r1 = ar44 ;; }
-	{ .mmi; nop.m 0; mov r1 = ar45 ;; }
+//	{ .mmi; nop.m 0; mov r1 = ar44 ;; }		// reserved
+//	{ .mmi; nop.m 0; mov r1 = ar45 ;; }		// reserved
 //	{ .mmi; nop.m 0; mov r1 = ar46 ;; }		// reserved
 //	{ .mmi; nop.m 0; mov r1 = ar47 ;; }		// reserved
 	{ .mmi; nop.m 0; mov r1 = ar48 ;; }
@@ -816,7 +816,6 @@ _start:
 	{ .mmi; nop.m 0; mov r1 = ar.unat ;; }
 	{ .mmi; nop.m 0; mov r1 = ar.fpsr ;; }
 	{ .mmi; nop.m 0; mov r1 = ar.itc ;; }
-	{ .mmi; nop.m 0; mov r1 = ar.ruc ;; }
 	{ .mmi; nop.m 0; mov r1 = ar.pfs ;; }
 	{ .mmi; nop.m 0; mov r1 = ar.lc ;; }
 	{ .mmi; nop.m 0; mov r1 = ar.ec ;; }
@@ -963,8 +962,6 @@ _start:
 	{ .mfb; mov r1 = cr.ifs ;; }
 	{ .mfb; mov r1 = cr.iim ;; }
 	{ .mfb; mov r1 = cr.iha ;; }
-	{ .mfb; mov r1 = cr.iib0 ;; }
-	{ .mfb; mov r1 = cr.iib1 ;; }
 	{ .mfb; mov r1 = cr.lid ;; }
 	{ .mfb; mov r1 = cr.ivr ;; }
 	{ .mfb; mov r1 = cr.tpr ;; }

@@ -1,8 +1,14 @@
 /* Trivial code used to test watchpoints in recursive code and 
    auto-deletion of watchpoints as they go out of scope.  */
 
+#ifdef PROTOTYPES
 static int
 recurse (int a)
+#else
+static int 
+recurse (a)
+     int a;
+#endif
 {
   int b = 0;
 
@@ -16,6 +22,10 @@ recurse (int a)
 
 int main()
 {
+#ifdef usestubs
+  set_debug_traps();
+  breakpoint();
+#endif
   recurse (10);
   return 0;
 }

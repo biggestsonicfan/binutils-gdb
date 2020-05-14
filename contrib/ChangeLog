@@ -1,10 +1,7 @@
-2019-10-21  Andrew Burgess  <andrew.burgess@embecosm.com>
+2002-07-03  Nick Clifton  <nickc@cambridge.redhat.com>
 
-	* dg-extract-results.py: Update from gcc repo.
-	* dg-extract-results.sh: Likewise.
+	* ChangeLog: Newly created.
+	* texi2pod.pl: Imported from FSF GCC sources.
+	
+	
 
-2018-08-06  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
-
-	* dg-extract-results.sh: Move from gdb/testsuite.
-	Update from gcc repo.
-	* dg-extract-results.py: New from gcc repo.

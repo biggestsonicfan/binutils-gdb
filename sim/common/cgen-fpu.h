@@ -1,6 +1,5 @@
 /* CGEN fpu support
-   Copyright (C) 1999 Cygnus Solutions.
-   Copyright (C) 2010 Doug Evans.  */
+   Copyright (C) 1999 Cygnus Solutions.  */
 
 #ifndef CGEN_FPU_H
 #define CGEN_FPU_H
@@ -18,18 +17,6 @@ typedef struct { SI parts[4]; } TF;
 #ifndef TARGET_EXT_FP_WORDS
 #define TARGET_EXT_FP_WORDS 4
 #endif
-
-/* Supported floating point conversion kinds (rounding modes).
-   FIXME: The IEEE rounding modes need to be implemented.  */
-
-typedef enum {
-  FPCONV_DEFAULT = 0,
-  FPCONV_TIES_TO_EVEN = 1,
-  FPCONV_TIES_TO_AWAY = 2,
-  FPCONV_TOWARD_ZERO = 3,
-  FPCONV_TOWARD_POSITIVE = 4,
-  FPCONV_TOWARD_NEGATIVE = 5
-} CGEN_FPCONV_KIND;
 
 /* forward decl */
 typedef struct cgen_fp_ops CGEN_FP_OPS;
@@ -69,7 +56,6 @@ struct cgen_fp_ops {
   SF (*subsf) (CGEN_FPU*, SF, SF);
   SF (*mulsf) (CGEN_FPU*, SF, SF);
   SF (*divsf) (CGEN_FPU*, SF, SF);
-  SF (*remsf) (CGEN_FPU*, SF, SF);
   SF (*negsf) (CGEN_FPU*, SF);
   SF (*abssf) (CGEN_FPU*, SF);
   SF (*sqrtsf) (CGEN_FPU*, SF);
@@ -87,7 +73,6 @@ struct cgen_fp_ops {
   int (*lesf) (CGEN_FPU*, SF, SF);
   int (*gtsf) (CGEN_FPU*, SF, SF);
   int (*gesf) (CGEN_FPU*, SF, SF);
-  int (*unorderedsf) (CGEN_FPU*, SF, SF);
 
   /* basic DF ops */
 
@@ -95,7 +80,6 @@ struct cgen_fp_ops {
   DF (*subdf) (CGEN_FPU*, DF, DF);
   DF (*muldf) (CGEN_FPU*, DF, DF);
   DF (*divdf) (CGEN_FPU*, DF, DF);
-  DF (*remdf) (CGEN_FPU*, DF, DF);
   DF (*negdf) (CGEN_FPU*, DF);
   DF (*absdf) (CGEN_FPU*, DF);
   DF (*sqrtdf) (CGEN_FPU*, DF);
@@ -113,32 +97,31 @@ struct cgen_fp_ops {
   int (*ledf) (CGEN_FPU*, DF, DF);
   int (*gtdf) (CGEN_FPU*, DF, DF);
   int (*gedf) (CGEN_FPU*, DF, DF);
-  int (*unordereddf) (CGEN_FPU*, DF, DF);
 
   /* SF/DF conversion ops */
 
-  DF (*fextsfdf) (CGEN_FPU*, int, SF);
-  SF (*ftruncdfsf) (CGEN_FPU*, int, DF);
+  DF (*fextsfdf) (CGEN_FPU*, SF);
+  SF (*ftruncdfsf) (CGEN_FPU*, DF);
 
-  SF (*floatsisf) (CGEN_FPU*, int, SI);
-  SF (*floatdisf) (CGEN_FPU*, int, DI);
-  SF (*ufloatsisf) (CGEN_FPU*, int, USI);
-  SF (*ufloatdisf) (CGEN_FPU*, int, UDI);
+  SF (*floatsisf) (CGEN_FPU*, SI);
+  SF (*floatdisf) (CGEN_FPU*, DI);
+  SF (*ufloatsisf) (CGEN_FPU*, USI);
+  SF (*ufloatdisf) (CGEN_FPU*, UDI);
 
-  SI (*fixsfsi) (CGEN_FPU*, int, SF);
-  DI (*fixsfdi) (CGEN_FPU*, int, SF);
-  USI (*ufixsfsi) (CGEN_FPU*, int, SF);
-  UDI (*ufixsfdi) (CGEN_FPU*, int, SF);
+  SI (*fixsfsi) (CGEN_FPU*, SF);
+  DI (*fixsfdi) (CGEN_FPU*, SF);
+  USI (*ufixsfsi) (CGEN_FPU*, SF);
+  UDI (*ufixsfdi) (CGEN_FPU*, SF);
 
-  DF (*floatsidf) (CGEN_FPU*, int, SI);
-  DF (*floatdidf) (CGEN_FPU*, int, DI);
-  DF (*ufloatsidf) (CGEN_FPU*, int, USI);
-  DF (*ufloatdidf) (CGEN_FPU*, int, UDI);
+  DF (*floatsidf) (CGEN_FPU*, SI);
+  DF (*floatdidf) (CGEN_FPU*, DI);
+  DF (*ufloatsidf) (CGEN_FPU*, USI);
+  DF (*ufloatdidf) (CGEN_FPU*, UDI);
 
-  SI (*fixdfsi) (CGEN_FPU*, int, DF);
-  DI (*fixdfdi) (CGEN_FPU*, int, DF);
-  USI (*ufixdfsi) (CGEN_FPU*, int, DF);
-  UDI (*ufixdfdi) (CGEN_FPU*, int, DF);
+  SI (*fixdfsi) (CGEN_FPU*, DF);
+  DI (*fixdfdi) (CGEN_FPU*, DF);
+  USI (*ufixdfsi) (CGEN_FPU*, DF);
+  UDI (*ufixdfdi) (CGEN_FPU*, DF);
 
   /* XF mode support (kept separate 'cus not always present) */
 
@@ -146,7 +129,6 @@ struct cgen_fp_ops {
   XF (*subxf) (CGEN_FPU*, XF, XF);
   XF (*mulxf) (CGEN_FPU*, XF, XF);
   XF (*divxf) (CGEN_FPU*, XF, XF);
-  XF (*remxf) (CGEN_FPU*, XF, XF);
   XF (*negxf) (CGEN_FPU*, XF);
   XF (*absxf) (CGEN_FPU*, XF);
   XF (*sqrtxf) (CGEN_FPU*, XF);
@@ -164,20 +146,20 @@ struct cgen_fp_ops {
   int (*gtxf) (CGEN_FPU*, XF, XF);
   int (*gexf) (CGEN_FPU*, XF, XF);
 
-  XF (*extsfxf) (CGEN_FPU*, int, SF);
-  XF (*extdfxf) (CGEN_FPU*, int, DF);
-  SF (*truncxfsf) (CGEN_FPU*, int, XF);
-  DF (*truncxfdf) (CGEN_FPU*, int, XF);
+  XF (*extsfxf) (CGEN_FPU*, SF);
+  XF (*extdfxf) (CGEN_FPU*, DF);
+  SF (*truncxfsf) (CGEN_FPU*, XF);
+  DF (*truncxfdf) (CGEN_FPU*, XF);
 
-  XF (*floatsixf) (CGEN_FPU*, int, SI);
-  XF (*floatdixf) (CGEN_FPU*, int, DI);
-  XF (*ufloatsixf) (CGEN_FPU*, int, USI);
-  XF (*ufloatdixf) (CGEN_FPU*, int, UDI);
+  XF (*floatsixf) (CGEN_FPU*, SI);
+  XF (*floatdixf) (CGEN_FPU*, DI);
+  XF (*ufloatsixf) (CGEN_FPU*, USI);
+  XF (*ufloatdixf) (CGEN_FPU*, UDI);
 
-  SI (*fixxfsi) (CGEN_FPU*, int, XF);
-  DI (*fixxfdi) (CGEN_FPU*, int, XF);
-  USI (*ufixxfsi) (CGEN_FPU*, int, XF);
-  UDI (*ufixxfdi) (CGEN_FPU*, int, XF);
+  SI (*fixxfsi) (CGEN_FPU*, XF);
+  DI (*fixxfdi) (CGEN_FPU*, XF);
+  USI (*ufixxfsi) (CGEN_FPU*, XF);
+  UDI (*ufixxfdi) (CGEN_FPU*, XF);
 
   /* TF mode support (kept separate 'cus not always present) */
 
@@ -185,7 +167,6 @@ struct cgen_fp_ops {
   TF (*subtf) (CGEN_FPU*, TF, TF);
   TF (*multf) (CGEN_FPU*, TF, TF);
   TF (*divtf) (CGEN_FPU*, TF, TF);
-  TF (*remtf) (CGEN_FPU*, TF, TF);
   TF (*negtf) (CGEN_FPU*, TF);
   TF (*abstf) (CGEN_FPU*, TF);
   TF (*sqrttf) (CGEN_FPU*, TF);
@@ -203,20 +184,20 @@ struct cgen_fp_ops {
   int (*gttf) (CGEN_FPU*, TF, TF);
   int (*getf) (CGEN_FPU*, TF, TF);
 
-  TF (*extsftf) (CGEN_FPU*, int, SF);
-  TF (*extdftf) (CGEN_FPU*, int, DF);
-  SF (*trunctfsf) (CGEN_FPU*, int, TF);
-  DF (*trunctfdf) (CGEN_FPU*, int, TF);
+  TF (*extsftf) (CGEN_FPU*, SF);
+  TF (*extdftf) (CGEN_FPU*, DF);
+  SF (*trunctfsf) (CGEN_FPU*, TF);
+  DF (*trunctfdf) (CGEN_FPU*, TF);
 
-  TF (*floatsitf) (CGEN_FPU*, int, SI);
-  TF (*floatditf) (CGEN_FPU*, int, DI);
-  TF (*ufloatsitf) (CGEN_FPU*, int, USI);
-  TF (*ufloatditf) (CGEN_FPU*, int, UDI);
+  TF (*floatsitf) (CGEN_FPU*, SI);
+  TF (*floatditf) (CGEN_FPU*, DI);
+  TF (*ufloatsitf) (CGEN_FPU*, USI);
+  TF (*ufloatditf) (CGEN_FPU*, UDI);
 
-  SI (*fixtfsi) (CGEN_FPU*, int, TF);
-  DI (*fixtfdi) (CGEN_FPU*, int, TF);
-  USI (*ufixtfsi) (CGEN_FPU*, int, TF);
-  UDI (*ufixtfdi) (CGEN_FPU*, int, TF);
+  SI (*fixtfsi) (CGEN_FPU*, TF);
+  DI (*fixtfdi) (CGEN_FPU*, TF);
+  USI (*ufixtfsi) (CGEN_FPU*, TF);
+  UDI (*ufixtfdi) (CGEN_FPU*, TF);
 
 };
 

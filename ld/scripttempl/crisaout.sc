@@ -1,19 +1,7 @@
-# Copyright (C) 2014-2020 Free Software Foundation, Inc.
-#
-# Copying and distribution of this file, with or without modification,
-# are permitted in any medium without royalty provided the copyright
-# notice and this notice are preserved.
-
 cat <<EOF
-/* Copyright (C) 2014-2020 Free Software Foundation, Inc.
-
-   Copying and distribution of this script, with or without modification,
-   are permitted in any medium without royalty provided the copyright
-   notice and this notice are preserved.  */
-
 OUTPUT_FORMAT("a.out-cris")
 OUTPUT_ARCH(cris)
-${RELOCATING+ENTRY (__start)}
+ENTRY(__start)
 SECTIONS
 {
   .text ${RELOCATING+ ${TEXT_START_ADDR}}:
@@ -22,7 +10,7 @@ SECTIONS
     ${CONSTRUCTING+ __Stext = .;}
     ${RELOCATING+*(.startup)}
     *(.text)
-    ${CONSTRUCTING+__start = DEFINED(__start) ? __start :
+    ${CONSTRUCTING+__start = DEFINED(__start) ? __start : 
 		   DEFINED(_start) ? _start :
 		     DEFINED(start) ? start :
 		        DEFINED(.startup) ? .startup + 2 : 2;}
@@ -42,7 +30,7 @@ SECTIONS
     ${CONSTRUCTING+ PROVIDE (___do_global_ctors = .);}
     ${CONSTRUCTING+ SHORT (0xe1fc); /* push srp */}
     ${CONSTRUCTING+ SHORT (0xbe7e);}
-    ${CONSTRUCTING+ KEEP (*(SORT_NONE(.init)))}
+    ${CONSTRUCTING+ *(.init)}
     ${CONSTRUCTING+ SHORT (0x0d3e); /* jump [sp+] */}
     ${CONSTRUCTING+ PROVIDE (__init__end = .);}
     ${CONSTRUCTING+ PROVIDE (___init__end = .);}
@@ -52,7 +40,7 @@ SECTIONS
     ${CONSTRUCTING+ PROVIDE (___do_global_dtors = .);}
     ${CONSTRUCTING+ SHORT (0xe1fc); /* push srp */}
     ${CONSTRUCTING+ SHORT (0xbe7e);}
-    ${CONSTRUCTING+ KEEP (*(SORT_NONE(.fini)))}
+    ${CONSTRUCTING+ *(.fini)}
     ${CONSTRUCTING+ SHORT (0x0d3e); /* jump [sp+] */}
     ${CONSTRUCTING+ PROVIDE (__fini__end = .);}
     ${CONSTRUCTING+  ___fini__end = .;}
@@ -61,16 +49,14 @@ SECTIONS
     ${CONSTRUCTING+ PROVIDE(___ctors = .);}
     ${CONSTRUCTING+ ___elf_ctors_dtors_begin = .;}
     ${CONSTRUCTING+ KEEP (*crtbegin.o(.ctors))}
-    ${CONSTRUCTING+ KEEP (*crtbegin?.o(.ctors))}
-    ${CONSTRUCTING+ KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .ctors))}
+    ${CONSTRUCTING+ KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))}
     ${CONSTRUCTING+ KEEP (*(SORT(.ctors.*)))}
     ${CONSTRUCTING+ KEEP (*(.ctors))}
     ${CONSTRUCTING+ PROVIDE(___ctors_end = .);}
 
     ${CONSTRUCTING+ PROVIDE(___dtors = .);}
     ${CONSTRUCTING+ KEEP (*crtbegin.o(.dtors))}
-    ${CONSTRUCTING+ KEEP (*crtbegin?.o(.dtors))}
-    ${CONSTRUCTING+ KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .dtors))}
+    ${CONSTRUCTING+ KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))}
     ${CONSTRUCTING+ KEEP (*(SORT(.dtors.*)))}
     ${CONSTRUCTING+ KEEP (*(.dtors))}
     ${CONSTRUCTING+ PROVIDE(___dtors_end = .);}

@@ -1,21 +1,22 @@
 /* Hardware ports.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998 Free Software Foundation, Inc.
    Contributed by Andrew Cagney and Cygnus Solutions.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 
 #include "hw-main.h"
@@ -35,9 +36,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <ctype.h>
 
+#define TRACE(x,y)
 
-struct hw_port_edge
-{
+
+struct hw_port_edge {
   int my_port;
   struct hw *dest;
   int dest_port;
@@ -45,16 +47,14 @@ struct hw_port_edge
   object_disposition disposition;
 };
 
-struct hw_port_data
-{
+struct hw_port_data {
   hw_port_event_method *to_port_event;
   const struct hw_port_descriptor *ports;
   struct hw_port_edge *edges;
 };
 
-const struct hw_port_descriptor empty_hw_ports[] =
-{
-  { NULL, 0, 0, 0 },
+const struct hw_port_descriptor empty_hw_ports[] = {
+  { NULL, },
 };
 
 static void
@@ -245,7 +245,7 @@ hw_port_decode (struct hw *me,
 {
   if (port_name == NULL || port_name[0] == '\0')
     return 0;
-  if (isdigit (port_name[0]))
+  if (isdigit(port_name[0]))
     {
       return strtoul (port_name, NULL, 0);
     }
@@ -253,7 +253,7 @@ hw_port_decode (struct hw *me,
     {
       const struct hw_port_descriptor *ports =
 	me->ports_of_hw->ports;
-      if (ports != NULL)
+      if (ports != NULL) 
 	{
 	  while (ports->name != NULL)
 	    {
@@ -267,7 +267,7 @@ hw_port_decode (struct hw *me,
 			{
 			  if (port_name[len] == '\0')
 			    return ports->number;
-			  else if (isdigit (port_name[len]))
+			  else if(isdigit (port_name[len]))
 			    {
 			      int port = (ports->number
 					  + strtoul (&port_name[len], NULL, 0));
@@ -286,7 +286,7 @@ hw_port_decode (struct hw *me,
 	    }
 	}
     }
-  hw_abort (me, "Unrecognized port %s", port_name);
+  hw_abort (me, "Unreconized port %s", port_name);
   return 0;
 }
 
@@ -312,7 +312,7 @@ hw_port_encode (struct hw *me,
 		    && port_number < ports->number + ports->nr_ports)
 		  {
 		    strcpy (buf, ports->name);
-		    sprintf (buf + strlen (buf), "%d", port_number - ports->number);
+		    sprintf (buf + strlen(buf), "%d", port_number - ports->number);
 		    if (strlen (buf) >= sizeof_buf)
 		      hw_abort (me, "hw_port_encode: buffer overflow");
 		    return strlen (buf);
@@ -322,10 +322,10 @@ hw_port_encode (struct hw *me,
 	      {
 		if (ports->number == port_number)
 		  {
-		    if (strlen (ports->name) >= sizeof_buf)
+		    if (strlen(ports->name) >= sizeof_buf)
 		      hw_abort (me, "hw_port_encode: buffer overflow");
-		    strcpy (buf, ports->name);
-		    return strlen (buf);
+		    strcpy(buf, ports->name);
+		    return strlen(buf);
 		  }
 	      }
 	  }
@@ -333,7 +333,7 @@ hw_port_encode (struct hw *me,
       }
   }
   sprintf (buf, "%d", port_number);
-  if (strlen (buf) >= sizeof_buf)
+  if (strlen(buf) >= sizeof_buf)
     hw_abort (me, "hw_port_encode: buffer overflow");
-  return strlen (buf);
+  return strlen(buf);
 }

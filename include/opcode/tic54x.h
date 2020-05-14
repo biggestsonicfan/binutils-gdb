@@ -1,23 +1,23 @@
 /* tic54x.h -- Header file for TI TMS320C54X opcode table
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000 Free Software Foundation, Inc.
    Written by Timothy Wall (twall@cygnus.com)
 
-   This file is part of GDB, GAS, and the GNU binutils.
+This file is part of GDB, GAS, and the GNU binutils.
 
-   GDB, GAS, and the GNU binutils are free software; you can redistribute
-   them and/or modify them under the terms of the GNU General Public
-   License as published by the Free Software Foundation; either version 3,
-   or (at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-   GDB, GAS, and the GNU binutils are distributed in the hope that they
-   will be useful, but WITHOUT ANY WARRANTY; without even the implied
-   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
-   the GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING3.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #ifndef _opcode_tic54x_h_
 #define _opcode_tic54x_h_
@@ -26,7 +26,7 @@ typedef struct _symbol
 {
   const char *name;
   unsigned short value;
-} tic54x_symbol;
+} symbol;
 
 enum optype {
   OPT = 0x8000,
@@ -147,17 +147,17 @@ typedef struct _template
   const char* parname;
   enum optype paroperand_types[MAX_OPERANDS];
 
-} insn_template;
+} template;
 
-extern const insn_template tic54x_unknown_opcode;
-extern const insn_template tic54x_optab[];
-extern const insn_template tic54x_paroptab[];
-extern const tic54x_symbol mmregs[], regs[];
-extern const tic54x_symbol condition_codes[], cc2_codes[], status_bits[];
-extern const tic54x_symbol cc3_codes[];
+extern const template tic54x_unknown_opcode;
+extern const template tic54x_optab[];
+extern const template tic54x_paroptab[];
+extern const symbol mmregs[], regs[];
+extern const symbol condition_codes[], cc2_codes[], status_bits[];
+extern const symbol cc3_codes[];
 extern const char *misc_symbols[];
 struct disassemble_info;
-extern const insn_template* tic54x_get_insn (struct disassemble_info *, 
+extern const template* tic54x_get_insn (struct disassemble_info *, 
                                         bfd_vma, unsigned short, int *);
 
 #endif /* _opcode_tic54x_h_ */

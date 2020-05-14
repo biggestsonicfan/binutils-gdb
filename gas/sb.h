@@ -1,5 +1,5 @@
 /* sb.h - header file for string buffer manipulation routines
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright 1994, 1995, 2000 Free Software Foundation, Inc.
 
    Written by Steve and Judy Chamberlain of Cygnus Support,
       sac@cygnus.com
@@ -8,7 +8,7 @@
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -18,14 +18,17 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #ifndef SB_H
 
 #define SB_H
 
-/* String blocks
+#include <stdio.h>
+#include "ansidecl.h"
+
+/* string blocks
 
    I had a couple of choices when deciding upon this data structure.
    gas uses null terminated strings for all its internal work.  This
@@ -41,30 +44,56 @@
    Obstacks provide all the functionality needed, but are too
    complicated, hence the sb.
 
-   An sb is allocated by the caller.  */
+   An sb is allocated by the caller, and is initialzed to point to an
+   sb_element.  sb_elements are kept on a free lists, and used when
+   needed, replaced onto the free list when unused.
+ */
 
+#define sb_max_power_two    30	/* don't allow strings more than
+			           2^sb_max_power_two long */
+/* structure of an sb */
 typedef struct sb
-{
-  char *ptr;			/* Points to the current block.  */
-  size_t len;			/* How much is used.  */
-  size_t max;			/* The maximum length.  */
-}
+  {
+    char *ptr;			/* points to the current block.  */
+    int len;			/* how much is used.  */
+    int pot;			/* the maximum length is 1<<pot */
+    struct le *item;
+  }
 sb;
 
-extern void sb_new (sb *);
-extern void sb_build (sb *, size_t);
-extern void sb_kill (sb *);
-extern void sb_add_sb (sb *, sb *);
-extern void sb_scrub_and_add_sb (sb *, sb *);
-extern void sb_reset (sb *);
-extern void sb_add_char (sb *, size_t);
-extern void sb_add_string (sb *, const char *);
-extern void sb_add_buffer (sb *, const char *, size_t);
-extern char *sb_terminate (sb *);
-extern size_t sb_skip_white (size_t, sb *);
-extern size_t sb_skip_comma (size_t, sb *);
+/* Structure of the free list object of an sb */
+typedef struct le
+  {
+    struct le *next;
+    int size;
+    char data[1];
+  }
+sb_element;
+
+/* The free list */
+typedef struct
+  {
+    sb_element *size[sb_max_power_two];
+  } sb_list_vector;
+
+extern int string_count[sb_max_power_two];
+
+extern void sb_build PARAMS ((sb *, int));
+extern void sb_new PARAMS ((sb *));
+extern void sb_kill PARAMS ((sb *));
+extern void sb_add_sb PARAMS ((sb *, sb *));
+extern void sb_reset PARAMS ((sb *));
+extern void sb_add_char PARAMS ((sb *, int));
+extern void sb_add_string PARAMS ((sb *, const char *));
+extern void sb_add_buffer PARAMS ((sb *, const char *, int));
+extern void sb_print PARAMS ((FILE *, sb *));
+extern void sb_print_at PARAMS ((FILE *, int, sb *));
+extern char *sb_name PARAMS ((sb *));
+extern char *sb_terminate PARAMS ((sb *));
+extern int sb_skip_white PARAMS ((int, sb *));
+extern int sb_skip_comma PARAMS ((int, sb *));
 
 /* Actually in input-scrub.c.  */
-extern void input_scrub_include_sb (sb *, char *, int);
+extern void input_scrub_include_sb PARAMS ((sb *, char *, int));
 
 #endif /* SB_H */

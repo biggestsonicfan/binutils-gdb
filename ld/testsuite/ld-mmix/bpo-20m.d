@@ -2,7 +2,7 @@
 #source: bpo-10.s
 #as: -linker-allocated-gregs
 #ld: -m mmo
-#error: too many global registers
+#error: Too many global registers
 
 # Check that many too many gregs are recognized (and not signed/unsigned
 # bugs with checks for < 32 appear).

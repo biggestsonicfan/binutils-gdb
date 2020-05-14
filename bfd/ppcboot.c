@@ -1,24 +1,23 @@
 /* BFD back-end for PPCbug boot records.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002
+   Free Software Foundation, Inc.
    Written by Michael Meissner, Cygnus Support, <meissner@cygnus.com>
 
-   This file is part of BFD, the Binary File Descriptor library.
+This file is part of BFD, the Binary File Descriptor library.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
-
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* This is a BFD backend which may be used to write PowerPCBug boot objects.
    It may only be used for output, not input.  The intention is that this may
@@ -33,14 +32,13 @@
    the file.  objcopy cooperates by specially setting the start
    address to zero by default.  */
 
-#include "sysdep.h"
 #include "safe-ctype.h"
 #include "bfd.h"
+#include "sysdep.h"
 #include "libbfd.h"
 
 /* PPCbug location structure */
-typedef struct ppcboot_location
-{
+typedef struct ppcboot_location {
   bfd_byte	ind;
   bfd_byte	head;
   bfd_byte	sector;
@@ -48,8 +46,7 @@ typedef struct ppcboot_location
 } ppcboot_location_t;
 
 /* PPCbug partition table layout */
-typedef struct ppcboot_partition
-{
+typedef struct ppcboot_partition {
   ppcboot_location_t	partition_begin;	/* partition begin */
   ppcboot_location_t	partition_end;		/* partition end */
   bfd_byte		sector_begin[4];	/* 32-bit start RBA (zero-based), little endian */
@@ -57,8 +54,7 @@ typedef struct ppcboot_partition
 } ppcboot_partition_t;
 
 /* PPCbug boot layout.  */
-typedef struct ppcboot_hdr
-{
+typedef struct ppcboot_hdr {
   bfd_byte		pc_compatibility[446];	/* x86 instruction field */
   ppcboot_partition_t	partition[4];		/* partition information */
   bfd_byte		signature[2];		/* 0x55 and 0xaa */
@@ -82,8 +78,7 @@ ppcboot_hdr_t;
 #define PPC_IND 0x41
 
 /* Information needed for ppcboot header */
-typedef struct ppcboot_data
-{
+typedef struct ppcboot_data {
   ppcboot_hdr_t	header;				/* raw header */
   asection *sec;				/* single section */
 } ppcboot_data_t;
@@ -92,35 +87,52 @@ typedef struct ppcboot_data
    a start symbol, an end symbol, and an absolute length symbol.  */
 #define PPCBOOT_SYMS 3
 
-#define ppcboot_set_tdata(abfd, ptr) ((abfd)->tdata.any = (ptr))
+static boolean ppcboot_mkobject PARAMS ((bfd *));
+static const bfd_target *ppcboot_object_p PARAMS ((bfd *));
+static boolean ppcboot_set_arch_mach
+  PARAMS ((bfd *, enum bfd_architecture, unsigned long));
+static boolean ppcboot_get_section_contents
+  PARAMS ((bfd *, asection *, PTR, file_ptr, bfd_size_type));
+static long ppcboot_get_symtab_upper_bound PARAMS ((bfd *));
+static char *mangle_name PARAMS ((bfd *, char *));
+static long ppcboot_get_symtab PARAMS ((bfd *, asymbol **));
+static void ppcboot_get_symbol_info PARAMS ((bfd *, asymbol *, symbol_info *));
+static boolean ppcboot_set_section_contents
+  PARAMS ((bfd *, asection *, PTR, file_ptr, bfd_size_type));
+static int ppcboot_sizeof_headers PARAMS ((bfd *, boolean));
+static boolean ppcboot_bfd_print_private_bfd_data PARAMS ((bfd *, PTR));
+
+#define ppcboot_set_tdata(abfd, ptr) ((abfd)->tdata.any = (PTR) (ptr))
 #define ppcboot_get_tdata(abfd) ((ppcboot_data_t *) ((abfd)->tdata.any))
 
 /* Create a ppcboot object.  Invoked via bfd_set_format.  */
 
-static bfd_boolean
-ppcboot_mkobject (bfd *abfd)
+static boolean
+ppcboot_mkobject (abfd)
+     bfd *abfd;
 {
   if (!ppcboot_get_tdata (abfd))
     {
-      size_t amt = sizeof (ppcboot_data_t);
+      bfd_size_type amt = sizeof (ppcboot_data_t);
       ppcboot_set_tdata (abfd, bfd_zalloc (abfd, amt));
     }
 
-  return TRUE;
+  return true;
 }
 
 
 /* Set the architecture to PowerPC */
-static bfd_boolean
-ppcboot_set_arch_mach (bfd *abfd,
-		       enum bfd_architecture arch,
-		       unsigned long machine)
+static boolean
+ppcboot_set_arch_mach (abfd, arch, machine)
+     bfd *abfd;
+     enum bfd_architecture arch;
+     unsigned long machine;
 {
   if (arch == bfd_arch_unknown)
     arch = bfd_arch_powerpc;
 
   else if (arch != bfd_arch_powerpc)
-    return FALSE;
+    return false;
 
   return bfd_default_set_arch_mach (abfd, arch, machine);
 }
@@ -130,15 +142,15 @@ ppcboot_set_arch_mach (bfd *abfd,
    was not defaulted.  That is, it must be explicitly specified as
    being ppcboot.  */
 
-static bfd_cleanup
-ppcboot_object_p (bfd *abfd)
+static const bfd_target *
+ppcboot_object_p (abfd)
+     bfd *abfd;
 {
   struct stat statbuf;
   asection *sec;
   ppcboot_hdr_t hdr;
   size_t i;
   ppcboot_data_t *tdata;
-  flagword flags;
 
   BFD_ASSERT (sizeof (ppcboot_hdr_t) == 1024);
 
@@ -161,7 +173,7 @@ ppcboot_object_p (bfd *abfd)
       return NULL;
     }
 
-  if (bfd_bread (&hdr, (bfd_size_type) sizeof (hdr), abfd)
+  if (bfd_bread ((PTR) &hdr, (bfd_size_type) sizeof (hdr), abfd)
       != sizeof (hdr))
     {
       if (bfd_get_error () != bfd_error_system_call)
@@ -193,21 +205,21 @@ ppcboot_object_p (bfd *abfd)
   abfd->symcount = PPCBOOT_SYMS;
 
   /* One data section.  */
-  flags = SEC_ALLOC | SEC_LOAD | SEC_DATA | SEC_CODE | SEC_HAS_CONTENTS;
-  sec = bfd_make_section_with_flags (abfd, ".data", flags);
+  sec = bfd_make_section (abfd, ".data");
   if (sec == NULL)
     return NULL;
+  sec->flags = SEC_ALLOC | SEC_LOAD | SEC_DATA | SEC_CODE | SEC_HAS_CONTENTS;
   sec->vma = 0;
-  sec->size = statbuf.st_size - sizeof (ppcboot_hdr_t);
+  sec->_raw_size = statbuf.st_size - sizeof (ppcboot_hdr_t);
   sec->filepos = sizeof (ppcboot_hdr_t);
 
   ppcboot_mkobject (abfd);
   tdata = ppcboot_get_tdata (abfd);
   tdata->sec = sec;
-  memcpy (&tdata->header, &hdr, sizeof (ppcboot_hdr_t));
+  memcpy ((PTR) &tdata->header, (PTR) &hdr, sizeof (ppcboot_hdr_t));
 
   ppcboot_set_arch_mach (abfd, bfd_arch_powerpc, 0L);
-  return _bfd_no_cleanup;
+  return abfd->xvec;
 }
 
 #define ppcboot_close_and_cleanup _bfd_generic_close_and_cleanup
@@ -217,24 +229,26 @@ ppcboot_object_p (bfd *abfd)
 
 /* Get contents of the only section.  */
 
-static bfd_boolean
-ppcboot_get_section_contents (bfd *abfd,
-			      asection *section ATTRIBUTE_UNUSED,
-			      void * location,
-			      file_ptr offset,
-			      bfd_size_type count)
+static boolean
+ppcboot_get_section_contents (abfd, section, location, offset, count)
+     bfd *abfd;
+     asection *section ATTRIBUTE_UNUSED;
+     PTR location;
+     file_ptr offset;
+     bfd_size_type count;
 {
   if (bfd_seek (abfd, offset + (file_ptr) sizeof (ppcboot_hdr_t), SEEK_SET) != 0
       || bfd_bread (location, count, abfd) != count)
-    return FALSE;
-  return TRUE;
+    return false;
+  return true;
 }
 
 
 /* Return the amount of memory needed to read the symbol table.  */
 
 static long
-ppcboot_get_symtab_upper_bound (bfd *abfd ATTRIBUTE_UNUSED)
+ppcboot_get_symtab_upper_bound (abfd)
+     bfd *abfd ATTRIBUTE_UNUSED;
 {
   return (PPCBOOT_SYMS + 1) * sizeof (asymbol *);
 }
@@ -243,7 +257,9 @@ ppcboot_get_symtab_upper_bound (bfd *abfd ATTRIBUTE_UNUSED)
 /* Create a symbol name based on the bfd's filename.  */
 
 static char *
-mangle_name (bfd *abfd, char *suffix)
+mangle_name (abfd, suffix)
+     bfd *abfd;
+     char *suffix;
 {
   bfd_size_type size;
   char *buf;
@@ -271,16 +287,18 @@ mangle_name (bfd *abfd, char *suffix)
 /* Return the symbol table.  */
 
 static long
-ppcboot_canonicalize_symtab (bfd *abfd, asymbol **alocation)
+ppcboot_get_symtab (abfd, alocation)
+     bfd *abfd;
+     asymbol **alocation;
 {
   asection *sec = ppcboot_get_tdata (abfd)->sec;
   asymbol *syms;
   unsigned int i;
-  size_t amt = PPCBOOT_SYMS * sizeof (asymbol);
+  bfd_size_type amt = PPCBOOT_SYMS * sizeof (asymbol);
 
   syms = (asymbol *) bfd_alloc (abfd, amt);
   if (syms == NULL)
-    return FALSE;
+    return false;
 
   /* Start symbol.  */
   syms[0].the_bfd = abfd;
@@ -293,7 +311,7 @@ ppcboot_canonicalize_symtab (bfd *abfd, asymbol **alocation)
   /* End symbol.  */
   syms[1].the_bfd = abfd;
   syms[1].name = mangle_name (abfd, "end");
-  syms[1].value = sec->size;
+  syms[1].value = sec->_raw_size;
   syms[1].flags = BSF_GLOBAL;
   syms[1].section = sec;
   syms[1].udata.p = NULL;
@@ -301,7 +319,7 @@ ppcboot_canonicalize_symtab (bfd *abfd, asymbol **alocation)
   /* Size symbol.  */
   syms[2].the_bfd = abfd;
   syms[2].name = mangle_name (abfd, "size");
-  syms[2].value = sec->size;
+  syms[2].value = sec->_raw_size;
   syms[2].flags = BSF_GLOBAL;
   syms[2].section = bfd_abs_section_ptr;
   syms[2].udata.p = NULL;
@@ -319,33 +337,36 @@ ppcboot_canonicalize_symtab (bfd *abfd, asymbol **alocation)
 /* Get information about a symbol.  */
 
 static void
-ppcboot_get_symbol_info (bfd *ignore_abfd ATTRIBUTE_UNUSED,
-			 asymbol *symbol,
-			 symbol_info *ret)
+ppcboot_get_symbol_info (ignore_abfd, symbol, ret)
+     bfd *ignore_abfd ATTRIBUTE_UNUSED;
+     asymbol *symbol;
+     symbol_info *ret;
 {
   bfd_symbol_info (symbol, ret);
 }
 
-#define ppcboot_get_symbol_version_string \
-  _bfd_nosymbols_get_symbol_version_string
-#define ppcboot_bfd_is_target_special_symbol _bfd_bool_bfd_asymbol_false
 #define ppcboot_bfd_is_local_label_name bfd_generic_is_local_label_name
 #define ppcboot_get_lineno _bfd_nosymbols_get_lineno
 #define ppcboot_find_nearest_line _bfd_nosymbols_find_nearest_line
-#define ppcboot_find_line _bfd_nosymbols_find_line
-#define ppcboot_find_inliner_info _bfd_nosymbols_find_inliner_info
 #define ppcboot_bfd_make_debug_symbol _bfd_nosymbols_bfd_make_debug_symbol
 #define ppcboot_read_minisymbols _bfd_generic_read_minisymbols
 #define ppcboot_minisymbol_to_symbol _bfd_generic_minisymbol_to_symbol
+
+#define ppcboot_get_reloc_upper_bound \
+  ((long (*) PARAMS ((bfd *, asection *))) bfd_0l)
+#define ppcboot_canonicalize_reloc \
+  ((long (*) PARAMS ((bfd *, asection *, arelent **, asymbol **))) bfd_0l)
+#define ppcboot_bfd_reloc_type_lookup _bfd_norelocs_bfd_reloc_type_lookup
 
 /* Write section contents of a ppcboot file.  */
 
-static bfd_boolean
-ppcboot_set_section_contents (bfd *abfd,
-			      asection *sec,
-			      const void * data,
-			      file_ptr offset,
-			      bfd_size_type size)
+static boolean
+ppcboot_set_section_contents (abfd, sec, data, offset, size)
+     bfd *abfd;
+     asection *sec;
+     PTR data;
+     file_ptr offset;
+     bfd_size_type size;
 {
   if (! abfd->output_has_begun)
     {
@@ -353,8 +374,8 @@ ppcboot_set_section_contents (bfd *abfd,
       asection *s;
 
       /* The lowest section VMA sets the virtual address of the start
-	 of the file.  We use the set the file position of all the
-	 sections.  */
+         of the file.  We use the set the file position of all the
+         sections.  */
       low = abfd->sections->vma;
       for (s = abfd->sections->next; s != NULL; s = s->next)
 	if (s->vma < low)
@@ -363,7 +384,7 @@ ppcboot_set_section_contents (bfd *abfd,
       for (s = abfd->sections; s != NULL; s = s->next)
 	s->filepos = s->vma - low;
 
-      abfd->output_has_begun = TRUE;
+      abfd->output_has_begun = true;
     }
 
   return _bfd_generic_set_section_contents (abfd, sec, data, offset, size);
@@ -371,8 +392,9 @@ ppcboot_set_section_contents (bfd *abfd,
 
 
 static int
-ppcboot_sizeof_headers (bfd *abfd ATTRIBUTE_UNUSED,
-			struct bfd_link_info *info ATTRIBUTE_UNUSED)
+ppcboot_sizeof_headers (abfd, exec)
+     bfd *abfd ATTRIBUTE_UNUSED;
+     boolean exec ATTRIBUTE_UNUSED;
 {
   return sizeof (ppcboot_hdr_t);
 }
@@ -380,20 +402,20 @@ ppcboot_sizeof_headers (bfd *abfd ATTRIBUTE_UNUSED,
 
 /* Print out the program headers.  */
 
-static bfd_boolean
-ppcboot_bfd_print_private_bfd_data (bfd *abfd, void * farg)
+static boolean
+ppcboot_bfd_print_private_bfd_data (abfd, farg)
+     bfd *abfd;
+     PTR farg;
 {
   FILE *f = (FILE *)farg;
   ppcboot_data_t *tdata = ppcboot_get_tdata (abfd);
-  long entry_offset = bfd_getl_signed_32 (tdata->header.entry_offset);
-  long length = bfd_getl_signed_32 (tdata->header.length);
+  long entry_offset = bfd_getl_signed_32 ((PTR) tdata->header.entry_offset);
+  long length = bfd_getl_signed_32 ((PTR) tdata->header.length);
   int i;
 
   fprintf (f, _("\nppcboot header:\n"));
-  fprintf (f, _("Entry offset        = 0x%.8lx (%ld)\n"),
-	   (unsigned long) entry_offset, entry_offset);
-  fprintf (f, _("Length              = 0x%.8lx (%ld)\n"),
-	   (unsigned long) length, length);
+  fprintf (f, _("Entry offset        = 0x%.8lx (%ld)\n"), entry_offset, entry_offset);
+  fprintf (f, _("Length              = 0x%.8lx (%ld)\n"), length, length);
 
   if (tdata->header.flags)
     fprintf (f, _("Flag field          = 0x%.2x\n"), tdata->header.flags);
@@ -401,13 +423,13 @@ ppcboot_bfd_print_private_bfd_data (bfd *abfd, void * farg)
   if (tdata->header.os_id)
     fprintf (f, "OS_ID               = 0x%.2x\n", tdata->header.os_id);
 
-  if (tdata->header.partition_name[0])
+  if (tdata->header.partition_name)
     fprintf (f, _("Partition name      = \"%s\"\n"), tdata->header.partition_name);
 
   for (i = 0; i < 4; i++)
     {
-      long sector_begin  = bfd_getl_signed_32 (tdata->header.partition[i].sector_begin);
-      long sector_length = bfd_getl_signed_32 (tdata->header.partition[i].sector_length);
+      long sector_begin  = bfd_getl_signed_32 ((PTR) tdata->header.partition[i].sector_begin);
+      long sector_length = bfd_getl_signed_32 ((PTR) tdata->header.partition[i].sector_length);
 
       /* Skip all 0 entries */
       if (!tdata->header.partition[i].partition_begin.ind
@@ -421,31 +443,24 @@ ppcboot_bfd_print_private_bfd_data (bfd *abfd, void * farg)
 	  && !sector_begin && !sector_length)
 	continue;
 
-      /* xgettext:c-format */
       fprintf (f, _("\nPartition[%d] start  = { 0x%.2x, 0x%.2x, 0x%.2x, 0x%.2x }\n"), i,
 	       tdata->header.partition[i].partition_begin.ind,
 	       tdata->header.partition[i].partition_begin.head,
 	       tdata->header.partition[i].partition_begin.sector,
 	       tdata->header.partition[i].partition_begin.cylinder);
 
-      /* xgettext:c-format */
       fprintf (f, _("Partition[%d] end    = { 0x%.2x, 0x%.2x, 0x%.2x, 0x%.2x }\n"), i,
 	       tdata->header.partition[i].partition_end.ind,
 	       tdata->header.partition[i].partition_end.head,
 	       tdata->header.partition[i].partition_end.sector,
 	       tdata->header.partition[i].partition_end.cylinder);
 
-      /* xgettext:c-format */
-      fprintf (f, _("Partition[%d] sector = 0x%.8lx (%ld)\n"),
-	       i, (unsigned long) sector_begin, sector_begin);
-
-      /* xgettext:c-format */
-      fprintf (f, _("Partition[%d] length = 0x%.8lx (%ld)\n"),
-	       i, (unsigned long) sector_length, sector_length);
+      fprintf (f, _("Partition[%d] sector = 0x%.8lx (%ld)\n"), i, sector_begin, sector_begin);
+      fprintf (f, _("Partition[%d] length = 0x%.8lx (%ld)\n"), i, sector_length, sector_length);
     }
 
   fprintf (f, "\n");
-  return TRUE;
+  return true;
 }
 
 
@@ -453,36 +468,25 @@ ppcboot_bfd_print_private_bfd_data (bfd *abfd, void * farg)
   bfd_generic_get_relocated_section_contents
 #define ppcboot_bfd_relax_section bfd_generic_relax_section
 #define ppcboot_bfd_gc_sections bfd_generic_gc_sections
-#define ppcboot_bfd_lookup_section_flags bfd_generic_lookup_section_flags
 #define ppcboot_bfd_merge_sections bfd_generic_merge_sections
-#define ppcboot_bfd_is_group_section bfd_generic_is_group_section
-#define ppcboot_bfd_group_name bfd_generic_group_name
 #define ppcboot_bfd_discard_group bfd_generic_discard_group
-#define ppcboot_section_already_linked \
-  _bfd_generic_section_already_linked
-#define ppcboot_bfd_define_common_symbol bfd_generic_define_common_symbol
-#define ppcboot_bfd_link_hide_symbol _bfd_generic_link_hide_symbol
-#define ppcboot_bfd_define_start_stop bfd_generic_define_start_stop
 #define ppcboot_bfd_link_hash_table_create _bfd_generic_link_hash_table_create
+#define ppcboot_bfd_link_hash_table_free _bfd_generic_link_hash_table_free
 #define ppcboot_bfd_link_add_symbols _bfd_generic_link_add_symbols
 #define ppcboot_bfd_link_just_syms _bfd_generic_link_just_syms
-#define ppcboot_bfd_copy_link_hash_symbol_type \
-  _bfd_generic_copy_link_hash_symbol_type
 #define ppcboot_bfd_final_link _bfd_generic_final_link
 #define ppcboot_bfd_link_split_section _bfd_generic_link_split_section
 #define ppcboot_get_section_contents_in_window \
   _bfd_generic_get_section_contents_in_window
-#define ppcboot_bfd_link_check_relocs _bfd_generic_link_check_relocs
 
 #define ppcboot_bfd_copy_private_bfd_data _bfd_generic_bfd_copy_private_bfd_data
 #define ppcboot_bfd_merge_private_bfd_data _bfd_generic_bfd_merge_private_bfd_data
 #define ppcboot_bfd_copy_private_section_data _bfd_generic_bfd_copy_private_section_data
 #define ppcboot_bfd_copy_private_symbol_data _bfd_generic_bfd_copy_private_symbol_data
-#define ppcboot_bfd_copy_private_header_data _bfd_generic_bfd_copy_private_header_data
 #define ppcboot_bfd_set_private_flags _bfd_generic_bfd_set_private_flags
 #define ppcboot_bfd_print_private_bfd_dat ppcboot_bfd_print_private_bfd_data
 
-const bfd_target powerpc_boot_vec =
+const bfd_target ppcboot_vec =
 {
   "ppcboot",			/* name */
   bfd_target_unknown_flavour,	/* flavour */
@@ -494,7 +498,6 @@ const bfd_target powerpc_boot_vec =
   0,				/* symbol_leading_char */
   ' ',				/* ar_pad_char */
   16,				/* ar_max_namelen */
-  0,				/* match priority.  */
   bfd_getb64, bfd_getb_signed_64, bfd_putb64,
   bfd_getb32, bfd_getb_signed_32, bfd_putb32,
   bfd_getb16, bfd_getb_signed_16, bfd_putb16,	/* data */
@@ -508,16 +511,16 @@ const bfd_target powerpc_boot_vec =
     _bfd_dummy_target,
   },
   {				/* bfd_set_format */
-    _bfd_bool_bfd_false_error,
+    bfd_false,
     ppcboot_mkobject,
-    _bfd_bool_bfd_false_error,
-    _bfd_bool_bfd_false_error,
+    bfd_false,
+    bfd_false,
   },
   {				/* bfd_write_contents */
-    _bfd_bool_bfd_false_error,
-    _bfd_bool_bfd_true,
-    _bfd_bool_bfd_false_error,
-    _bfd_bool_bfd_false_error,
+    bfd_false,
+    bfd_true,
+    bfd_false,
+    bfd_false,
   },
 
   BFD_JUMP_TABLE_GENERIC (ppcboot),
@@ -525,7 +528,7 @@ const bfd_target powerpc_boot_vec =
   BFD_JUMP_TABLE_CORE (_bfd_nocore),
   BFD_JUMP_TABLE_ARCHIVE (_bfd_noarchive),
   BFD_JUMP_TABLE_SYMBOLS (ppcboot),
-  BFD_JUMP_TABLE_RELOCS (_bfd_norelocs),
+  BFD_JUMP_TABLE_RELOCS (ppcboot),
   BFD_JUMP_TABLE_WRITE (ppcboot),
   BFD_JUMP_TABLE_LINK (ppcboot),
   BFD_JUMP_TABLE_DYNAMIC (_bfd_nodynamic),

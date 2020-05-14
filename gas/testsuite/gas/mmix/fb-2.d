@@ -3,10 +3,10 @@
 .*:     file format elf64-mmix
 
 SYMBOL TABLE:
-0+ l    d  \.text	0+ (|\.text)
-0+ l    d  \.data	0+ (|\.data)
-0+ l    d  \.bss	0+ (|\.bss)
-0+ l    d  \.MMIX\.reg_contents	0+ (|\.MMIX\.reg_contents)
+0+ l    d  \.text	0+ 
+0+ l    d  \.data	0+ 
+0+ l    d  \.bss	0+ 
+0+ l    d  \.MMIX\.reg_contents	0+ 
 0+10 g       \*ABS\*	0+ __\.MMIX\.start\.\.text
 
 
@@ -28,5 +28,6 @@ Contents of section \.text:
  0020 00000000 fd000000 231e0000 00000000  .*
  0030 00000000 00000000 00000000 00000000  .*
  0040 fd000000 002a002b 002b002c           .*
+Contents of section \.data:
 Contents of section \.MMIX\.reg_contents:
  0000 00000000 00000000                    .*

@@ -15,7 +15,6 @@ struct B : public A
 void B::foo() { }			// lose
 
 void _start() __asm__("_start");	// keep
-void start() __asm__("start"); // some toolchains use this name.
 
 A a;					// keep
 B b;
@@ -24,11 +23,6 @@ A *getme() { return &a; }		// keep
 void _start()
 {
   getme()->bar();
-}
-
-void start ()
-{
-  _start ();
 }
 
 extern "C" void __main() { }

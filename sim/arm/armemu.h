@@ -3,7 +3,7 @@
  
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
  
     This program is distributed in the hope that it will be useful,
@@ -12,13 +12,10 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>. */
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 
 extern ARMword isize;
-extern int trace;
-extern int disas;
-extern int trace_funcs;
-extern void print_insn (ARMword);
 
 /* Condition code values.  */
 #define EQ 0
@@ -50,10 +47,6 @@ extern void print_insn (ARMword);
 #define CBIT (1L << 29)
 #define VBIT (1L << 28)
 #define SBIT (1L << 27)
-#define GE0 (1L << 16)
-#define GE1 (1L << 17)
-#define GE2 (1L << 18)
-#define GE3 (1L << 19)
 #define IBIT (1L << 7)
 #define FBIT (1L << 6)
 #define IFBITS (3L << 6)
@@ -410,7 +403,7 @@ extern void print_insn (ARMword);
   do						\
     {						\
       if (DESTReg == 15)			\
-	WriteR15Load (state, d);		\
+	WriteR15Branch (state, d);		\
       else					\
 	DEST = d;				\
     }						\
@@ -462,34 +455,31 @@ typedef enum
 }
 tdstate;
 
-#define t_resolved t_branch
-
-/* Macros to scrutinize instructions.  The dummy do loop is to keep the compiler
-   happy when the statement is used in an otherwise empty else statement.  */
-#define UNDEF_Test		do { ; } while (0)
-#define UNDEF_Shift		do { ; } while (0)
-#define UNDEF_MSRPC		do { ; } while (0)
-#define UNDEF_MRSPC		do { ; } while (0)
-#define UNDEF_MULPCDest		do { ; } while (0)
-#define UNDEF_MULDestEQOp1	do { ; } while (0)
-#define UNDEF_LSRBPC		do { ; } while (0)
-#define UNDEF_LSRBaseEQOffWb	do { ; } while (0)
-#define UNDEF_LSRBaseEQDestWb	do { ; } while (0)
-#define UNDEF_LSRPCBaseWb	do { ; } while (0)
-#define UNDEF_LSRPCOffWb	do { ; } while (0)
-#define UNDEF_LSMNoRegs		do { ; } while (0)
-#define UNDEF_LSMPCBase		do { ; } while (0)
-#define UNDEF_LSMUserBankWb	do { ; } while (0)
-#define UNDEF_LSMBaseInListWb	do { ; } while (0)
-#define UNDEF_SWPPC		do { ; } while (0)
-#define UNDEF_CoProHS		do { ; } while (0)
-#define UNDEF_MCRPC		do { ; } while (0)
-#define UNDEF_LSCPCBaseWb	do { ; } while (0)
-#define UNDEF_UndefNotBounced	do { ; } while (0)
-#define UNDEF_ShortInt		do { ; } while (0)
-#define UNDEF_IllegalMode	do { ; } while (0)
-#define UNDEF_Prog32SigChange	do { ; } while (0)
-#define UNDEF_Data32SigChange	do { ; } while (0)
+/* Macros to scrutinize instructions.  */
+#define UNDEF_Test
+#define UNDEF_Shift
+#define UNDEF_MSRPC
+#define UNDEF_MRSPC
+#define UNDEF_MULPCDest
+#define UNDEF_MULDestEQOp1
+#define UNDEF_LSRBPC
+#define UNDEF_LSRBaseEQOffWb
+#define UNDEF_LSRBaseEQDestWb
+#define UNDEF_LSRPCBaseWb
+#define UNDEF_LSRPCOffWb
+#define UNDEF_LSMNoRegs
+#define UNDEF_LSMPCBase
+#define UNDEF_LSMUserBankWb
+#define UNDEF_LSMBaseInListWb
+#define UNDEF_SWPPC
+#define UNDEF_CoProHS
+#define UNDEF_MCRPC
+#define UNDEF_LSCPCBaseWb
+#define UNDEF_UndefNotBounced
+#define UNDEF_ShortInt
+#define UNDEF_IllegalMode
+#define UNDEF_Prog32SigChange
+#define UNDEF_Data32SigChange
 
 /* Prototypes for exported functions.  */
 extern unsigned ARMul_NthReg        (ARMword, unsigned);
@@ -540,16 +530,3 @@ extern void     ARMul_CoProAttach   (ARMul_State *, unsigned, ARMul_CPInits *, A
 extern void     ARMul_CoProDetach   (ARMul_State *, unsigned);
 extern ARMword  read_cp15_reg       (unsigned, unsigned, unsigned);
 
-extern unsigned DSPLDC4 (ARMul_State *, unsigned, ARMword, ARMword);
-extern unsigned DSPMCR4 (ARMul_State *, unsigned, ARMword, ARMword);
-extern unsigned DSPMRC4 (ARMul_State *, unsigned, ARMword, ARMword *);
-extern unsigned	DSPSTC4 (ARMul_State *, unsigned, ARMword, ARMword *);
-extern unsigned	DSPCDP4 (ARMul_State *, unsigned, ARMword);
-extern unsigned DSPMCR5 (ARMul_State *, unsigned, ARMword, ARMword);
-extern unsigned DSPMRC5 (ARMul_State *, unsigned, ARMword, ARMword *);
-extern unsigned DSPLDC5 (ARMul_State *, unsigned, ARMword, ARMword);
-extern unsigned	DSPSTC5 (ARMul_State *, unsigned, ARMword, ARMword *);
-extern unsigned	DSPCDP5 (ARMul_State *, unsigned, ARMword);
-extern unsigned DSPMCR6 (ARMul_State *, unsigned, ARMword, ARMword);
-extern unsigned DSPMRC6 (ARMul_State *, unsigned, ARMword, ARMword *);
-extern unsigned	DSPCDP6 (ARMul_State *, unsigned, ARMword);

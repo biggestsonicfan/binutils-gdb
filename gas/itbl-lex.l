@@ -1,29 +1,28 @@
-%option noyywrap
-
 /* itbl-lex.l
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright 1997, 1998, 2001 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
-   GAS is distributed in the hope that it will be useful,
+   GAS is distributed in the hope that it will be useful, 
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 %{
-#include "as.h"
-#include "itbl-lex.h"
-#include <itbl-parse.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "itbl-parse.h"
 
 #ifdef DEBUG
 #define DBG(x) printf x
@@ -83,24 +82,32 @@ HEX	[0-9A-Fa-f]
   }
 ";"|"#"	{
     int c;
-    while ((c = input ()) !=  EOF)
+    while ((c = input ()) !=  EOF) 
       {
-        if (c ==  '\n')
+        if (c ==  '\n') 
     	{
     		unput (c);
     		break;
     	}
       }
   }
-"\n"	{
-    insntbl_line++;
+"\n"	{ 
+    insntbl_line++; 
     MDBG (("in lex, NL = %d (x%x)\n", NL, NL));
-    return NL;
+    return NL; 
   }
-" "|"\t" {
+" "|"\t" { 
   }
 . {
     MDBG (("char = %x, %d\n", yytext[0], yytext[0]));
     return yytext[0];
   }
 %%
+
+#ifndef yywrap
+int 
+yywrap () 
+  { 
+    return 1; 
+  }
+#endif

@@ -1,33 +1,45 @@
-# Copyright (C) 1992-2020 Free Software Foundation, Inc.
+# Copyright (C) 1992, 1997, 2001 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Jeff Law. (law@cs.utah.edu)
 
-if { [prepare_for_testing "failed to prepare" "return"] } {
-    return -1
+if $tracelevel then {
+	strace $tracelevel
 }
 
-set skip_float_test [gdb_skip_float_test]
+set prms_id 0
+set bug_id 0
+
+set testfile "return"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
 
 proc return_tests { } {
-    global gdb_prompt skip_float_test
+    global gdb_prompt
 
 
     if { ! [ runto func1 ] } then { return 0 }
-
-    gdb_test_multiple "return" "simple return" {
+    send_gdb "return\n"
+    gdb_expect {
 	-re "Make .* return now.*y or n. $" {
 	    send_gdb "y\n"
 	    exp_continue
@@ -36,27 +48,26 @@ proc return_tests { } {
 	    send_gdb "step\n"
 	    exp_continue
 	}
-	-re ".*in main after func1.*$gdb_prompt $" { 
-	    pass "simple return" 
-	}
+    -re ".*in main after func1.*$gdb_prompt $" { pass "simple return" }
+    -re "$gdb_prompt $" { fail "simple return" }
+    timeout { fail "(timeout) simple return" }
     }
 
     # Set breakpoints in other interesting functions.
-    gdb_test "break func2" ".*"
-    gdb_test "break func3" ".*"
+    gdb_test "break func2" "" "break func2"
+    gdb_test "break func3" "" "break func3"
 
     gdb_test "continue" "return -5;" "continue to return of -5"
-
-    gdb_test_multiple "return 5" "return value 5" {
+    send_gdb "return 5\n"
+    gdb_expect {
 	-re "Make .* return now.*y or n. $" {
 	    send_gdb "y\n"
 	    exp_continue
 	}
-	-re ".*tmp2 = func2.*$gdb_prompt $" {
-	    # pass without comment
-	}
+    -re ".*tmp2 = func2.*$gdb_prompt $" { }
+    -re "$gdb_prompt $" { fail "did not return (integer test)" }
+    timeout { fail "(timeout) did not return (integer test)" }
     }
-
     gdb_test "next" "tmp3 = func3.*" "next over call to func2"
 
     gdb_test "p tmp2" ".* = 5" "correct value returned (integer test)"
@@ -66,15 +77,15 @@ proc return_tests { } {
     # Return of a double does not work for 68hc11 (need struct return
     # in memory).
     setup_xfail "m6811-*-*"
-
-    gdb_test_multiple "return 5.0" "return value 5.0" {
+    send_gdb "return 5.0\n"
+    gdb_expect {
 	-re "Make .* return now.*y or n. $" {
 	    send_gdb "y\n"
 	    exp_continue
 	}
-	-re ".*tmp3 = func3.*$gdb_prompt $" {
-	    # pass without comment
-	}
+	-re ".*tmp3 = func3.*$gdb_prompt $" { }
+	-re "$gdb_prompt $" { fail "did not return (double test)" }
+	timeout { fail "(timeout) did not return (double test)" }
     }
 
     setup_xfail "m6811-*-*"
@@ -90,13 +101,16 @@ proc return_tests { } {
     # is not xfailed.
 
     setup_xfail "sparc-*-solaris2.3*" "sparc-*-solaris2.4*" "m6811-*-*"
-    if {!$skip_float_test} {
-	gdb_test "p tmp3" ".* = 5.*" \
-	    "correct value returned double test (known problem with sparc solaris)"
-    }
+    gdb_test "p tmp3" ".* = 5.*" "correct value returned double test (known problem with sparc solaris)"
 }
 
-set prev_timeout $timeout
+
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
 set timeout 30
 return_tests
-set timeout $prev_timeout

@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -100,7 +101,7 @@ detach_device_interrupt_edge(device *me,
       if (old_edge->disposition == permenant_object)
 	device_error(me, "attempt to delete permenant interrupt");
       *list = old_edge->next;
-      free(old_edge);
+      zfree(old_edge);
       return;
     }
   }
@@ -119,7 +120,7 @@ clean_device_interrupt_edges(device_interrupt_edge **list)
       break;
     case tempoary_object:
       *list = old_edge->next;
-      free(old_edge);
+      zfree(old_edge);
       break;
     }
   }
@@ -589,9 +590,9 @@ device_instance_delete(device_instance *instance)
     device_error(me, "no delete method");
   instance->callback->delete(instance);
   if (instance->args != NULL)
-    free(instance->args);
+    zfree(instance->args);
   if (instance->path != NULL)
-    free(instance->path);
+    zfree(instance->path);
   if (instance->child == NULL) {
     /* only remove leaf nodes */
     device_instance **curr = &me->instances;
@@ -613,7 +614,7 @@ device_instance_delete(device_instance *instance)
     instance->child->parent = NULL;
   }
   cap_remove(me->ihandles, instance);
-  free(instance);
+  zfree(instance);
 }
 
 INLINE_DEVICE\
@@ -790,7 +791,7 @@ device_set_property(device *me,
       device_error(me, "conflict between type of new and old value for property %s", property);
     /* replace its value */
     if (value->array != NULL)
-      free((void*)value->array);
+      zfree((void*)value->array);
     new_array = (sizeof_array > 0
 		 ? zalloc(sizeof_array)
 		 : (void*)0);
@@ -821,7 +822,7 @@ clean_device_properties(device *me)
       /* zap the current value, will be initialized later */
       ASSERT(current->init_array != NULL);
       if (current->value->array != NULL) {
-	free((void*)current->value->array);
+	zfree((void*)current->value->array);
 	current->value->array = NULL;
       }
       delete_point = &(*delete_point)->next;
@@ -831,9 +832,9 @@ clean_device_properties(device *me)
       ASSERT(current->init_array == NULL);
       *delete_point = current->next;
       if (current->value->array != NULL)
-	free((void*)current->value->array);
-      free(current->value);
-      free(current);
+	zfree((void*)current->value->array);
+      zfree(current->value);
+      zfree(current);
       break;
     }
   }
@@ -1238,7 +1239,7 @@ device_add_range_array_property(device *me,
 		      cells, sizeof_cells,
 		      NULL, permenant_object);
 
-  free(cells);
+  zfree(cells);
 }
 
 INLINE_DEVICE\
@@ -1329,7 +1330,7 @@ device_add_reg_array_property(device *me,
 		      cells, sizeof_cells,
 		      NULL, permenant_object);
 
-  free(cells);
+  zfree(cells);
 }
 
 INLINE_DEVICE\
@@ -1815,7 +1816,7 @@ device_ioctl(device *me,
 /* I/O */
 
 EXTERN_DEVICE\
-(void)
+(void volatile)
 device_error(device *me,
 	     const char *fmt,
 	     ...)

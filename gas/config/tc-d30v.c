@@ -1,11 +1,11 @@
 /* tc-d30v.c -- Assembler code for the Mitsubishi D30V
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright 1997, 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,21 +15,21 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
+#include <stdio.h>
 #include "as.h"
 #include "safe-ctype.h"
 #include "subsegs.h"
 #include "opcode/d30v.h"
-#include "dwarf2dbg.h"
 
-const char comment_chars[]        = ";";
-const char line_comment_chars[]   = "#";
+const char comment_chars[] = ";";
+const char line_comment_chars[] = "#";
 const char line_separator_chars[] = "";
-const char *md_shortopts          = "OnNcC";
-const char EXP_CHARS[]            = "eE";
-const char FLT_CHARS[]            = "dD";
+const char *md_shortopts = "OnNcC";
+const char EXP_CHARS[] = "eE";
+const char FLT_CHARS[] = "dD";
 
 #if HAVE_LIMITS_H
 #include <limits.h>
@@ -51,15 +51,14 @@ static int warn_register_name_conflicts = 1;
 /* EXEC types.  */
 typedef enum _exec_type
 {
-  EXEC_UNKNOWN,			/* No order specified.  */
-  EXEC_PARALLEL,		/* Done in parallel (FM=00).  */
-  EXEC_SEQ,			/* Sequential (FM=01).  */
-  EXEC_REVSEQ			/* Reverse sequential (FM=10).  */
+  EXEC_UNKNOWN,			/* no order specified */
+  EXEC_PARALLEL,		/* done in parallel (FM=00) */
+  EXEC_SEQ,			/* sequential (FM=01) */
+  EXEC_REVSEQ			/* reverse sequential (FM=10) */
 } exec_type_enum;
 
 /* Fixups.  */
-#define MAX_INSN_FIXUPS  5
-
+#define MAX_INSN_FIXUPS (5)
 struct d30v_fixup
 {
   expressionS exp;
@@ -102,13 +101,41 @@ static int d30v_current_align;
 static segT d30v_current_align_seg;
 
 /* The last seen label in the current section.  This is used to auto-align
-   labels preceding instructions.  */
+   labels preceeding instructions.  */
 static symbolS *d30v_last_label;
 
 /* Two nops.  */
 #define NOP_LEFT   ((long long) NOP << 32)
 #define NOP_RIGHT  ((long long) NOP)
 #define NOP2 (FM00 | NOP_LEFT | NOP_RIGHT)
+
+/* Local functions.  */
+static int reg_name_search PARAMS ((char *name));
+static int register_name PARAMS ((expressionS *expressionP));
+static int check_range PARAMS ((unsigned long num, int bits, int flags));
+static int postfix PARAMS ((char *p));
+static bfd_reloc_code_real_type get_reloc PARAMS ((struct d30v_operand *op, int rel_flag));
+static int get_operands PARAMS ((expressionS exp[], int cmp_hack));
+static struct d30v_format *find_format PARAMS ((struct d30v_opcode *opcode,
+			expressionS ops[],int fsize, int cmp_hack));
+static long long build_insn PARAMS ((struct d30v_insn *opcode, expressionS *opers));
+static void write_long PARAMS ((struct d30v_insn *opcode, long long insn, Fixups *fx));
+static void write_1_short PARAMS ((struct d30v_insn *opcode, long long insn,
+				   Fixups *fx, int use_sequential));
+static int write_2_short PARAMS ((struct d30v_insn *opcode1, long long insn1,
+		   struct d30v_insn *opcode2, long long insn2, exec_type_enum exec_type, Fixups *fx));
+static long long do_assemble PARAMS ((char *str, struct d30v_insn *opcode,
+				      int shortp, int is_parallel));
+static int parallel_ok PARAMS ((struct d30v_insn *opcode1, unsigned long insn1,
+				struct d30v_insn *opcode2, unsigned long insn2,
+				exec_type_enum exec_type));
+static void d30v_number_to_chars PARAMS ((char *buf, long long value, int nbytes));
+static void check_size PARAMS ((long value, int bits, char *file, int line));
+static void d30v_align PARAMS ((int, char *, symbolS *));
+static void s_d30v_align PARAMS ((int));
+static void s_d30v_text PARAMS ((int));
+static void s_d30v_data PARAMS ((int));
+static void s_d30v_section PARAMS ((int));
 
 struct option md_longopts[] =
 {
@@ -117,15 +144,31 @@ struct option md_longopts[] =
 
 size_t md_longopts_size = sizeof (md_longopts);
 
+/* The target specific pseudo-ops which we support.  */
+const pseudo_typeS md_pseudo_table[] =
+{
+  { "word", cons, 4 },
+  { "hword", cons, 2 },
+  { "align", s_d30v_align, 0 },
+  { "text", s_d30v_text, 0 },
+  { "data", s_d30v_data, 0 },
+  { "section", s_d30v_section, 0 },
+  { "section.s", s_d30v_section, 0 },
+  { "sect", s_d30v_section, 0 },
+  { "sect.s", s_d30v_section, 0 },
+  { NULL, NULL, 0 }
+};
+
 /* Opcode hash table.  */
 static struct hash_control *d30v_hash;
 
 /* Do a binary search of the pre_defined_registers array to see if
-   NAME is a valid register name.  Return the register number from the
+   NAME is a valid regiter name.  Return the register number from the
    array on success, or -1 on failure.  */
 
 static int
-reg_name_search (char *name)
+reg_name_search (name)
+     char *name;
 {
   int middle, low, high;
   int cmp;
@@ -162,7 +205,8 @@ reg_name_search (char *name)
    register name.  */
 
 static int
-register_name (expressionS *expressionP)
+register_name (expressionP)
+     expressionS *expressionP;
 {
   int reg_number;
   char c, *p = input_line_pointer;
@@ -191,7 +235,10 @@ register_name (expressionS *expressionP)
 }
 
 static int
-check_range (unsigned long num, int bits, int flags)
+check_range (num, bits, flags)
+     unsigned long num;
+     int bits;
+     int flags;
 {
   long min, max;
 
@@ -205,47 +252,51 @@ check_range (unsigned long num, int bits, int flags)
 	 Allow either.  */
       min = -((unsigned long) 1 << (bits - 1));
       max = ((unsigned long) 1 << bits) - 1;
-      return (long) num < min || (long) num > max;
+      return (long)num < min || (long)num > max;
     }
 
   if (flags & OPERAND_SHIFT)
     {
       /* We know that all shifts are right by three bits.  */
-      num >>= 3;
 
       if (flags & OPERAND_SIGNED)
-	{
-	  unsigned long sign_bit = ((unsigned long) -1L >> 4) + 1;
-	  num = (num ^ sign_bit) - sign_bit;
-	}
+	num = (unsigned long) ((long) num >= 0)
+		? (((long) num) >> 3)
+		: ((num >> 3) | ~(~(unsigned long) 0 >> 3));
+      else
+	num >>= 3;
     }
 
   if (flags & OPERAND_SIGNED)
     {
       max = ((unsigned long) 1 << (bits - 1)) - 1;
       min = - ((unsigned long) 1 << (bits - 1));
-      return (long) num > max || (long) num < min;
+      return (long)num > max || (long)num < min;
     }
   else
     {
       max = ((unsigned long) 1 << bits) - 1;
-      return num > (unsigned long) max;
+      min = 0;
+      return num > max || num < min;
     }
 }
 
 void
-md_show_usage (FILE *stream)
+md_show_usage (stream)
+     FILE *stream;
 {
   fprintf (stream, _("\nD30V options:\n\
 -O                      Make adjacent short instructions parallel if possible.\n\
 -n                      Warn about all NOPs inserted by the assembler.\n\
--N                      Warn about NOPs inserted after word multiplies.\n\
--c                      Warn about symbols whose names match register names.\n\
+-N			Warn about NOPs inserted after word multiplies.\n\
+-c                      Warn about symbols whoes names match register names.\n\
 -C                      Opposite of -C.  -c is the default.\n"));
 }
 
 int
-md_parse_option (int c, const char *arg ATTRIBUTE_UNUSED)
+md_parse_option (c, arg)
+     int c;
+     char *arg;
 {
   switch (c)
     {
@@ -280,34 +331,75 @@ md_parse_option (int c, const char *arg ATTRIBUTE_UNUSED)
 }
 
 symbolS *
-md_undefined_symbol (char *name ATTRIBUTE_UNUSED)
+md_undefined_symbol (name)
+     char *name;
 {
   return 0;
 }
 
-const char *
-md_atof (int type, char *litP, int *sizeP)
+/* Turn a string in input_line_pointer into a floating point constant
+   of type TYPE, and store the appropriate bytes in *LITP.  The number
+   of LITTLENUMS emitted is stored in *SIZEP.  An error message is
+   returned, or NULL on OK.  */
+
+char *
+md_atof (type, litP, sizeP)
+     int type;
+     char *litP;
+     int *sizeP;
 {
-  return ieee_md_atof (type, litP, sizeP, TRUE);
+  int prec;
+  LITTLENUM_TYPE words[4];
+  char *t;
+  int i;
+
+  switch (type)
+    {
+    case 'f':
+      prec = 2;
+      break;
+    case 'd':
+      prec = 4;
+      break;
+    default:
+      *sizeP = 0;
+      return _("bad call to md_atof");
+    }
+
+  t = atof_ieee (input_line_pointer, type, words);
+  if (t)
+    input_line_pointer = t;
+
+  *sizeP = prec * 2;
+
+  for (i = 0; i < prec; i++)
+    {
+      md_number_to_chars (litP, (valueT) words[i], 2);
+      litP += 2;
+    }
+  return NULL;
 }
 
 void
-md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED,
-		 asection *sec ATTRIBUTE_UNUSED,
-		 fragS *fragP ATTRIBUTE_UNUSED)
+md_convert_frag (abfd, sec, fragP)
+     bfd *abfd;
+     asection *sec;
+     fragS *fragP;
 {
   abort ();
 }
 
 valueT
-md_section_align (asection *seg, valueT addr)
+md_section_align (seg, addr)
+     asection *seg;
+     valueT addr;
 {
-  int align = bfd_section_alignment (seg);
-  return ((addr + (1 << align) - 1) & -(1 << align));
+  int align = bfd_get_section_alignment (stdoutput, seg);
+  return ((addr + (1 << align) - 1) & (-1 << align));
 }
 
 void
-md_begin (void)
+md_begin ()
 {
   struct d30v_opcode *opcode;
   d30v_hash = hash_new ();
@@ -327,7 +419,8 @@ md_begin (void)
    from an expression.  */
 
 static int
-postfix (char *p)
+postfix (p)
+     char *p;
 {
   while (*p != '-' && *p != '+')
     {
@@ -352,7 +445,9 @@ postfix (char *p)
 }
 
 static bfd_reloc_code_real_type
-get_reloc (const struct d30v_operand *op, int rel_flag)
+get_reloc (op, rel_flag)
+     struct d30v_operand *op;
+     int rel_flag;
 {
   switch (op->bits)
     {
@@ -389,7 +484,9 @@ get_reloc (const struct d30v_operand *op, int rel_flag)
 /* Parse a string of operands and return an array of expressions.  */
 
 static int
-get_operands (expressionS exp[], int cmp_hack)
+get_operands (exp, cmp_hack)
+     expressionS exp[];
+     int cmp_hack;
 {
   char *p = input_line_pointer;
   int numops = 0;
@@ -482,9 +579,11 @@ get_operands (expressionS exp[], int cmp_hack)
    It does everything but write the FM bits.  */
 
 static long long
-build_insn (struct d30v_insn *opcode, expressionS *opers)
+build_insn (opcode, opers)
+     struct d30v_insn *opcode;
+     expressionS *opers;
 {
-  int i, bits, shift, flags;
+  int i, length, bits, shift, flags;
   unsigned long number, id = 0;
   long long insn;
   struct d30v_opcode *op = opcode->op;
@@ -506,6 +605,7 @@ build_insn (struct d30v_insn *opcode, expressionS *opers)
       if (flags & OPERAND_SHIFT)
 	bits += 3;
 
+      length = d30v_operand_table[form->operands[i]].length;
       shift = 12 - d30v_operand_table[form->operands[i]].position;
       if (opers[i].X_op != O_symbol)
 	number = opers[i].X_add_number;
@@ -521,13 +621,16 @@ build_insn (struct d30v_insn *opcode, expressionS *opers)
 	      number = 0;
 	    }
 	  else if (number & OPERAND_FLAG)
-	    /* NUMBER is a flag register.  */
-	    id = 3;
-
+	    {
+	      /* NUMBER is a flag register.  */
+	      id = 3;
+	    }
 	  number &= 0x7F;
 	}
       else if (flags & OPERAND_SPECIAL)
-	number = id;
+	{
+	  number = id;
+	}
 
       if (opers[i].X_op != O_register && opers[i].X_op != O_constant
 	  && !(flags & OPERAND_NAME))
@@ -537,7 +640,7 @@ build_insn (struct d30v_insn *opcode, expressionS *opers)
 	    as_fatal (_("too many fixups"));
 
 	  fixups->fix[fixups->fc].reloc =
-	    get_reloc (d30v_operand_table + form->operands[i], op->reloc_flag);
+	    get_reloc ((struct d30v_operand *) &d30v_operand_table[form->operands[i]], op->reloc_flag);
 	  fixups->fix[fixups->fc].size = 4;
 	  fixups->fix[fixups->fc].exp = opers[i];
 	  fixups->fix[fixups->fc].operand = form->operands[i];
@@ -550,7 +653,7 @@ build_insn (struct d30v_insn *opcode, expressionS *opers)
 
       /* Truncate to the proper number of bits.  */
       if ((opers[i].X_op == O_constant) && check_range (number, bits, flags))
-	as_bad (_("operand out of range: %ld"), number);
+	as_bad (_("operand out of range: %d"), number);
       if (bits < 31)
 	number &= 0x7FFFFFFF >> (31 - bits);
       if (flags & OPERAND_SHIFT)
@@ -558,10 +661,10 @@ build_insn (struct d30v_insn *opcode, expressionS *opers)
       if (bits == 32)
 	{
 	  /* It's a LONG instruction.  */
-	  insn |= ((number & 0xffffffff) >> 26);	/* Top 6 bits.  */
-	  insn <<= 32;			/* Shift the first word over.  */
-	  insn |= ((number & 0x03FC0000) << 2);		/* Next 8 bits.  */
-	  insn |= number & 0x0003FFFF;			/* Bottom 18 bits.  */
+	  insn |= ((number & 0xffffffff) >> 26);	/* top 6 bits */
+	  insn <<= 32;			/* shift the first word over */
+	  insn |= ((number & 0x03FC0000) << 2);		/* next 8 bits */
+	  insn |= number & 0x0003FFFF;			/* bottom 18 bits */
 	}
       else
 	insn |= number << shift;
@@ -570,29 +673,17 @@ build_insn (struct d30v_insn *opcode, expressionS *opers)
   return insn;
 }
 
-static void
-d30v_number_to_chars (char *buf,	/* Return 'nbytes' of chars here.  */
-		      long long value,	/* The value of the bits.  */
-		      int n)		/* Number of bytes in the output.  */
-{
-  while (n--)
-    {
-      buf[n] = value & 0xff;
-      value >>= 8;
-    }
-}
-
 /* Write out a long form instruction.  */
 
 static void
-write_long (struct d30v_insn *opcode ATTRIBUTE_UNUSED,
-	    long long insn,
-	    Fixups *fx)
+write_long (opcode, insn, fx)
+     struct d30v_insn *opcode;
+     long long insn;
+     Fixups *fx;
 {
   int i, where;
   char *f = frag_more (8);
 
-  dwarf2_emit_insn (8);
   insn |= FM11;
   d30v_number_to_chars (f, insn, 8);
 
@@ -601,8 +692,12 @@ write_long (struct d30v_insn *opcode ATTRIBUTE_UNUSED,
       if (fx->fix[i].reloc)
 	{
 	  where = f - frag_now->fr_literal;
-	  fix_new_exp (frag_now, where, fx->fix[i].size, &(fx->fix[i].exp),
-		       fx->fix[i].pcrel, fx->fix[i].reloc);
+	  fix_new_exp (frag_now,
+		       where,
+		       fx->fix[i].size,
+		       &(fx->fix[i].exp),
+		       fx->fix[i].pcrel,
+		       fx->fix[i].reloc);
 	}
     }
 
@@ -612,15 +707,15 @@ write_long (struct d30v_insn *opcode ATTRIBUTE_UNUSED,
 /* Write out a short form instruction by itself.  */
 
 static void
-write_1_short (struct d30v_insn *opcode,
-	       long long insn,
-	       Fixups *fx,
-	       int use_sequential)
+write_1_short (opcode, insn, fx, use_sequential)
+     struct d30v_insn *opcode;
+     long long insn;
+     Fixups *fx;
+     int use_sequential;
 {
   char *f = frag_more (8);
   int i, where;
 
-  dwarf2_emit_insn (8);
   if (warn_nops == NOP_ALL)
     as_warn (_("%s NOP inserted"), use_sequential ?
 	     _("sequential") : _("parallel"));
@@ -634,6 +729,7 @@ write_1_short (struct d30v_insn *opcode,
 
       /* According to 4.3.1: for FM=01, sub-instructions performed
 	 only by IU cannot be encoded in L-container.  */
+
       if (opcode->op->unit == IU)
 	/* Right then left.  */
 	insn |= FM10 | NOP_LEFT;
@@ -645,6 +741,7 @@ write_1_short (struct d30v_insn *opcode,
     {
       /* According to 4.3.1: for FM=00, sub-instructions performed
 	 only by IU cannot be encoded in L-container.  */
+
       if (opcode->op->unit == IU)
 	/* Right container.  */
 	insn |= FM00 | NOP_LEFT;
@@ -672,15 +769,208 @@ write_1_short (struct d30v_insn *opcode,
   fx->fc = 0;
 }
 
+/* Write out a short form instruction if possible.
+   Return number of instructions not written out.  */
+
+static int
+write_2_short (opcode1, insn1, opcode2, insn2, exec_type, fx)
+     struct d30v_insn *opcode1, *opcode2;
+     long long insn1, insn2;
+     exec_type_enum exec_type;
+     Fixups *fx;
+{
+  long long insn = NOP2;
+  char *f;
+  int i, j, where;
+
+  if (exec_type == EXEC_SEQ
+      && (opcode1->op->flags_used & (FLAG_JMP | FLAG_JSR))
+      && ((opcode1->op->flags_used & FLAG_DELAY) == 0)
+      && ((opcode1->ecc == ECC_AL) || ! Optimizing))
+    {
+      /* Unconditional, non-delayed branches kill instructions in
+	 the right bin.  Conditional branches don't always but if
+	 we are not optimizing, then we have been asked to produce
+	 an error about such constructs.  For the purposes of this
+	 test, subroutine calls are considered to be branches.  */
+      write_1_short (opcode1, insn1, fx->next, false);
+      return 1;
+    }
+
+  /* Note: we do not have to worry about subroutine calls occuring
+     in the right hand container.  The return address is always
+     aligned to the next 64 bit boundary, be that 64 or 32 bit away.  */
+  switch (exec_type)
+    {
+    case EXEC_UNKNOWN:	/* Order not specified.  */
+      if (Optimizing
+	  && parallel_ok (opcode1, insn1, opcode2, insn2, exec_type)
+	  && ! (   (opcode1->op->unit == EITHER_BUT_PREFER_MU
+		 || opcode1->op->unit == MU)
+		&&
+		(   opcode2->op->unit == EITHER_BUT_PREFER_MU
+		 || opcode2->op->unit == MU)))
+	{
+	  /* Parallel.  */
+	  exec_type = EXEC_PARALLEL;
+
+	  if (opcode1->op->unit == IU
+	      || opcode2->op->unit == MU
+	      || opcode2->op->unit == EITHER_BUT_PREFER_MU)
+	    insn = FM00 | (insn2 << 32) | insn1;
+	  else
+	    {
+	      insn = FM00 | (insn1 << 32) | insn2;
+	      fx = fx->next;
+	    }
+	}
+      else if ((opcode1->op->flags_used & (FLAG_JMP | FLAG_JSR)
+		&& ((opcode1->op->flags_used & FLAG_DELAY) == 0))
+	       || opcode1->op->flags_used & FLAG_RP)
+	{
+	  /* We must emit (non-delayed) branch type instructions
+	     on their own with nothing in the right container.  */
+	  /* We must treat repeat instructions likewise, since the
+	     following instruction has to be separate from the repeat
+	     in order to be repeated.  */
+	  write_1_short (opcode1, insn1, fx->next, false);
+	  return 1;
+	}
+      else if (prev_left_kills_right_p)
+	{
+	  /* The left instruction kils the right slot, so we
+	     must leave it empty.  */
+	  write_1_short (opcode1, insn1, fx->next, false);
+	  return 1;
+	}
+      else if (opcode1->op->unit == IU)
+	{
+	  if (opcode2->op->unit == EITHER_BUT_PREFER_MU)
+	    {
+	      /* Case 103810 is a request from Mitsubishi that opcodes
+		 with EITHER_BUT_PREFER_MU should not be executed in
+		 reverse sequential order.  */
+	      write_1_short (opcode1, insn1, fx->next, false);
+	      return 1;
+	    }
+
+	  /* Reverse sequential.  */
+	  insn = FM10 | (insn2 << 32) | insn1;
+	  exec_type = EXEC_REVSEQ;
+	}
+      else
+	{
+	  /* Sequential.  */
+	  insn = FM01 | (insn1 << 32) | insn2;
+	  fx = fx->next;
+	  exec_type = EXEC_SEQ;
+	}
+      break;
+
+    case EXEC_PARALLEL:	/* Parallel.  */
+      flag_explicitly_parallel = flag_xp_state;
+      if (! parallel_ok (opcode1, insn1, opcode2, insn2, exec_type))
+	as_bad (_("Instructions may not be executed in parallel"));
+      else if (opcode1->op->unit == IU)
+	{
+	  if (opcode2->op->unit == IU)
+	    as_bad (_("Two IU instructions may not be executed in parallel"));
+	  as_warn (_("Swapping instruction order"));
+	  insn = FM00 | (insn2 << 32) | insn1;
+	}
+      else if (opcode2->op->unit == MU)
+	{
+	  if (opcode1->op->unit == MU)
+	    as_bad (_("Two MU instructions may not be executed in parallel"));
+	  else if (opcode1->op->unit == EITHER_BUT_PREFER_MU)
+	    as_warn (_("Executing %s in IU may not work"), opcode1->op->name);
+	  as_warn (_("Swapping instruction order"));
+	  insn = FM00 | (insn2 << 32) | insn1;
+	}
+      else
+	{
+	  if (opcode2->op->unit == EITHER_BUT_PREFER_MU)
+	    as_warn (_("Executing %s in IU may not work in parallel execution"),
+		     opcode2->op->name);
+
+	  insn = FM00 | (insn1 << 32) | insn2;
+	  fx = fx->next;
+	}
+      flag_explicitly_parallel = 0;
+      break;
+
+    case EXEC_SEQ:	/* Sequential.  */
+      if (opcode1->op->unit == IU)
+	as_bad (_("IU instruction may not be in the left container"));
+      if (prev_left_kills_right_p)
+	as_bad (_("special left instruction `%s' kills instruction "
+		  "`%s' in right container"),
+		opcode1->op->name, opcode2->op->name);
+      insn = FM01 | (insn1 << 32) | insn2;
+      fx = fx->next;
+      break;
+
+    case EXEC_REVSEQ:	/* Reverse sequential.  */
+      if (opcode2->op->unit == MU)
+	as_bad (_("MU instruction may not be in the right container"));
+      if (opcode1->op->unit == EITHER_BUT_PREFER_MU)
+	as_warn (_("Executing %s in reverse serial with %s may not work"),
+		 opcode1->op->name, opcode2->op->name);
+      else if (opcode2->op->unit == EITHER_BUT_PREFER_MU)
+	as_warn (_("Executing %s in IU in reverse serial may not work"),
+		 opcode2->op->name);
+      insn = FM10 | (insn1 << 32) | insn2;
+      fx = fx->next;
+      break;
+
+    default:
+      as_fatal (_("unknown execution type passed to write_2_short()"));
+    }
+
+#if 0
+  printf ("writing out %llx\n", insn);
+#endif
+  f = frag_more (8);
+  d30v_number_to_chars (f, insn, 8);
+
+  /* If the previous instruction was a 32-bit multiply but it is put into a
+     parallel container, mark the current instruction as being a 32-bit
+     multiply.  */
+  if (prev_mul32_p && exec_type == EXEC_PARALLEL)
+    cur_mul32_p = 1;
+
+  for (j = 0; j < 2; j++)
+    {
+      for (i = 0; i < fx->fc; i++)
+	{
+	  if (fx->fix[i].reloc)
+	    {
+	      where = (f - frag_now->fr_literal) + 4 * j;
+
+	      fix_new_exp (frag_now,
+			   where,
+			   fx->fix[i].size,
+			   &(fx->fix[i].exp),
+			   fx->fix[i].pcrel,
+			   fx->fix[i].reloc);
+	    }
+	}
+
+      fx->fc = 0;
+      fx = fx->next;
+    }
+
+  return 0;
+}
+
 /* Check 2 instructions and determine if they can be safely
    executed in parallel.  Return 1 if they can be.  */
 
 static int
-parallel_ok (struct d30v_insn *op1,
-	     unsigned long insn1,
-	     struct d30v_insn *op2,
-	     unsigned long insn2,
-	     exec_type_enum exec_type)
+parallel_ok (op1, insn1, op2, insn2, exec_type)
+     struct d30v_insn *op1, *op2;
+     unsigned long insn1, insn2;
+     exec_type_enum exec_type;
 {
   int i, j, shift, regno, bits, ecc;
   unsigned long flags, mask, flags_set1, flags_set2, flags_used1, flags_used2;
@@ -928,629 +1218,6 @@ parallel_ok (struct d30v_insn *op1,
   return 1;
 }
 
-/* Write out a short form instruction if possible.
-   Return number of instructions not written out.  */
-
-static int
-write_2_short (struct d30v_insn *opcode1,
-	       long long insn1,
-	       struct d30v_insn *opcode2,
-	       long long insn2,
-	       exec_type_enum exec_type,
-	       Fixups *fx)
-{
-  long long insn = NOP2;
-  char *f;
-  int i, j, where;
-
-  if (exec_type == EXEC_SEQ
-      && (opcode1->op->flags_used & (FLAG_JMP | FLAG_JSR))
-      && ((opcode1->op->flags_used & FLAG_DELAY) == 0)
-      && ((opcode1->ecc == ECC_AL) || ! Optimizing))
-    {
-      /* Unconditional, non-delayed branches kill instructions in
-	 the right bin.  Conditional branches don't always but if
-	 we are not optimizing, then we have been asked to produce
-	 an error about such constructs.  For the purposes of this
-	 test, subroutine calls are considered to be branches.  */
-      write_1_short (opcode1, insn1, fx->next, FALSE);
-      return 1;
-    }
-
-  /* Note: we do not have to worry about subroutine calls occurring
-     in the right hand container.  The return address is always
-     aligned to the next 64 bit boundary, be that 64 or 32 bit away.  */
-  switch (exec_type)
-    {
-    case EXEC_UNKNOWN:	/* Order not specified.  */
-      if (Optimizing
-	  && parallel_ok (opcode1, insn1, opcode2, insn2, exec_type)
-	  && ! (   (opcode1->op->unit == EITHER_BUT_PREFER_MU
-		 || opcode1->op->unit == MU)
-		&&
-		(   opcode2->op->unit == EITHER_BUT_PREFER_MU
-		 || opcode2->op->unit == MU)))
-	{
-	  /* Parallel.  */
-	  exec_type = EXEC_PARALLEL;
-
-	  if (opcode1->op->unit == IU
-	      || opcode2->op->unit == MU
-	      || opcode2->op->unit == EITHER_BUT_PREFER_MU)
-	    insn = FM00 | (insn2 << 32) | insn1;
-	  else
-	    {
-	      insn = FM00 | (insn1 << 32) | insn2;
-	      fx = fx->next;
-	    }
-	}
-      else if ((opcode1->op->flags_used & (FLAG_JMP | FLAG_JSR)
-		&& ((opcode1->op->flags_used & FLAG_DELAY) == 0))
-	       || opcode1->op->flags_used & FLAG_RP)
-	{
-	  /* We must emit (non-delayed) branch type instructions
-	     on their own with nothing in the right container.  */
-	  /* We must treat repeat instructions likewise, since the
-	     following instruction has to be separate from the repeat
-	     in order to be repeated.  */
-	  write_1_short (opcode1, insn1, fx->next, FALSE);
-	  return 1;
-	}
-      else if (prev_left_kills_right_p)
-	{
-	  /* The left instruction kills the right slot, so we
-	     must leave it empty.  */
-	  write_1_short (opcode1, insn1, fx->next, FALSE);
-	  return 1;
-	}
-      else if (opcode1->op->unit == IU)
-	{
-	  if (opcode2->op->unit == EITHER_BUT_PREFER_MU)
-	    {
-	      /* Case 103810 is a request from Mitsubishi that opcodes
-		 with EITHER_BUT_PREFER_MU should not be executed in
-		 reverse sequential order.  */
-	      write_1_short (opcode1, insn1, fx->next, FALSE);
-	      return 1;
-	    }
-
-	  /* Reverse sequential.  */
-	  insn = FM10 | (insn2 << 32) | insn1;
-	  exec_type = EXEC_REVSEQ;
-	}
-      else
-	{
-	  /* Sequential.  */
-	  insn = FM01 | (insn1 << 32) | insn2;
-	  fx = fx->next;
-	  exec_type = EXEC_SEQ;
-	}
-      break;
-
-    case EXEC_PARALLEL:	/* Parallel.  */
-      flag_explicitly_parallel = flag_xp_state;
-      if (! parallel_ok (opcode1, insn1, opcode2, insn2, exec_type))
-	as_bad (_("Instructions may not be executed in parallel"));
-      else if (opcode1->op->unit == IU)
-	{
-	  if (opcode2->op->unit == IU)
-	    as_bad (_("Two IU instructions may not be executed in parallel"));
-	  as_warn (_("Swapping instruction order"));
-	  insn = FM00 | (insn2 << 32) | insn1;
-	}
-      else if (opcode2->op->unit == MU)
-	{
-	  if (opcode1->op->unit == MU)
-	    as_bad (_("Two MU instructions may not be executed in parallel"));
-	  else if (opcode1->op->unit == EITHER_BUT_PREFER_MU)
-	    as_warn (_("Executing %s in IU may not work"), opcode1->op->name);
-	  as_warn (_("Swapping instruction order"));
-	  insn = FM00 | (insn2 << 32) | insn1;
-	}
-      else
-	{
-	  if (opcode2->op->unit == EITHER_BUT_PREFER_MU)
-	    as_warn (_("Executing %s in IU may not work in parallel execution"),
-		     opcode2->op->name);
-
-	  insn = FM00 | (insn1 << 32) | insn2;
-	  fx = fx->next;
-	}
-      flag_explicitly_parallel = 0;
-      break;
-
-    case EXEC_SEQ:	/* Sequential.  */
-      if (opcode1->op->unit == IU)
-	as_bad (_("IU instruction may not be in the left container"));
-      if (prev_left_kills_right_p)
-	as_bad (_("special left instruction `%s' kills instruction "
-		  "`%s' in right container"),
-		opcode1->op->name, opcode2->op->name);
-      insn = FM01 | (insn1 << 32) | insn2;
-      fx = fx->next;
-      break;
-
-    case EXEC_REVSEQ:	/* Reverse sequential.  */
-      if (opcode2->op->unit == MU)
-	as_bad (_("MU instruction may not be in the right container"));
-      if (opcode1->op->unit == EITHER_BUT_PREFER_MU)
-	as_warn (_("Executing %s in reverse serial with %s may not work"),
-		 opcode1->op->name, opcode2->op->name);
-      else if (opcode2->op->unit == EITHER_BUT_PREFER_MU)
-	as_warn (_("Executing %s in IU in reverse serial may not work"),
-		 opcode2->op->name);
-      insn = FM10 | (insn1 << 32) | insn2;
-      fx = fx->next;
-      break;
-
-    default:
-      as_fatal (_("unknown execution type passed to write_2_short()"));
-    }
-
-  f = frag_more (8);
-  dwarf2_emit_insn (8);
-  d30v_number_to_chars (f, insn, 8);
-
-  /* If the previous instruction was a 32-bit multiply but it is put into a
-     parallel container, mark the current instruction as being a 32-bit
-     multiply.  */
-  if (prev_mul32_p && exec_type == EXEC_PARALLEL)
-    cur_mul32_p = 1;
-
-  for (j = 0; j < 2; j++)
-    {
-      for (i = 0; i < fx->fc; i++)
-	{
-	  if (fx->fix[i].reloc)
-	    {
-	      where = (f - frag_now->fr_literal) + 4 * j;
-
-	      fix_new_exp (frag_now,
-			   where,
-			   fx->fix[i].size,
-			   &(fx->fix[i].exp),
-			   fx->fix[i].pcrel,
-			   fx->fix[i].reloc);
-	    }
-	}
-
-      fx->fc = 0;
-      fx = fx->next;
-    }
-
-  return 0;
-}
-
-/* Get a pointer to an entry in the format table.
-   It must look at all formats for an opcode and use the operands
-   to choose the correct one.  Return NULL on error.  */
-
-static struct d30v_format *
-find_format (struct d30v_opcode *opcode,
-	     expressionS myops[],
-	     int fsize,
-	     int cmp_hack)
-{
-  int match, opcode_index, i = 0, j, k;
-  struct d30v_format *fm;
-
-  if (opcode == NULL)
-    return NULL;
-
-  /* Get all the operands and save them as expressions.  */
-  get_operands (myops, cmp_hack);
-
-  while ((opcode_index = opcode->format[i++]) != 0)
-    {
-      if (fsize == FORCE_SHORT && opcode_index >= LONG)
-	continue;
-
-      if (fsize == FORCE_LONG && opcode_index < LONG)
-	continue;
-
-      fm = (struct d30v_format *) &d30v_format_table[opcode_index];
-      k = opcode_index;
-      while (fm->form == opcode_index)
-	{
-	  match = 1;
-	  /* Now check the operands for compatibility.  */
-	  for (j = 0; match && fm->operands[j]; j++)
-	    {
-	      int flags = d30v_operand_table[fm->operands[j]].flags;
-	      int bits = d30v_operand_table[fm->operands[j]].bits;
-	      operatorT X_op = myops[j].X_op;
-	      int num = myops[j].X_add_number;
-
-	      if (flags & OPERAND_SPECIAL)
-		break;
-	      else if (X_op == O_illegal)
-		match = 0;
-	      else if (flags & OPERAND_REG)
-		{
-		  if (X_op != O_register
-		      || ((flags & OPERAND_ACC) && !(num & OPERAND_ACC))
-		      || (!(flags & OPERAND_ACC) && (num & OPERAND_ACC))
-		      || ((flags & OPERAND_FLAG) && !(num & OPERAND_FLAG))
-		      || (!(flags & (OPERAND_FLAG | OPERAND_CONTROL)) && (num & OPERAND_FLAG))
-		      || ((flags & OPERAND_CONTROL)
-			  && !(num & (OPERAND_CONTROL | OPERAND_FLAG))))
-		    match = 0;
-		}
-	      else if (((flags & OPERAND_MINUS)
-			&& (X_op != O_absent || num != OPERAND_MINUS))
-		       || ((flags & OPERAND_PLUS)
-			   && (X_op != O_absent || num != OPERAND_PLUS))
-		       || ((flags & OPERAND_ATMINUS)
-			   && (X_op != O_absent || num != OPERAND_ATMINUS))
-		       || ((flags & OPERAND_ATPAR)
-			   && (X_op != O_absent || num != OPERAND_ATPAR))
-		       || ((flags & OPERAND_ATSIGN)
-			   && (X_op != O_absent || num != OPERAND_ATSIGN)))
-		match = 0;
-	      else if (flags & OPERAND_NUM)
-		{
-		  /* A number can be a constant or symbol expression.  */
-
-		  /* If we have found a register name, but that name
-		     also matches a symbol, then re-parse the name as
-		     an expression.  */
-		  if (X_op == O_register
-		      && symbol_find ((char *) myops[j].X_op_symbol))
-		    {
-		      input_line_pointer = (char *) myops[j].X_op_symbol;
-		      expression (&myops[j]);
-		    }
-
-		  /* Turn an expression into a symbol for later resolution.  */
-		  if (X_op != O_absent && X_op != O_constant
-		      && X_op != O_symbol && X_op != O_register
-		      && X_op != O_big)
-		    {
-		      symbolS *sym = make_expr_symbol (&myops[j]);
-		      myops[j].X_op = X_op = O_symbol;
-		      myops[j].X_add_symbol = sym;
-		      myops[j].X_add_number = num = 0;
-		    }
-
-		  if (fm->form >= LONG)
-		    {
-		      /* If we're testing for a LONG format, either fits.  */
-		      if (X_op != O_constant && X_op != O_symbol)
-			match = 0;
-		    }
-		  else if (fm->form < LONG
-			   && ((fsize == FORCE_SHORT && X_op == O_symbol)
-			       || (fm->form == SHORT_D2 && j == 0)))
-		    match = 1;
-
-		  /* This is the tricky part.  Will the constant or symbol
-		     fit into the space in the current format?  */
-		  else if (X_op == O_constant)
-		    {
-		      if (check_range (num, bits, flags))
-			match = 0;
-		    }
-		  else if (X_op == O_symbol
-			   && S_IS_DEFINED (myops[j].X_add_symbol)
-			   && S_GET_SEGMENT (myops[j].X_add_symbol) == now_seg
-			   && opcode->reloc_flag == RELOC_PCREL)
-		    {
-		      /* If the symbol is defined, see if the value will fit
-			 into the form we're considering.  */
-		      fragS *f;
-		      long value;
-
-		      /* Calculate the current address by running through the
-			 previous frags and adding our current offset.  */
-		      value = frag_now_fix_octets ();
-		      for (f = frchain_now->frch_root; f; f = f->fr_next)
-			value += f->fr_fix + f->fr_offset;
-		      value = S_GET_VALUE (myops[j].X_add_symbol) - value;
-		      if (check_range (value, bits, flags))
-			match = 0;
-		    }
-		  else
-		    match = 0;
-		}
-	    }
-	  /* We're only done if the operands matched so far AND there
-	     are no more to check.  */
-	  if (match && myops[j].X_op == 0)
-	    {
-	      /* Final check - issue a warning if an odd numbered register
-		 is used as the first register in an instruction that reads
-		 or writes 2 registers.  */
-
-	      for (j = 0; fm->operands[j]; j++)
-		if (myops[j].X_op == O_register
-		    && (myops[j].X_add_number & 1)
-		    && (d30v_operand_table[fm->operands[j]].flags & OPERAND_2REG))
-		  as_warn (_("Odd numbered register used as target of multi-register instruction"));
-
-	      return fm;
-	    }
-	  fm = (struct d30v_format *) &d30v_format_table[++k];
-	}
-    }
-  return NULL;
-}
-
-/* Assemble a single instruction and return an opcode.
-   Return -1 (an invalid opcode) on error.  */
-
-#define NAME_BUF_LEN	20
-
-static long long
-do_assemble (char *str,
-	     struct d30v_insn *opcode,
-	     int shortp,
-	     int is_parallel)
-{
-  char *op_start;
-  char *save;
-  char *op_end;
-  char           name[NAME_BUF_LEN];
-  int            cmp_hack;
-  int            nlen = 0;
-  int            fsize = (shortp ? FORCE_SHORT : 0);
-  expressionS    myops[6];
-  long long      insn;
-
-  /* Drop leading whitespace.  */
-  while (*str == ' ')
-    str++;
-
-  /* Find the opcode end.  */
-  for (op_start = op_end = str;
-       *op_end
-       && nlen < (NAME_BUF_LEN - 1)
-       && *op_end != '/'
-       && !is_end_of_line[(unsigned char) *op_end] && *op_end != ' ';
-       op_end++)
-    {
-      name[nlen] = TOLOWER (op_start[nlen]);
-      nlen++;
-    }
-
-  if (nlen == 0)
-    return -1;
-
-  name[nlen] = 0;
-
-  /* If there is an execution condition code, handle it.  */
-  if (*op_end == '/')
-    {
-      int i = 0;
-      while ((i < ECC_MAX) && strncasecmp (d30v_ecc_names[i], op_end + 1, 2))
-	i++;
-
-      if (i == ECC_MAX)
-	{
-	  char tmp[4];
-	  strncpy (tmp, op_end + 1, 2);
-	  tmp[2] = 0;
-	  as_bad (_("unknown condition code: %s"), tmp);
-	  return -1;
-	}
-      opcode->ecc = i;
-      op_end += 3;
-    }
-  else
-    opcode->ecc = ECC_AL;
-
-  /* CMP and CMPU change their name based on condition codes.  */
-  if (!strncmp (name, "cmp", 3))
-    {
-      int p, i;
-      char **d30v_str = (char **) d30v_cc_names;
-
-      if (name[3] == 'u')
-	p = 4;
-      else
-	p = 3;
-
-      for (i = 1; *d30v_str && strncmp (*d30v_str, &name[p], 2); i++, d30v_str++)
-	;
-
-      /* cmpu only supports some condition codes.  */
-      if (p == 4)
-	{
-	  if (i < 3 || i > 6)
-	    {
-	      name[p + 2] = 0;
-	      as_bad (_("cmpu doesn't support condition code %s"), &name[p]);
-	    }
-	}
-
-      if (!*d30v_str)
-	{
-	  name[p + 2] = 0;
-	  as_bad (_("unknown condition code: %s"), &name[p]);
-	}
-
-      cmp_hack = i;
-      name[p] = 0;
-    }
-  else
-    cmp_hack = 0;
-
-  /* Need to look for .s or .l.  */
-  if (name[nlen - 2] == '.')
-    {
-      switch (name[nlen - 1])
-	{
-	case 's':
-	  fsize = FORCE_SHORT;
-	  break;
-	case 'l':
-	  fsize = FORCE_LONG;
-	  break;
-	}
-      name[nlen - 2] = 0;
-    }
-
-  /* Find the first opcode with the proper name.  */
-  opcode->op = (struct d30v_opcode *) hash_find (d30v_hash, name);
-  if (opcode->op == NULL)
-    {
-      as_bad (_("unknown opcode: %s"), name);
-      return -1;
-    }
-
-  save = input_line_pointer;
-  input_line_pointer = op_end;
-  while (!(opcode->form = find_format (opcode->op, myops, fsize, cmp_hack)))
-    {
-      opcode->op++;
-      if (opcode->op->name == NULL || strcmp (opcode->op->name, name))
-	{
-	  as_bad (_("operands for opcode `%s' do not match any valid format"),
-		  name);
-	  return -1;
-	}
-    }
-  input_line_pointer = save;
-
-  insn = build_insn (opcode, myops);
-
-  /* Propagate multiply status.  */
-  if (insn != -1)
-    {
-      if (is_parallel && prev_mul32_p)
-	cur_mul32_p = 1;
-      else
-	{
-	  prev_mul32_p = cur_mul32_p;
-	  cur_mul32_p  = (opcode->op->flags_used & FLAG_MUL32) != 0;
-	}
-    }
-
-  /* Propagate left_kills_right status.  */
-  if (insn != -1)
-    {
-      prev_left_kills_right_p = cur_left_kills_right_p;
-
-      if (opcode->op->flags_set & FLAG_LKR)
-	{
-	  cur_left_kills_right_p = 1;
-
-	  if (strcmp (opcode->op->name, "mvtsys") == 0)
-	    {
-	      /* Left kills right for only mvtsys only for
-                 PSW/PSWH/PSWL/flags target.  */
-	      if ((myops[0].X_op == O_register) &&
-		  ((myops[0].X_add_number == OPERAND_CONTROL) || /* psw */
-		   (myops[0].X_add_number == OPERAND_CONTROL+MAX_CONTROL_REG+2) || /* pswh */
-		   (myops[0].X_add_number == OPERAND_CONTROL+MAX_CONTROL_REG+1) || /* pswl */
-		   (myops[0].X_add_number == OPERAND_FLAG+0) || /* f0 */
-		   (myops[0].X_add_number == OPERAND_FLAG+1) || /* f1 */
-		   (myops[0].X_add_number == OPERAND_FLAG+2) || /* f2 */
-		   (myops[0].X_add_number == OPERAND_FLAG+3) || /* f3 */
-		   (myops[0].X_add_number == OPERAND_FLAG+4) || /* f4 */
-		   (myops[0].X_add_number == OPERAND_FLAG+5) || /* f5 */
-		   (myops[0].X_add_number == OPERAND_FLAG+6) || /* f6 */
-		   (myops[0].X_add_number == OPERAND_FLAG+7))) /* f7 */
-		{
-		  cur_left_kills_right_p = 1;
-		}
-	      else
-		{
-		  /* Other mvtsys target registers don't kill right
-                     instruction.  */
-		  cur_left_kills_right_p = 0;
-		}
-	    } /* mvtsys */
-	}
-      else
-	cur_left_kills_right_p = 0;
-    }
-
-  return insn;
-}
-
-/* Called internally to handle all alignment needs.  This takes care
-   of eliding calls to frag_align if'n the cached current alignment
-   says we've already got it, as well as taking care of the auto-aligning
-   labels wrt code.  */
-
-static void
-d30v_align (int n, char *pfill, symbolS *label)
-{
-  /* The front end is prone to changing segments out from under us
-     temporarily when -g is in effect.  */
-  int switched_seg_p = (d30v_current_align_seg != now_seg);
-
-  /* Do not assume that if 'd30v_current_align >= n' and
-     '! switched_seg_p' that it is safe to avoid performing
-     this alignment request.  The alignment of the current frag
-     can be changed under our feet, for example by a .ascii
-     directive in the source code.  cf testsuite/gas/d30v/reloc.s  */
-  d30v_cleanup (FALSE);
-
-  if (pfill == NULL)
-    {
-      if (n > 2
-	  && (bfd_section_flags (now_seg) & SEC_CODE) != 0)
-	{
-	  static char const nop[4] = { 0x00, 0xf0, 0x00, 0x00 };
-
-	  /* First, make sure we're on a four-byte boundary, in case
-	     someone has been putting .byte values the text section.  */
-	  if (d30v_current_align < 2 || switched_seg_p)
-	    frag_align (2, 0, 0);
-	  frag_align_pattern (n, nop, sizeof nop, 0);
-	}
-      else
-	frag_align (n, 0, 0);
-    }
-  else
-    frag_align (n, *pfill, 0);
-
-  if (!switched_seg_p)
-    d30v_current_align = n;
-
-  if (label != NULL)
-    {
-      symbolS     *sym;
-      int          label_seen = FALSE;
-      struct frag *old_frag;
-      valueT       old_value;
-      valueT       new_value;
-
-      gas_assert (S_GET_SEGMENT (label) == now_seg);
-
-      old_frag  = symbol_get_frag (label);
-      old_value = S_GET_VALUE (label);
-      new_value = (valueT) frag_now_fix ();
-
-      /* It is possible to have more than one label at a particular
-	 address, especially if debugging is enabled, so we must
-	 take care to adjust all the labels at this address in this
-	 fragment.  To save time we search from the end of the symbol
-	 list, backwards, since the symbols we are interested in are
-	 almost certainly the ones that were most recently added.
-	 Also to save time we stop searching once we have seen at least
-	 one matching label, and we encounter a label that is no longer
-	 in the target fragment.  Note, this search is guaranteed to
-	 find at least one match when sym == label, so no special case
-	 code is necessary.  */
-      for (sym = symbol_lastP; sym != NULL; sym = symbol_previous (sym))
-	{
-	  if (symbol_get_frag (sym) == old_frag
-	      && S_GET_VALUE (sym) == old_value)
-	    {
-	      label_seen = TRUE;
-	      symbol_set_frag (sym, frag_now);
-	      S_SET_VALUE (sym, new_value);
-	    }
-	  else if (label_seen && symbol_get_frag (sym) != old_frag)
-	    break;
-	}
-    }
-
-  record_alignment (now_seg, n);
-}
-
 /* This is the main entry point for the machine-dependent assembler.
    STR points to a machine-dependent instruction.  This function is
    supposed to emit the frags/bytes it assembles to.  For the D30V, it
@@ -1563,7 +1230,8 @@ static subsegT prev_subseg;
 static segT prev_seg = 0;
 
 void
-md_assemble (char *str)
+md_assemble (str)
+     char *str;
 {
   struct d30v_insn opcode;
   long long insn;
@@ -1575,7 +1243,7 @@ md_assemble (char *str)
 
   if ((prev_insn != -1) && prev_seg
       && ((prev_seg != now_seg) || (prev_subseg != now_subseg)))
-    d30v_cleanup (FALSE);
+    d30v_cleanup (false);
 
   if (d30v_current_align < 3)
     d30v_align (3, NULL, d30v_last_label);
@@ -1614,7 +1282,7 @@ md_assemble (char *str)
 
 	  /* If two instructions are present and we already have one saved,
 	     then first write it out.  */
-	  d30v_cleanup (FALSE);
+	  d30v_cleanup (false);
 
 	  /* Assemble first instruction and save it.  */
 	  prev_insn = do_assemble (str, &prev_opcode, 1, 0);
@@ -1675,17 +1343,16 @@ md_assemble (char *str)
 	     of NOPs for us.  */
 
 	  if (prev_insn != -1 && (strcmp (prev_opcode.op->name, "nop") == 0))
-	    d30v_cleanup (FALSE);
+	    d30v_cleanup (false);
 	  else
 	    {
 	      char *f;
 
 	      if (prev_insn != -1)
-		d30v_cleanup (TRUE);
+		d30v_cleanup (true);
 	      else
 		{
 		  f = frag_more (8);
-		  dwarf2_emit_insn (8);
 		  d30v_number_to_chars (f, NOP2, 8);
 
 		  if (warn_nops == NOP_ALL || warn_nops == NOP_MULTIPLY)
@@ -1707,7 +1374,7 @@ md_assemble (char *str)
     {
       /* Can't parallelize, flush current instruction and add a
          sequential NOP.  */
-      write_1_short (&opcode, (long) insn, fixups->next->next, TRUE);
+      write_1_short (&opcode, (long) insn, fixups->next->next, true);
 
       /* Make the previous instruction the current one.  */
       extype = EXEC_UNKNOWN;
@@ -1726,7 +1393,7 @@ md_assemble (char *str)
     {
       if (extype != EXEC_UNKNOWN)
 	as_bad (_("Instruction uses long version, so it cannot be mixed as specified"));
-      d30v_cleanup (FALSE);
+      d30v_cleanup (false);
       write_long (&opcode, insn, fixups);
       prev_insn = -1;
     }
@@ -1753,40 +1420,411 @@ md_assemble (char *str)
     }
 }
 
+/* Assemble a single instruction and return an opcode.
+   Return -1 (an invalid opcode) on error.  */
+
+#define NAME_BUF_LEN	20
+
+static long long
+do_assemble (str, opcode, shortp, is_parallel)
+     char *str;
+     struct d30v_insn *opcode;
+     int shortp;
+     int is_parallel;
+{
+  unsigned char *op_start;
+  unsigned char *save;
+  unsigned char *op_end;
+  char           name[NAME_BUF_LEN];
+  int            cmp_hack;
+  int            nlen = 0;
+  int            fsize = (shortp ? FORCE_SHORT : 0);
+  expressionS    myops[6];
+  long long      insn;
+
+  /* Drop leading whitespace.  */
+  while (*str == ' ')
+    str++;
+
+  /* Find the opcode end.  */
+  for (op_start = op_end = (unsigned char *) (str);
+       *op_end
+       && nlen < (NAME_BUF_LEN - 1)
+       && *op_end != '/'
+       && !is_end_of_line[*op_end] && *op_end != ' ';
+       op_end++)
+    {
+      name[nlen] = TOLOWER (op_start[nlen]);
+      nlen++;
+    }
+
+  if (nlen == 0)
+    return -1;
+
+  name[nlen] = 0;
+
+  /* If there is an execution condition code, handle it.  */
+  if (*op_end == '/')
+    {
+      int i = 0;
+      while ((i < ECC_MAX) && strncasecmp (d30v_ecc_names[i], op_end + 1, 2))
+	i++;
+
+      if (i == ECC_MAX)
+	{
+	  char tmp[4];
+	  strncpy (tmp, op_end + 1, 2);
+	  tmp[2] = 0;
+	  as_bad (_("unknown condition code: %s"), tmp);
+	  return -1;
+	}
+#if 0
+      printf ("condition code=%d\n", i);
+#endif
+      opcode->ecc = i;
+      op_end += 3;
+    }
+  else
+    opcode->ecc = ECC_AL;
+
+  /* CMP and CMPU change their name based on condition codes.  */
+  if (!strncmp (name, "cmp", 3))
+    {
+      int p, i;
+      char **str = (char **) d30v_cc_names;
+      if (name[3] == 'u')
+	p = 4;
+      else
+	p = 3;
+
+      for (i = 1; *str && strncmp (*str, &name[p], 2); i++, str++)
+	;
+
+      /* cmpu only supports some condition codes.  */
+      if (p == 4)
+	{
+	  if (i < 3 || i > 6)
+	    {
+	      name[p + 2] = 0;
+	      as_bad (_("cmpu doesn't support condition code %s"), &name[p]);
+	    }
+	}
+
+      if (!*str)
+	{
+	  name[p + 2] = 0;
+	  as_bad (_("unknown condition code: %s"), &name[p]);
+	}
+
+      cmp_hack = i;
+      name[p] = 0;
+    }
+  else
+    cmp_hack = 0;
+
+#if 0
+  printf ("cmp_hack=%d\n", cmp_hack);
+#endif
+
+  /* Need to look for .s or .l.  */
+  if (name[nlen - 2] == '.')
+    {
+      switch (name[nlen - 1])
+	{
+	case 's':
+	  fsize = FORCE_SHORT;
+	  break;
+	case 'l':
+	  fsize = FORCE_LONG;
+	  break;
+	}
+      name[nlen - 2] = 0;
+    }
+
+  /* Find the first opcode with the proper name.  */
+  opcode->op = (struct d30v_opcode *) hash_find (d30v_hash, name);
+  if (opcode->op == NULL)
+    {
+      as_bad (_("unknown opcode: %s"), name);
+      return -1;
+    }
+
+  save = input_line_pointer;
+  input_line_pointer = op_end;
+  while (!(opcode->form = find_format (opcode->op, myops, fsize, cmp_hack)))
+    {
+      opcode->op++;
+      if (opcode->op->name == NULL || strcmp (opcode->op->name, name))
+	{
+	  as_bad (_("operands for opcode `%s' do not match any valid format"),
+		  name);
+	  return -1;
+	}
+    }
+  input_line_pointer = save;
+
+  insn = build_insn (opcode, myops);
+
+  /* Propigate multiply status.  */
+  if (insn != -1)
+    {
+      if (is_parallel && prev_mul32_p)
+	cur_mul32_p = 1;
+      else
+	{
+	  prev_mul32_p = cur_mul32_p;
+	  cur_mul32_p  = (opcode->op->flags_used & FLAG_MUL32) != 0;
+	}
+    }
+
+  /* Propagate left_kills_right status.  */
+  if (insn != -1)
+    {
+      prev_left_kills_right_p = cur_left_kills_right_p;
+
+      if (opcode->op->flags_set & FLAG_LKR)
+	{
+	  cur_left_kills_right_p = 1;
+
+	  if (strcmp (opcode->op->name, "mvtsys") == 0)
+	    {
+	      /* Left kills right for only mvtsys only for
+                 PSW/PSWH/PSWL/flags target.  */
+	      if ((myops[0].X_op == O_register) &&
+		  ((myops[0].X_add_number == OPERAND_CONTROL) || /* psw */
+		   (myops[0].X_add_number == OPERAND_CONTROL+MAX_CONTROL_REG+2) || /* pswh */
+		   (myops[0].X_add_number == OPERAND_CONTROL+MAX_CONTROL_REG+1) || /* pswl */
+		   (myops[0].X_add_number == OPERAND_FLAG+0) || /* f0 */
+		   (myops[0].X_add_number == OPERAND_FLAG+1) || /* f1 */
+		   (myops[0].X_add_number == OPERAND_FLAG+2) || /* f2 */
+		   (myops[0].X_add_number == OPERAND_FLAG+3) || /* f3 */
+		   (myops[0].X_add_number == OPERAND_FLAG+4) || /* f4 */
+		   (myops[0].X_add_number == OPERAND_FLAG+5) || /* f5 */
+		   (myops[0].X_add_number == OPERAND_FLAG+6) || /* f6 */
+		   (myops[0].X_add_number == OPERAND_FLAG+7))) /* f7 */
+		{
+		  cur_left_kills_right_p = 1;
+		}
+	      else
+		{
+		  /* Other mvtsys target registers don't kill right
+                     instruction.  */
+		  cur_left_kills_right_p = 0;
+		}
+	    } /* mvtsys */
+	}
+      else
+	cur_left_kills_right_p = 0;
+    }
+
+  return insn;
+}
+
+/* Get a pointer to an entry in the format table.
+   It must look at all formats for an opcode and use the operands
+   to choose the correct one.  Return NULL on error.  */
+
+static struct d30v_format *
+find_format (opcode, myops, fsize, cmp_hack)
+     struct d30v_opcode *opcode;
+     expressionS myops[];
+     int fsize;
+     int cmp_hack;
+{
+  int numops, match, index, i = 0, j, k;
+  struct d30v_format *fm;
+
+  if (opcode == NULL)
+    return NULL;
+
+  /* Get all the operands and save them as expressions.  */
+  numops = get_operands (myops, cmp_hack);
+
+  while ((index = opcode->format[i++]) != 0)
+    {
+      if (fsize == FORCE_SHORT && index >= LONG)
+	continue;
+
+      if (fsize == FORCE_LONG && index < LONG)
+	continue;
+
+      fm = (struct d30v_format *) &d30v_format_table[index];
+      k = index;
+      while (fm->form == index)
+	{
+	  match = 1;
+	  /* Now check the operands for compatibility.  */
+	  for (j = 0; match && fm->operands[j]; j++)
+	    {
+	      int flags = d30v_operand_table[fm->operands[j]].flags;
+	      int bits = d30v_operand_table[fm->operands[j]].bits;
+	      int X_op = myops[j].X_op;
+	      int num = myops[j].X_add_number;
+
+	      if (flags & OPERAND_SPECIAL)
+		break;
+	      else if (X_op == O_illegal)
+		match = 0;
+	      else if (flags & OPERAND_REG)
+		{
+		  if (X_op != O_register
+		      || ((flags & OPERAND_ACC) && !(num & OPERAND_ACC))
+		      || (!(flags & OPERAND_ACC) && (num & OPERAND_ACC))
+		      || ((flags & OPERAND_FLAG) && !(num & OPERAND_FLAG))
+		      || (!(flags & (OPERAND_FLAG | OPERAND_CONTROL)) && (num & OPERAND_FLAG))
+		      || ((flags & OPERAND_CONTROL)
+			  && !(num & (OPERAND_CONTROL | OPERAND_FLAG))))
+		    {
+		      match = 0;
+		    }
+		}
+	      else if (((flags & OPERAND_MINUS)
+			&& (X_op != O_absent || num != OPERAND_MINUS))
+		       || ((flags & OPERAND_PLUS)
+			   && (X_op != O_absent || num != OPERAND_PLUS))
+		       || ((flags & OPERAND_ATMINUS)
+			   && (X_op != O_absent || num != OPERAND_ATMINUS))
+		       || ((flags & OPERAND_ATPAR)
+			   && (X_op != O_absent || num != OPERAND_ATPAR))
+		       || ((flags & OPERAND_ATSIGN)
+			   && (X_op != O_absent || num != OPERAND_ATSIGN)))
+		{
+		  match = 0;
+		}
+	      else if (flags & OPERAND_NUM)
+		{
+		  /* A number can be a constant or symbol expression.  */
+
+		  /* If we have found a register name, but that name
+		     also matches a symbol, then re-parse the name as
+		     an expression.  */
+		  if (X_op == O_register
+		      && symbol_find ((char *) myops[j].X_op_symbol))
+		    {
+		      input_line_pointer = (char *) myops[j].X_op_symbol;
+		      expression (&myops[j]);
+		    }
+
+		  /* Turn an expression into a symbol for later resolution.  */
+		  if (X_op != O_absent && X_op != O_constant
+		      && X_op != O_symbol && X_op != O_register
+		      && X_op != O_big)
+		    {
+		      symbolS *sym = make_expr_symbol (&myops[j]);
+		      myops[j].X_op = X_op = O_symbol;
+		      myops[j].X_add_symbol = sym;
+		      myops[j].X_add_number = num = 0;
+		    }
+
+		  if (fm->form >= LONG)
+		    {
+		      /* If we're testing for a LONG format, either fits.  */
+		      if (X_op != O_constant && X_op != O_symbol)
+			match = 0;
+		    }
+		  else if (fm->form < LONG
+			   && ((fsize == FORCE_SHORT && X_op == O_symbol)
+			       || (fm->form == SHORT_D2 && j == 0)))
+		    match = 1;
+
+		  /* This is the tricky part.  Will the constant or symbol
+		     fit into the space in the current format?  */
+		  else if (X_op == O_constant)
+		    {
+		      if (check_range (num, bits, flags))
+			match = 0;
+		    }
+		  else if (X_op == O_symbol
+			   && S_IS_DEFINED (myops[j].X_add_symbol)
+			   && S_GET_SEGMENT (myops[j].X_add_symbol) == now_seg
+			   && opcode->reloc_flag == RELOC_PCREL)
+		    {
+		      /* If the symbol is defined, see if the value will fit
+			 into the form we're considering.  */
+		      fragS *f;
+		      long value;
+
+		      /* Calculate the current address by running through the
+			 previous frags and adding our current offset.  */
+		      value = 0;
+		      for (f = frchain_now->frch_root; f; f = f->fr_next)
+			value += f->fr_fix + f->fr_offset;
+		      value = (S_GET_VALUE (myops[j].X_add_symbol) - value
+			       - (obstack_next_free (&frchain_now->frch_obstack)
+				  - frag_now->fr_literal));
+		      if (check_range (value, bits, flags))
+			match = 0;
+		    }
+		  else
+		    match = 0;
+		}
+	    }
+#if 0
+	  printf ("through the loop: match=%d\n", match);
+#endif
+	  /* We're only done if the operands matched so far AND there
+	     are no more to check.  */
+	  if (match && myops[j].X_op == 0)
+	    {
+	      /* Final check - issue a warning if an odd numbered register
+		 is used as the first register in an instruction that reads
+		 or writes 2 registers.  */
+
+	      for (j = 0; fm->operands[j]; j++)
+		if (myops[j].X_op == O_register
+		    && (myops[j].X_add_number & 1)
+		    && (d30v_operand_table[fm->operands[j]].flags & OPERAND_2REG))
+		  as_warn (_("Odd numbered register used as target of multi-register instruction"));
+
+	      return fm;
+	    }
+	  fm = (struct d30v_format *) &d30v_format_table[++k];
+	}
+#if 0
+      printf ("trying another format: i=%d\n", i);
+#endif
+    }
+  return NULL;
+}
+
 /* If while processing a fixup, a reloc really needs to be created,
    then it is done here.  */
 
 arelent *
-tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
+tc_gen_reloc (seg, fixp)
+     asection *seg;
+     fixS *fixp;
 {
   arelent *reloc;
-  reloc = XNEW (arelent);
-  reloc->sym_ptr_ptr = XNEW (asymbol *);
+  reloc = (arelent *) xmalloc (sizeof (arelent));
+  reloc->sym_ptr_ptr = (asymbol **) xmalloc (sizeof (asymbol *));
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
   reloc->address = fixp->fx_frag->fr_address + fixp->fx_where;
   reloc->howto = bfd_reloc_type_lookup (stdoutput, fixp->fx_r_type);
-  if (reloc->howto == NULL)
+  if (reloc->howto == (reloc_howto_type *) NULL)
     {
       as_bad_where (fixp->fx_file, fixp->fx_line,
 		    _("reloc %d not supported by object file format"),
 		    (int) fixp->fx_r_type);
       return NULL;
     }
-
-  reloc->addend = 0;
+  reloc->addend = fixp->fx_addnumber;
   return reloc;
 }
 
 int
-md_estimate_size_before_relax (fragS *fragp ATTRIBUTE_UNUSED,
-			       asection *seg ATTRIBUTE_UNUSED)
+md_estimate_size_before_relax (fragp, seg)
+     fragS *fragp;
+     asection *seg;
 {
   abort ();
   return 0;
 }
 
 long
-md_pcrel_from_section (fixS *fixp, segT sec)
+md_pcrel_from_section (fixp, sec)
+     fixS *fixp;
+     segT sec;
 {
   if (fixp->fx_addsy != (symbolS *) NULL
       && (!S_IS_DEFINED (fixp->fx_addsy)
@@ -1795,121 +1833,36 @@ md_pcrel_from_section (fixS *fixp, segT sec)
   return fixp->fx_frag->fr_address + fixp->fx_where;
 }
 
-/* Called after the assembler has finished parsing the input file or
-   after a label is defined.  Because the D30V assembler sometimes
-   saves short instructions to see if it can package them with the
-   next instruction, there may be a short instruction that still needs
-   written.  */
-
-int
-d30v_cleanup (int use_sequential)
-{
-  segT seg;
-  subsegT subseg;
-
-  if (prev_insn != -1)
-    {
-      seg = now_seg;
-      subseg = now_subseg;
-      subseg_set (prev_seg, prev_subseg);
-      write_1_short (&prev_opcode, (long) prev_insn, fixups->next,
-		     use_sequential);
-      subseg_set (seg, subseg);
-      prev_insn = -1;
-      if (use_sequential)
-	prev_mul32_p = FALSE;
-    }
-
-  return 1;
-}
-
-/* This function is called at the start of every line.  It checks to
-   see if the first character is a '.', which indicates the start of a
-   pseudo-op.  If it is, then write out any unwritten instructions.  */
-
 void
-d30v_start_line (void)
-{
-  char *c = input_line_pointer;
-
-  while (ISSPACE (*c))
-    c++;
-
-  if (*c == '.')
-    d30v_cleanup (FALSE);
-}
-
-static void
-check_size (long value, int bits, const char *file, int line)
-{
-  int tmp, max;
-
-  if (value < 0)
-    tmp = ~value;
-  else
-    tmp = value;
-
-  max = (1 << (bits - 1)) - 1;
-
-  if (tmp > max)
-    as_bad_where (file, line, _("value too large to fit in %d bits"), bits);
-}
-
-/* d30v_frob_label() is called when after a label is recognized.  */
-
-void
-d30v_frob_label (symbolS *lab)
-{
-  /* Emit any pending instructions.  */
-  d30v_cleanup (FALSE);
-
-  /* Update the label's address with the current output pointer.  */
-  symbol_set_frag (lab, frag_now);
-  S_SET_VALUE (lab, (valueT) frag_now_fix ());
-
-  /* Record this label for future adjustment after we find out what
-     kind of data it references, and the required alignment therewith.  */
-  d30v_last_label = lab;
-
-  dwarf2_emit_label (lab);
-}
-
-/* Hook into cons for capturing alignment changes.  */
-
-void
-d30v_cons_align (int size)
-{
-  int log_size;
-
-  /* Don't specially align anything in debug sections.  */
-  if ((now_seg->flags & SEC_ALLOC) == 0
-      || strcmp (now_seg->name, ".eh_frame") == 0)
-    return;
-
-  log_size = 0;
-  while ((size >>= 1) != 0)
-    ++log_size;
-
-  if (d30v_current_align < log_size)
-    d30v_align (log_size, (char *) NULL, NULL);
-  else if (d30v_current_align > log_size)
-    d30v_current_align = log_size;
-  d30v_last_label = NULL;
-}
-
-void
-md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
+md_apply_fix3 (fixP, valP, seg)
+     fixS *fixP;
+     valueT * valP;
+     segT seg;
 {
   char *where;
   unsigned long insn, insn2;
-  long value = *valP;
+  long value = * (long *) valP;
 
   if (fixP->fx_addsy == (symbolS *) NULL)
     fixP->fx_done = 1;
 
-  /* We don't support subtracting a symbol.  */
-  if (fixP->fx_subsy != (symbolS *) NULL)
-    as_bad_where (fixP->fx_file, fixP->fx_line, _("expression too complex"));
+  else if (fixP->fx_pcrel)
+    ;
+
+  else
+    {
+      value = fixP->fx_offset;
+
+      if (fixP->fx_subsy != (symbolS *) NULL)
+	{
+	  if (S_GET_SEGMENT (fixP->fx_subsy) == absolute_section)
+	    value -= S_GET_VALUE (fixP->fx_subsy);
+	  else
+	    /* We don't actually support subtracting a symbol.  */
+	    as_bad_where (fixP->fx_file, fixP->fx_line,
+			  _("expression too complex"));
+	}
+    }
 
   /* Fetch the instruction, insert the fully resolved operand
      value, and stuff the instruction back again.  */
@@ -1918,17 +1871,37 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 
   switch (fixP->fx_r_type)
     {
-    case BFD_RELOC_8:
-      *(unsigned char *) where = value;
+    case BFD_RELOC_8:  /* Check for a bad .byte directive.  */
+      if (fixP->fx_addsy != NULL)
+	as_bad (_("line %d: unable to place address of symbol '%s' into a byte"),
+		fixP->fx_line, S_GET_NAME (fixP->fx_addsy));
+      else if (((unsigned)value) > 0xff)
+	as_bad (_("line %d: unable to place value %x into a byte"),
+		fixP->fx_line, value);
+      else
+	*(unsigned char *) where = value;
       break;
 
-    case BFD_RELOC_16:
-      bfd_putb16 ((bfd_vma) value, (unsigned char *) where);
+    case BFD_RELOC_16:  /* Check for a bad .short directive.  */
+      if (fixP->fx_addsy != NULL)
+	as_bad (_("line %d: unable to place address of symbol '%s' into a short"),
+		fixP->fx_line, S_GET_NAME (fixP->fx_addsy));
+      else if (((unsigned)value) > 0xffff)
+	as_bad (_("line %d: unable to place value %x into a short"),
+		fixP->fx_line, value);
+      else
+	bfd_putb16 ((bfd_vma) value, (unsigned char *) where);
       break;
 
-    case BFD_RELOC_64:
-      bfd_putb32 ((bfd_vma) value, (unsigned char *) where);
-      bfd_putb32 (0, ((unsigned char *) where) + 4);
+    case BFD_RELOC_64:  /* Check for a bad .quad directive.  */
+      if (fixP->fx_addsy != NULL)
+	as_bad (_("line %d: unable to place address of symbol '%s' into a quad"),
+		fixP->fx_line, S_GET_NAME (fixP->fx_addsy));
+      else
+	{
+	  bfd_putb32 ((bfd_vma) value, (unsigned char *) where);
+	  bfd_putb32 (0, ((unsigned char *) where) + 4);
+	}
       break;
 
     case BFD_RELOC_D30V_6:
@@ -2016,11 +1989,215 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     }
 }
 
+/* Called after the assembler has finished parsing the input file or
+   after a label is defined.  Because the D30V assembler sometimes
+   saves short instructions to see if it can package them with the
+   next instruction, there may be a short instruction that still needs
+   written.  */
+
+int
+d30v_cleanup (use_sequential)
+     int use_sequential;
+{
+  segT seg;
+  subsegT subseg;
+
+  if (prev_insn != -1)
+    {
+      seg = now_seg;
+      subseg = now_subseg;
+      subseg_set (prev_seg, prev_subseg);
+      write_1_short (&prev_opcode, (long) prev_insn, fixups->next,
+		     use_sequential);
+      subseg_set (seg, subseg);
+      prev_insn = -1;
+      if (use_sequential)
+	prev_mul32_p = false;
+    }
+
+  return 1;
+}
+
+static void
+d30v_number_to_chars (buf, value, n)
+     char *buf;			/* Return 'nbytes' of chars here.  */
+     long long value;		/* The value of the bits.  */
+     int n;			/* Number of bytes in the output.  */
+{
+  while (n--)
+    {
+      buf[n] = value & 0xff;
+      value >>= 8;
+    }
+}
+
+/* This function is called at the start of every line.  It checks to
+   see if the first character is a '.', which indicates the start of a
+   pseudo-op.  If it is, then write out any unwritten instructions.  */
+
+void
+d30v_start_line ()
+{
+  char *c = input_line_pointer;
+
+  while (ISSPACE (*c))
+    c++;
+
+  if (*c == '.')
+    d30v_cleanup (false);
+}
+
+static void
+check_size (value, bits, file, line)
+     long value;
+     int bits;
+     char *file;
+     int line;
+{
+  int tmp, max;
+
+  if (value < 0)
+    tmp = ~value;
+  else
+    tmp = value;
+
+  max = (1 << (bits - 1)) - 1;
+
+  if (tmp > max)
+    as_bad_where (file, line, _("value too large to fit in %d bits"), bits);
+
+  return;
+}
+
+/* d30v_frob_label() is called when after a label is recognized.  */
+
+void
+d30v_frob_label (lab)
+     symbolS *lab;
+{
+  /* Emit any pending instructions.  */
+  d30v_cleanup (false);
+
+  /* Update the label's address with the current output pointer.  */
+  symbol_set_frag (lab, frag_now);
+  S_SET_VALUE (lab, (valueT) frag_now_fix ());
+
+  /* Record this label for future adjustment after we find out what
+     kind of data it references, and the required alignment therewith.  */
+  d30v_last_label = lab;
+}
+
+/* Hook into cons for capturing alignment changes.  */
+
+void
+d30v_cons_align (size)
+     int size;
+{
+  int log_size;
+
+  log_size = 0;
+  while ((size >>= 1) != 0)
+    ++log_size;
+
+  if (d30v_current_align < log_size)
+    d30v_align (log_size, (char *) NULL, NULL);
+  else if (d30v_current_align > log_size)
+    d30v_current_align = log_size;
+  d30v_last_label = NULL;
+}
+
+/* Called internally to handle all alignment needs.  This takes care
+   of eliding calls to frag_align if'n the cached current alignment
+   says we've already got it, as well as taking care of the auto-aligning
+   labels wrt code.  */
+
+static void
+d30v_align (n, pfill, label)
+     int n;
+     char *pfill;
+     symbolS *label;
+{
+  /* The front end is prone to changing segments out from under us
+     temporarily when -g is in effect.  */
+  int switched_seg_p = (d30v_current_align_seg != now_seg);
+
+  /* Do not assume that if 'd30v_current_align >= n' and
+     '! switched_seg_p' that it is safe to avoid performing
+     this alignement request.  The alignment of the current frag
+     can be changed under our feet, for example by a .ascii
+     directive in the source code.  cf testsuite/gas/d30v/reloc.s  */
+  d30v_cleanup (false);
+
+  if (pfill == NULL)
+    {
+      if (n > 2
+	  && (bfd_get_section_flags (stdoutput, now_seg) & SEC_CODE) != 0)
+	{
+	  static char const nop[4] = { 0x00, 0xf0, 0x00, 0x00 };
+
+	  /* First, make sure we're on a four-byte boundary, in case
+	     someone has been putting .byte values the text section.  */
+	  if (d30v_current_align < 2 || switched_seg_p)
+	    frag_align (2, 0, 0);
+	  frag_align_pattern (n, nop, sizeof nop, 0);
+	}
+      else
+	frag_align (n, 0, 0);
+    }
+  else
+    frag_align (n, *pfill, 0);
+
+  if (!switched_seg_p)
+    d30v_current_align = n;
+
+  if (label != NULL)
+    {
+      symbolS     *sym;
+      int          label_seen = false;
+      struct frag *old_frag;
+      valueT       old_value;
+      valueT       new_value;
+
+      assert (S_GET_SEGMENT (label) == now_seg);
+
+      old_frag  = symbol_get_frag (label);
+      old_value = S_GET_VALUE (label);
+      new_value = (valueT) frag_now_fix ();
+
+      /* It is possible to have more than one label at a particular
+	 address, especially if debugging is enabled, so we must
+	 take care to adjust all the labels at this address in this
+	 fragment.  To save time we search from the end of the symbol
+	 list, backwards, since the symbols we are interested in are
+	 almost certainly the ones that were most recently added.
+	 Also to save time we stop searching once we have seen at least
+	 one matching label, and we encounter a label that is no longer
+	 in the target fragment.  Note, this search is guaranteed to
+	 find at least one match when sym == label, so no special case
+	 code is necessary.  */
+      for (sym = symbol_lastP; sym != NULL; sym = symbol_previous (sym))
+	{
+	  if (symbol_get_frag (sym) == old_frag
+	      && S_GET_VALUE (sym) == old_value)
+	    {
+	      label_seen = true;
+	      symbol_set_frag (sym, frag_now);
+	      S_SET_VALUE (sym, new_value);
+	    }
+	  else if (label_seen && symbol_get_frag (sym) != old_frag)
+	    break;
+	}
+    }
+
+  record_alignment (now_seg, n);
+}
+
 /* Handle the .align pseudo-op.  This aligns to a power of two.  We
    hook here to latch the current alignment.  */
 
 static void
-s_d30v_align (int ignore ATTRIBUTE_UNUSED)
+s_d30v_align (ignore)
+     int ignore;
 {
   int align;
   char fill, *pfill = NULL;
@@ -2055,7 +2232,8 @@ s_d30v_align (int ignore ATTRIBUTE_UNUSED)
    clears the saved last label and resets known alignment.  */
 
 static void
-s_d30v_text (int i)
+s_d30v_text (i)
+     int i;
 
 {
   s_text (i);
@@ -2068,7 +2246,8 @@ s_d30v_text (int i)
    clears the saved last label and resets known alignment.  */
 
 static void
-s_d30v_data (int i)
+s_d30v_data (i)
+     int i;
 {
   s_data (i);
   d30v_last_label = NULL;
@@ -2080,25 +2259,11 @@ s_d30v_data (int i)
    clears the saved last label and resets known alignment.  */
 
 static void
-s_d30v_section (int ignore)
+s_d30v_section (ignore)
+     int ignore;
 {
   obj_elf_section (ignore);
   d30v_last_label = NULL;
   d30v_current_align = 0;
   d30v_current_align_seg = now_seg;
 }
-
-/* The target specific pseudo-ops which we support.  */
-const pseudo_typeS md_pseudo_table[] =
-{
-  { "word", cons, 4 },
-  { "hword", cons, 2 },
-  { "align", s_d30v_align, 0 },
-  { "text", s_d30v_text, 0 },
-  { "data", s_d30v_data, 0 },
-  { "section", s_d30v_section, 0 },
-  { "section.s", s_d30v_section, 0 },
-  { "sect", s_d30v_section, 0 },
-  { "sect.s", s_d30v_section, 0 },
-  { NULL, NULL, 0 }
-};

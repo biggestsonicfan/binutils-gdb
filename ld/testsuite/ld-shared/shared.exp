@@ -1,22 +1,20 @@
 # Expect script for ld-shared tests
-#   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+#   Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001
+#   Free Software Foundation, Inc.
 #
-# This file is part of the GNU Binutils.
-#
-# This program is free software; you can redistribute it and/or modify
+# This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 # Written by Ian Lance Taylor (ian@cygnus.com)
 #
@@ -25,10 +23,8 @@
 # Note that linking against ELF shared libraries is tested by the
 # bootstrap test.
 
-# Check to see if the C compiler works
-if { ![check_compiler_available] } {
-    return
-}
+# This test can only be run if ld generates native executables.
+if ![isnative] then {return}
 
 # This test can only be run on a couple of ELF platforms.
 # Square bracket expressions seem to confuse istarget.
@@ -38,32 +34,32 @@ if { ![istarget hppa*64*-*-hpux*] \
      && ![istarget i?86-*-unixware] \
      && ![istarget i?86-*-elf*] \
      && ![istarget i?86-*-linux*] \
-     && ![istarget i?86-*-gnu*] \
-     && ![istarget *-*-nacl*] \
      && ![istarget ia64-*-elf*] \
      && ![istarget ia64-*-linux*] \
      && ![istarget m68k-*-linux*] \
      && ![istarget mips*-*-irix5*] \
      && ![istarget mips*-*-linux*] \
-     && ![istarget powerpc*-*-elf*] \
-     && ![istarget powerpc*-*-linux*] \
-     && ![istarget powerpc*-*-sysv4*] \
+     && ![istarget powerpc-*-elf*] \
+     && ![istarget powerpc-*-linux*] \
+     && ![istarget powerpc-*-sysv4*] \
      && ![istarget sparc*-*-elf] \
      && ![istarget sparc*-*-solaris2*] \
+     && ![istarget sparc*-*-sunos4*] \
      && ![istarget sparc*-*-linux*] \
      && ![istarget arm*-*-linux*] \
      && ![istarget alpha*-*-linux*] \
      && ![istarget rs6000*-*-aix*] \
-     && ![istarget powerpc*-*-aix*] \
-     && ![istarget s390*-*-linux*] \
-     && ![istarget aarch64*-*-linux*] \
-     && ![istarget x86_64-*-linux*] } {
+     && ![istarget powerpc*-*-aix*] } {
+    return
+}
+
+if { [istarget *-*-linux*aout*] \
+     || [istarget *-*-linux*oldld*] } {
     return
 }
 
 set tmpdir tmpdir
 set SHCFLAG ""
-set shared_needs_pic "no"
 
 if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 
@@ -95,30 +91,9 @@ if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
     close $file
 }
 
-if [istarget arm*-*-linux*] {
-    # On ARM section anchors can change the symbol pre-emptability for
-    # non-PIC shared libraries, causing these tests to fail.  Turn section
-    # anchors off.
-    set SHCFLAG "-fno-section-anchors"
-
-    # On targets that have MOVW the compiler will emit relocations which
-    # the linker doesn't support when compiling -shared without -fpic.  The
-    # test to find out whether we want to XFAIL the non-PIC tests requires
-    # a compile - so we pre-calculate it here.  We also note that this can
-    # only affect arm*-*-*eabi* targets as the old ABI doesn't support v7.
-    if [istarget arm*-*-*eabi*] {
-	set file [open $tmpdir/movw-detect.c w]
-	puts $file "void foo(void) { __asm (\"movw r0, #0\"); }"
-	close $file
-	if [run_host_cmd_yesno "$CC" "$CFLAGS -c $tmpdir/movw-detect.c -o $tmpdir/movw-detect.o"] {
-	    set shared_needs_pic "yes"
-	}
-    }
-}
-
 # The test procedure.
 proc shared_test { progname testname main sh1 sh2 dat args } {
-    global CC
+    global ld
     global srcdir
     global subdir
     global exec_output
@@ -133,7 +108,7 @@ proc shared_test { progname testname main sh1 sh2 dat args } {
     if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	set shared "-bM:SRE -bE:$tmpdir/xcoff.exp"
     }
-    if {![ld_link $CC $tmpdir/$progname.so "$shared $shldflags $tmpdir/$sh1 $tmpdir/$sh2"]} {
+    if {![ld_simple_link $ld $tmpdir/$progname.so "$shared $shldflags $tmpdir/$sh1 $tmpdir/$sh2"]} {
         fail "$testname"
     	return
     }
@@ -146,14 +121,9 @@ proc shared_test { progname testname main sh1 sh2 dat args } {
     if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	set rpath /lib:$tmpdir
     }
-    if ![ld_link $CC $tmpdir/$progname "-Wl,-rpath,$rpath $tmpdir/$main $tmpdir/$progname.so"] {
+    if ![ld_link $ld $tmpdir/$progname "-rpath $rpath $tmpdir/$main $tmpdir/$progname.so"] {
     	fail "$testname"
     	return
-    }
-
-    if ![isnative] {
-	unsupported $testname
-	return
     }
 
     # Run the resulting program
@@ -182,9 +152,7 @@ proc shared_test { progname testname main sh1 sh2 dat args } {
     pass "$testname"
 }
 
-# Old version of GCC for MIPS default to enabling -fpic
-# and get confused if it is used on the command line.
-if { [istarget mips*-*-*] && ! [at_least_gcc_version 4 3] } then {
+if [istarget mips*-*-*] {
     set picflag ""
 } else {
     # Unfortunately, the gcc argument is -fpic and the cc argument is
@@ -199,7 +167,11 @@ if { [istarget mips*-*-*] && ! [at_least_gcc_version 4 3] } then {
 	 || [string match "*option ignored*" $exec_output] \
 	 || [string match "*unrecognized option*" $exec_output] \
 	 || [string match "*passed to ld*" $exec_output] } {
-	set picflag "-KPIC"
+	if [istarget *-*-sunos4*] {
+	    set picflag "-pic"
+	} else {
+	    set picflag "-KPIC"
+	}
     }
 }
 verbose "Using $picflag to compile PIC code"
@@ -214,83 +186,54 @@ if ![ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o] 
     # although it will be less efficient because the dynamic linker
     # will need to do more relocation work.  However, note that not
     # using -fpic will cause some of the tests to return different
-    # results.  Make sure that PLT is used since PLT is expected.
-    global PLT_CFLAGS NOPIE_CFLAGS
-    if { ![ld_compile "$CC $PLT_CFLAGS $NOPIE_CFLAGS $CFLAGS $SHCFLAG" $srcdir/$subdir/sh1.c $tmpdir/sh1np.o]
-	 || ![ld_compile "$CC $PLT_CFLAGS $CFLAGS $SHCFLAG" $srcdir/$subdir/sh2.c $tmpdir/sh2np.o] } {
+    # results.
+    if { ![ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/sh1.c $tmpdir/sh1np.o]
+	 || ![ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/sh2.c $tmpdir/sh2np.o] } {
 	unresolved "shared (non PIC)"
     } else { if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	shared_test shnp "shared (nonPIC)" mainnp.o sh1np.o sh2np.o xcoff
     } else {
-	# Solaris defaults to -z text.
-	setup_xfail "*-*-solaris2*"
+	# SunOS non PIC shared libraries don't permit some cases of
+	# overriding.
+	setup_xfail "*-*-sunos4*"
 	setup_xfail "ia64-*-linux*"
 	setup_xfail "alpha*-*-linux*"
-	setup_xfail "powerpc64*-*-*"
-	if { ![istarget hppa*64*-*-linux*] } {
-	    setup_xfail "hppa*-*-linux*"
-	}
-	if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainnp.o] } {
-	    setup_xfail "sparc*-*-linux*"
-	}
-	if { [is_elf64 $tmpdir/mainnp.o] } {
-	    setup_xfail "x86_64-*-linux*"
-	}
-	setup_xfail "x86_64-*-linux-gnux32"
-	setup_xfail "s390x-*-linux*"
-	if [ string match $shared_needs_pic "yes" ] {
-	    setup_xfail "arm*-*-linux*"
-	}
-	setup_xfail "aarch64*-*-linux*"
 	shared_test shnp "shared (non PIC)" mainnp.o sh1np.o sh2np.o shared
 
 	# Test ELF shared library relocations with a non-zero load
 	# address for the library.  Near as I can tell, the R_*_RELATIVE
 	# relocations for various targets are broken in the case where
 	# the load address is not zero (which is the default).
+	setup_xfail "*-*-sunos4*"
 	setup_xfail "*-*-linux*libc1"
-	setup_xfail "powerpc*-*-linux*"
+	setup_xfail "powerpc-*-linux*"
 	setup_xfail "ia64-*-linux*"
 	setup_xfail "alpha*-*-linux*"
 	setup_xfail "mips*-*-linux*"
-	if { ![istarget hppa*64*-*-linux*] } {
-	    setup_xfail "hppa*-*-linux*"
-	}
-	if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainnp.o] } {
-	    setup_xfail "sparc*-*-linux*"
-	}
-	if { [is_elf64 $tmpdir/mainnp.o] } {
-	    setup_xfail "x86_64-*-linux*"
-	}
-	setup_xfail "x86_64-*-linux-gnux32"
-	setup_xfail "s390x-*-linux*"
-	if [ string match $shared_needs_pic "yes" ] {
-	    setup_xfail "arm*-*-linux*"
-	}
-	setup_xfail "aarch64*-*-linux*"
-	# Solaris defaults to -z text.
-	setup_xfail "*-*-solaris2*"
 	shared_test shnp "shared (non PIC, load offset)" \
 		mainnp.o sh1np.o sh2np.o shared \
-		"-Wl,-T,$srcdir/$subdir/elf-offset.ld,--hash-style=sysv"
+		"-T $srcdir/$subdir/elf-offset.ld"
     } }
 
     # Now compile the code using -fpic.
 
-    if { ![ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o]
+    if { ![ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o] 
 	 || ![ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/sh2.c $tmpdir/sh2p.o] } {
 	unresolved "shared"
     } else {
-	if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
+	# SunOS can not compare function pointers correctly
+	if [istarget "*-*-sunos4*"] {
+	    shared_test shp "shared" mainnp.o sh1p.o sh2p.o sun4
+	} else { if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	    shared_test shp "shared" mainnp.o sh1p.o sh2p.o xcoff
 	} else {
 	    shared_test shp "shared" mainnp.o sh1p.o sh2p.o shared
 	    ld_compile "$CC $CFLAGS -DSYMBOLIC_TEST -DXCOFF_TEST $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o
 	    ld_compile "$CC $CFLAGS -DSYMBOLIC_TEST -DXCOFF_TEST $SHCFLAG $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o
-	    shared_test shp "shared -Bsymbolic" mainnp.o sh1p.o sh2p.o symbolic "-Bsymbolic"
+	    shared_test shp "shared -Bsymbolic" mainnp.o sh1p.o sh2p.o symbolic "-Bsymbolic" 
 	    ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o
 	    ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o
-	}
+	} }
     }
 }
 
@@ -303,26 +246,11 @@ if ![ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/main.c $tmpdir/m
         if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	    shared_test shmpnp "shared (PIC main, non PIC so)" mainp.o sh1np.o sh2np.o xcoff
 	} else {
-	    # Solaris defaults to -z text.
-	    setup_xfail "*-*-solaris2*"
+	    # SunOS non PIC shared libraries don't permit some cases of
+	    # overriding.
+	    setup_xfail "*-*-sunos4*"
 	    setup_xfail "ia64-*-linux*"
 	    setup_xfail "alpha*-*-linux*"
-	    setup_xfail "powerpc64*-*-*"
-	    if { ![istarget hppa*64*-*-linux*] } {
-		setup_xfail "hppa*-*-linux*"
-	    }
-	    if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainp.o] } {
-		setup_xfail "sparc*-*-linux*"
-	    }
-	    if { [is_elf64 $tmpdir/mainp.o] } {
-		setup_xfail "x86_64-*-linux*"
-	    }
-	    setup_xfail "x86_64-*-linux-gnux32"
-	    setup_xfail "s390x-*-linux*"
-	    if [ string match $shared_needs_pic "yes" ] {
-		setup_xfail "arm*-*-linux*"
-	    }
-	    setup_xfail "aarch64*-*-linux*"
 	    shared_test shmpnp "shared (PIC main, non PIC so)" mainp.o sh1np.o sh2np.o shared
 	}
     } else {

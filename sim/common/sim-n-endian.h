@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1995, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #ifndef N
@@ -44,7 +43,7 @@ INLINE_SIM_ENDIAN\
 (unsigned_N)
 endian_t2h_N(unsigned_N raw_in)
 {
-  if (CURRENT_TARGET_BYTE_ORDER == HOST_BYTE_ORDER) {
+  if (CURRENT_TARGET_BYTE_ORDER == CURRENT_HOST_BYTE_ORDER) {
     return raw_in;
   }
   else {
@@ -58,7 +57,7 @@ INLINE_SIM_ENDIAN\
 (unsigned_N)
 endian_h2t_N(unsigned_N raw_in)
 {
-  if (CURRENT_TARGET_BYTE_ORDER == HOST_BYTE_ORDER) {
+  if (CURRENT_TARGET_BYTE_ORDER == CURRENT_HOST_BYTE_ORDER) {
     return raw_in;
   }
   else {
@@ -81,7 +80,7 @@ INLINE_SIM_ENDIAN\
 (unsigned_N)
 endian_h2be_N(unsigned_N raw_in)
 {
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_BIG) {
+  if (CURRENT_HOST_BYTE_ORDER == BIG_ENDIAN) {
     return raw_in;
   }
   else {
@@ -95,7 +94,7 @@ INLINE_SIM_ENDIAN\
 (unsigned_N)
 endian_be2h_N(unsigned_N raw_in)
 {
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_BIG) {
+  if (CURRENT_HOST_BYTE_ORDER == BIG_ENDIAN) {
     return raw_in;
   }
   else {
@@ -109,7 +108,7 @@ INLINE_SIM_ENDIAN\
 (unsigned_N)
 endian_h2le_N(unsigned_N raw_in)
 {
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_LITTLE) {
+  if (CURRENT_HOST_BYTE_ORDER == LITTLE_ENDIAN) {
     return raw_in;
   }
   else {
@@ -123,7 +122,7 @@ INLINE_SIM_ENDIAN\
 (unsigned_N)
 endian_le2h_N(unsigned_N raw_in)
 {
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_LITTLE) {
+  if (CURRENT_HOST_BYTE_ORDER == LITTLE_ENDIAN) {
     return raw_in;
   }
   else {
@@ -145,7 +144,7 @@ offset_N (unsigned_N *x,
   ASSERT (offset + sizeof_word <= sizeof(unsigned_N));
   ASSERT (word < (sizeof (unsigned_N) / sizeof_word));
   ASSERT ((sizeof (unsigned_N) % sizeof_word) == 0);
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_LITTLE)
+  if (WITH_HOST_BYTE_ORDER == LITTLE_ENDIAN)
     {
       out = in + sizeof (unsigned_N) - offset - sizeof_word;
     }

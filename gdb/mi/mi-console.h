@@ -1,12 +1,12 @@
 /* MI Command Set - MI Console.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions (a Red Hat company).
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,44 +15,13 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
-#ifndef MI_MI_CONSOLE_H
-#define MI_MI_CONSOLE_H
+#ifndef MI_CONSOLE_H
+#define MI_CONSOLE_H
 
-/* An output stream for MI.  Wraps a given output stream with a prefix
-   and handles quoting.  This stream is locally buffered.  */
+extern struct ui_file *mi_console_file_new (struct ui_file *raw, const char *prefix);
 
-class mi_console_file : public ui_file
-{
-public:
-  /* Create a console that wraps the given output stream RAW with the
-     string PREFIX and quoting it with QUOTE.  */
-  mi_console_file (ui_file *raw, const char *prefix, char quote);
-
-  /* MI-specific API.  */
-  void set_raw (ui_file *raw);
-
-  /* ui_file-specific methods.  */
-
-  void flush () override;
-
-  void write (const char *buf, long length_buf) override;
-
-  void write_async_safe (const char *buf, long length_buf) override;
-
-private:
-  /* The wrapped raw output stream.  */
-  ui_file *m_raw;
-
-  /* The local buffer.  */
-  string_file m_buffer;
-
-  /* The prefix.  */
-  const char *m_prefix;
-
-  /* The quote char.  */
-  char m_quote;
-};
-
-#endif /* MI_MI_CONSOLE_H */
+#endif

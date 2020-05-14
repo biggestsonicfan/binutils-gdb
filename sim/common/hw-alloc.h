@@ -1,21 +1,22 @@
 /* Hardware memory allocator.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 
 #ifndef HW_ALLOC_H
@@ -33,8 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #define HW_ZALLOC(me,type) (type*) hw_zalloc (me, sizeof (type))
 #define HW_MALLOC(me,type) (type*) hw_malloc (me, sizeof (type))
-#define HW_NALLOC(me,type,n) (type*) hw_malloc (me, sizeof (type) * (n))
-#define HW_NZALLOC(me,type,n) (type*) hw_zalloc (me, sizeof (type) * (n))
+#define HW_NZALLOC(ME,TYPE,N) (TYPE*) hw_zalloc (me, sizeof (TYPE) * (N))
 
 extern void *hw_zalloc (struct hw *me, unsigned long size);
 extern void *hw_malloc (struct hw *me, unsigned long size);

@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #ifndef N
@@ -138,7 +137,7 @@ sim_core_trace_M (sim_cpu *cpu,
 }
 #endif
 
-
+  
 /* TAGS: sim_core_read_aligned_1 sim_core_read_aligned_2 */
 /* TAGS: sim_core_read_aligned_4 sim_core_read_aligned_8 */
 /* TAGS: sim_core_read_aligned_16 */
@@ -164,8 +163,19 @@ sim_core_read_aligned_N(sim_cpu *cpu,
   mapping = sim_core_find_mapping (core, map, addr, N, read_transfer, 1 /*abort*/, cpu, cia);
   do
     {
+#if (WITH_DEVICES)
+      if (WITH_CALLBACK_MEMORY && mapping->device != NULL)
+	{
+	  unsigned_M data;
+	  if (device_io_read_buffer (mapping->device, &data, mapping->space, addr, N, CPU_STATE (cpu), cpu, cia) != N)
+	    device_error (mapping->device, "internal error - %s - io_read_buffer should not fail",
+			  XSTRING (sim_core_read_aligned_N));
+	  val = T2H_M (data);
+	  break;
+	}
+#endif
 #if (WITH_HW)
-      if (mapping->device != NULL)
+      if (WITH_CALLBACK_MEMORY && mapping->device != NULL)
 	{
 	  unsigned_M data;
 	  sim_cpu_hw_io_read_buffer (cpu, cia, mapping->device, &data, mapping->space, addr, N);
@@ -182,7 +192,7 @@ sim_core_read_aligned_N(sim_cpu *cpu,
   return val;
 }
 #endif
-
+  
 /* TAGS: sim_core_read_unaligned_1 sim_core_read_unaligned_2 */
 /* TAGS: sim_core_read_unaligned_4 sim_core_read_unaligned_8 */
 /* TAGS: sim_core_read_unaligned_16 */
@@ -248,9 +258,9 @@ sim_core_read_misaligned_N(sim_cpu *cpu,
   if (sim_core_xor_read_buffer (CPU_STATE (cpu), cpu, map, &val, addr, N) != N)
     SIM_CORE_SIGNAL (CPU_STATE (cpu), cpu, cia, map, N, addr,
 		     read_transfer, sim_core_unaligned_signal);
-  if (HOST_BYTE_ORDER != CURRENT_TARGET_BYTE_ORDER)
+  if (CURRENT_HOST_BYTE_ORDER != CURRENT_TARGET_BYTE_ORDER)
     val = SWAP_M (val);
-  if (CURRENT_TARGET_BYTE_ORDER == BFD_ENDIAN_BIG)
+  if (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
     val >>= (M - N) * 8;
   PROFILE_COUNT_CORE (cpu, addr, N, map);
   if (TRACE_P (cpu, TRACE_CORE_IDX))
@@ -284,8 +294,18 @@ sim_core_write_aligned_N(sim_cpu *cpu,
   mapping = sim_core_find_mapping (core, map, addr, N, write_transfer, 1 /*abort*/, cpu, cia);
   do
     {
+#if (WITH_DEVICES)
+      if (WITH_CALLBACK_MEMORY && mapping->device != NULL)
+	{
+	  unsigned_M data = H2T_M (val);
+	  if (device_io_write_buffer (mapping->device, &data, mapping->space, addr, N, CPU_STATE (cpu), cpu, cia) != N)
+	    device_error (mapping->device, "internal error - %s - io_write_buffer should not fail",
+			  XSTRING (sim_core_write_aligned_N));
+	  break;
+	}
+#endif
 #if (WITH_HW)
-      if (mapping->device != NULL)
+      if (WITH_CALLBACK_MEMORY && mapping->device != NULL)
 	{
 	  unsigned_M data = H2T_M (val);
 	  sim_cpu_hw_io_write_buffer (cpu, cia, mapping->device, &data, mapping->space, addr, N);
@@ -366,9 +386,9 @@ sim_core_write_misaligned_N(sim_cpu *cpu,
 			   unsigned_M val)
 {
   unsigned_M data = val;
-  if (CURRENT_TARGET_BYTE_ORDER == BFD_ENDIAN_BIG)
+  if (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
     data <<= (M - N) * 8;
-  if (HOST_BYTE_ORDER != CURRENT_TARGET_BYTE_ORDER)
+  if (CURRENT_HOST_BYTE_ORDER != CURRENT_TARGET_BYTE_ORDER)
     data = SWAP_M (data);
   if (sim_core_xor_write_buffer (CPU_STATE (cpu), cpu, map, &data, addr, N) != N)
     SIM_CORE_SIGNAL (CPU_STATE (cpu), cpu, cia, map, N, addr,

@@ -84,11 +84,6 @@
 	mov	ar.itc = r1
 	;;
 
-// AR[RUC]
-	mov	ar.ruc = r1
-	mov	ar.ruc = r1
-	;;
-
 // AR[K]
 	mov	ar.k2 = r3
 	mov	ar.k2 = r3
@@ -170,15 +165,6 @@
 	mov	cr.iha = r14
 	;;
 
-// CR[IIB%]
-	mov	cr.iib0 = r15
-	mov	cr.iib0 = r16
-	;;
-
-	mov	cr.iib1 = r15
-	mov	cr.iib1 = r16
-	;;
-
 // CR[IIM]
 	mov	cr.iim = r15
 	mov	cr.iim = r16
@@ -200,8 +186,8 @@
 	;;
 
 // CR[IRR%] (and others)
-	mov	r2 = cr.ivr
-	mov	r3 = cr.ivr
+	mov	r0 = cr.ivr
+	mov	r1 = cr.ivr
 	;;
 	
 // CR[ISR]
@@ -455,13 +441,13 @@
 // PSR.mc (rfi is the only writer)
 // PSR.mfh
 	mov	f32 = f33
-	mov	r10 = psr
+	mov	r0 = psr
 	;;
 	ssm	(1<<5)
 	ssm	(1<<5)
 	;;
 	ssm	(1<<5)
-	mov	psr.um = r10
+	mov	psr.um = r0
 	;;
 	rum	(1<<5)
 	rum	(1<<5)
@@ -472,13 +458,13 @@
 
 // PSR.mfl
 	mov	f2 = f3
-	mov	r10 = psr
+	mov	r0 = psr
 	;;
 	ssm	(1<<4)
 	ssm	(1<<4)
 	;;
 	ssm	(1<<4)
-	mov	psr.um = r10
+	mov	psr.um = r0
 	;;
 	rum	(1<<4)
 	rum	(1<<4)

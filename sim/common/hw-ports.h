@@ -1,21 +1,22 @@
 /* Hardware ports.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998 Free Software Foundation, Inc.
    Contributed by Andrew Cagney and Cygnus Solutions.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 
 #ifndef HW_PORTS_H
@@ -23,10 +24,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* Initialize a port */
 
-struct hw_port_descriptor
-{
+struct hw_port_descriptor {
   const char *name;
-  int number;
+  int number; 
   int nr_ports;
   port_direction direction;
 };
@@ -54,13 +54,13 @@ void hw_port_event
  int my_port,
  int value);
 
-/* This port event will then be propagated to any attached
+/* This port event will then be propogated to any attached
    destination ports.
 
-   Any interpretation of PORT and VALUE is model dependent.  As a
+   Any interpretation of PORT and VALUE is model dependant.  As a
    guideline the following are recommended: PCI interrupts A-D should
-   correspond to ports 0-3; level sensitive interrupts be requested
-   with a value of one and withdrawn with a value of 0; edge sensitive
+   correspond to ports 0-3; level sensative interrupts be requested
+   with a value of one and withdrawn with a value of 0; edge sensative
    interrupts always have a value of 1, the event its self is treated
    as the interrupt.
 
@@ -68,7 +68,7 @@ void hw_port_event
    Port destinations
 
    Attached to each port of a device can be zero or more
-   destinations.  These destinations consist of a device/port pair.
+   desitinations.  These destinations consist of a device/port pair.
    A destination is attached/detached to a device line using the
    attach and detach calls. */
 
@@ -99,7 +99,7 @@ void hw_port_traverse
 (struct hw *me,
  hw_port_traverse_function *handler,
  void *data);
-
+ 
 
 /* DESTINATION is attached (detached) to LINE of the device ME
 
@@ -124,6 +124,6 @@ int hw_port_encode
  char *buf,
  int sizeof_buf,
  port_direction direction);
-
+ 
 
 #endif

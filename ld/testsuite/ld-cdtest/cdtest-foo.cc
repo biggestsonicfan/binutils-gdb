@@ -5,14 +5,14 @@
 // We don't use header files, since we only want to see, whether the
 // compiler is installed properly.
 //
-#if __GNUG__ >= 2
+#if (__GNUG__ == 2)
 typedef __SIZE_TYPE__ size_t;
 #else
 typedef unsigned int size_t;
 #endif
 
 extern "C" {
-    char *strncpy (char* dest, const char* src, size_t len);
+    char *strncpy (char* dest, const char* dest, size_t len);
     int printf (const char*, ...);
 };
 
@@ -38,7 +38,7 @@ Foo::Foo ()
 #endif
 }
 
-Foo::Foo (const char* msg)
+Foo::Foo (char* msg)
 {
     i = ++foos;
     strncpy( message, msg, len);

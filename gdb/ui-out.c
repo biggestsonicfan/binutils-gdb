@@ -1,6 +1,6 @@
 /* Output generating routines for GDB.
 
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
    Contributed by Cygnus Solutions.
    Written by Fernando Nasser for Cygnus.
@@ -9,7 +9,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -18,393 +18,350 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
+#include "gdb_string.h"
 #include "expression.h"		/* For language.h */
 #include "language.h"
 #include "ui-out.h"
-#include "gdbsupport/format.h"
-#include "cli/cli-style.h"
-#include "diagnostics.h"
+#include "gdb_assert.h"
 
-#include <vector>
-#include <memory>
-#include <string>
+/* table header structures */
 
-namespace {
-
-/* A header of a ui_out_table.  */
-
-class ui_out_hdr
-{
- public:
-
-  explicit ui_out_hdr (int number, int min_width, ui_align alignment,
-		       const std::string &name, const std::string &header)
-  : m_number (number),
-    m_min_width (min_width),
-    m_alignment (alignment),
-    m_name (name),
-    m_header (header)
+struct ui_out_hdr
   {
-  }
+    int colno;
+    int width;
+    int alignment;
+    char *col_name;
+    char *colhdr;
+    struct ui_out_hdr *next;
+  };
 
-  int number () const
+/* Maintain a stack so that the info applicable to the inner most list
+   is always available.  Stack/nested level 0 is reserved for the
+   top-level result. */
+
+enum { MAX_UI_OUT_LEVELS = 5 };
+
+struct ui_out_level
   {
-    return m_number;
-  }
-
-  int min_width () const
-  {
-    return m_min_width;
-  }
-
-  ui_align alignment () const
-  {
-    return m_alignment;
-  }
-
-  const std::string &header () const
-  {
-    return m_header;
-  }
-
-  const std::string &name () const
-  {
-    return m_name;
-  }
-
- private:
-
-  /* The number of the table column this header represents, 1-based.  */
-  int m_number;
-
-  /* Minimal column width in characters.  May or may not be applicable,
-     depending on the actual implementation of ui_out.  */
-  int m_min_width;
-
-  /* Alignment of the content in the column.  May or may not be applicable,
-     depending on the actual implementation of ui_out.  */
-  ui_align m_alignment;
-
-  /* Internal column name, used to internally refer to the column.  */
-  std::string m_name;
-
-  /* Printed header text of the column.  */
-  std::string m_header;
-};
-
-} // namespace
-
-/* A level of nesting (either a list or a tuple) in a ui_out output.  */
-
-class ui_out_level
-{
- public:
-
-  explicit ui_out_level (ui_out_type type)
-  : m_type (type),
-    m_field_count (0)
-  {
-  }
-
-  ui_out_type type () const
-  {
-    return m_type;
-  }
-
-  int field_count () const
-  {
-    return m_field_count;
-  }
-
-  void inc_field_count ()
-  {
-    m_field_count++;
-  }
-
- private:
-
-  /* The type of this level.  */
-  ui_out_type m_type;
-
-  /* Count each field; the first element is for non-list fields.  */
-  int m_field_count;
-};
+    /* Count each field; the first element is for non-list fields */
+    int field_count;
+    /* The type of this level. */
+    enum ui_out_type type;
+  };
 
 /* Tables are special.  Maintain a separate structure that tracks
    their state.  At present an output can only contain a single table
    but that restriction might eventually be lifted.  */
 
-class ui_out_table
+struct ui_out_table
 {
- public:
+  /* If on, a table is being generated.  */
+  int flag;
 
-  /* States (steps) of a table generation.  */
-
-  enum class state
-  {
-    /* We are generating the table headers.  */
-    HEADERS,
-
-    /* We are generating the table body.  */
-    BODY,
-  };
-
-  explicit ui_out_table (int entry_level, int nr_cols, const std::string &id)
-  : m_state (state::HEADERS),
-    m_entry_level (entry_level),
-    m_nr_cols (nr_cols),
-    m_id (id)
-  {
-  }
-
-  /* Start building the body of the table.  */
-
-  void start_body ();
-
-  /* Add a new header to the table.  */
-
-  void append_header (int width, ui_align alignment,
-		      const std::string &col_name, const std::string &col_hdr);
-
-  void start_row ();
-
-  /* Extract the format information for the next header and advance
-     the header iterator.  Return false if there was no next header.  */
-
-  bool get_next_header (int *colno, int *width, ui_align *alignment,
-		       const char **col_hdr);
-
-  bool query_field (int colno, int *width, int *alignment,
-		    const char **col_name) const;
-
-  state current_state () const;
-
-  int entry_level () const;
-
- private:
-
-  state m_state;
+  /* If on, the body of a table is being generated.  If off, the table
+     header is being generated.  */
+  int body_flag;
 
   /* The level at which each entry of the table is to be found.  A row
      (a tuple) is made up of entries.  Consequently ENTRY_LEVEL is one
      above that of the table.  */
-  int m_entry_level;
+  int entry_level;
 
   /* Number of table columns (as specified in the table_begin call).  */
-  int m_nr_cols;
+  int columns;
 
   /* String identifying the table (as specified in the table_begin
      call).  */
-  std::string m_id;
+  char *id;
 
-  /* Pointers to the column headers.  */
-  std::vector<std::unique_ptr<ui_out_hdr>> m_headers;
+  /* Points to the first table header (if any).  */
+  struct ui_out_hdr *header_first;
 
-  /* Iterator over the headers vector, used when printing successive fields.  */
-  std::vector<std::unique_ptr<ui_out_hdr>>::const_iterator m_headers_iterator;
+  /* Points to the last table header (if any).  */
+  struct ui_out_hdr *header_last;
+
+  /* Points to header of NEXT column to format.  */
+  struct ui_out_hdr *header_next;
+
 };
 
-/* See ui-out.h.  */
 
-void ui_out_table::start_body ()
+/* The ui_out structure */
+/* Any change here requires a corresponding one in the initialization
+   of the default uiout, which is statically initialized */
+
+struct ui_out
+  {
+    int flags;
+    /* specific implementation of ui-out */
+    struct ui_out_impl *impl;
+    struct ui_out_data *data;
+
+    /* Sub structure tracking the ui-out depth.  */
+    int level;
+    struct ui_out_level levels[MAX_UI_OUT_LEVELS];
+
+    /* A table, if any.  At present only a single table is supported.  */
+    struct ui_out_table table;
+  };
+
+/* The current (inner most) level. */
+static struct ui_out_level *
+current_level (struct ui_out *uiout)
 {
-  if (m_state != state::HEADERS)
+  return &uiout->levels[uiout->level];
+}
+
+/* Create a new level, of TYPE.  Return the new level's index. */
+static int
+push_level (struct ui_out *uiout,
+	    enum ui_out_type type,
+	    const char *id)
+{
+  struct ui_out_level *current;
+  /* We had better not overflow the buffer. */
+  uiout->level++;
+  gdb_assert (uiout->level >= 0 && uiout->level < MAX_UI_OUT_LEVELS);
+  current = current_level (uiout);
+  current->field_count = 0;
+  current->type = type;
+  return uiout->level;
+}
+
+/* Discard the current level, return the discarded level's index.
+   TYPE is the type of the level being discarded. */
+static int
+pop_level (struct ui_out *uiout,
+	   enum ui_out_type type)
+{
+  /* We had better not underflow the buffer. */
+  gdb_assert (uiout->level > 0 && uiout->level < MAX_UI_OUT_LEVELS);
+  gdb_assert (current_level (uiout)->type == type);
+  uiout->level--;
+  return uiout->level + 1;
+}
+
+
+/* These are the default implementation functions */
+
+static void default_table_begin (struct ui_out *uiout, int nbrofcols,
+				 int nr_rows, const char *tblid);
+static void default_table_body (struct ui_out *uiout);
+static void default_table_end (struct ui_out *uiout);
+static void default_table_header (struct ui_out *uiout, int width,
+				  enum ui_align alig, const char *col_name,
+				  const char *colhdr);
+static void default_begin (struct ui_out *uiout,
+			   enum ui_out_type type,
+			   int level, const char *id);
+static void default_end (struct ui_out *uiout,
+			 enum ui_out_type type,
+			 int level);
+static void default_field_int (struct ui_out *uiout, int fldno, int width,
+			       enum ui_align alig,
+			       const char *fldname,
+			       int value);
+static void default_field_skip (struct ui_out *uiout, int fldno, int width,
+				enum ui_align alig,
+				const char *fldname);
+static void default_field_string (struct ui_out *uiout, int fldno, int width,
+				  enum ui_align align,
+				  const char *fldname,
+				  const char *string);
+static void default_field_fmt (struct ui_out *uiout, int fldno,
+			       int width, enum ui_align align,
+			       const char *fldname,
+			       const char *format,
+			       va_list args);
+static void default_spaces (struct ui_out *uiout, int numspaces);
+static void default_text (struct ui_out *uiout, const char *string);
+static void default_message (struct ui_out *uiout, int verbosity,
+			     const char *format,
+			     va_list args);
+static void default_wrap_hint (struct ui_out *uiout, char *identstring);
+static void default_flush (struct ui_out *uiout);
+
+/* This is the default ui-out implementation functions vector */
+
+struct ui_out_impl default_ui_out_impl =
+{
+  default_table_begin,
+  default_table_body,
+  default_table_end,
+  default_table_header,
+  default_begin,
+  default_end,
+  default_field_int,
+  default_field_skip,
+  default_field_string,
+  default_field_fmt,
+  default_spaces,
+  default_text,
+  default_message,
+  default_wrap_hint,
+  default_flush,
+  0, /* Does not need MI hacks.  */
+};
+
+/* The default ui_out */
+
+struct ui_out def_uiout =
+{
+  0,				/* flags */
+  &default_ui_out_impl,		/* impl */
+};
+
+/* Pointer to current ui_out */
+/* FIXME: This should not be a global, but something passed down from main.c
+   or top.c */
+
+struct ui_out *uiout = &def_uiout;
+
+/* These are the interfaces to implementation functions */
+
+static void uo_table_begin (struct ui_out *uiout, int nbrofcols,
+			    int nr_rows, const char *tblid);
+static void uo_table_body (struct ui_out *uiout);
+static void uo_table_end (struct ui_out *uiout);
+static void uo_table_header (struct ui_out *uiout, int width,
+			     enum ui_align align, const char *col_name,
+			     const char *colhdr);
+static void uo_begin (struct ui_out *uiout,
+		      enum ui_out_type type,
+		      int level, const char *id);
+static void uo_end (struct ui_out *uiout,
+		    enum ui_out_type type,
+		    int level);
+static void uo_field_int (struct ui_out *uiout, int fldno, int width,
+			  enum ui_align align, const char *fldname, int value);
+static void uo_field_skip (struct ui_out *uiout, int fldno, int width,
+			   enum ui_align align, const char *fldname);
+static void uo_field_string (struct ui_out *uiout, int fldno, int width,
+			     enum ui_align align, const char *fldname,
+			     const char *string);
+static void uo_field_fmt (struct ui_out *uiout, int fldno, int width,
+			  enum ui_align align, const char *fldname,
+			  const char *format, va_list args);
+static void uo_spaces (struct ui_out *uiout, int numspaces);
+static void uo_text (struct ui_out *uiout, const char *string);
+static void uo_message (struct ui_out *uiout, int verbosity,
+			const char *format, va_list args);
+static void uo_wrap_hint (struct ui_out *uiout, char *identstring);
+static void uo_flush (struct ui_out *uiout);
+
+/* Prototypes for local functions */
+
+extern void _initialize_ui_out (void);
+static void append_header_to_list (struct ui_out *uiout, int width,
+				   int alignment, const char *col_name,
+				   const char *colhdr);
+static int get_next_header (struct ui_out *uiout, int *colno, int *width,
+			    int *alignment, char **colhdr);
+static void clear_header_list (struct ui_out *uiout);
+static void verify_field (struct ui_out *uiout, int *fldno, int *width,
+			  int *align);
+
+static void init_ui_out_state (struct ui_out *uiout);
+
+/* exported functions (ui_out API) */
+
+/* Mark beginning of a table */
+
+void
+ui_out_table_begin (struct ui_out *uiout, int nbrofcols,
+		    int nr_rows,
+		    const char *tblid)
+{
+  if (uiout->table.flag)
     internal_error (__FILE__, __LINE__,
-		    _("extra table_body call not allowed; there must be only "
-		      "one table_body after a table_begin and before a "
-		      "table_end."));
+		    "tables cannot be nested; table_begin found before \
+previous table_end.");
 
-  /* Check if the number of defined headers matches the number of expected
-     columns.  */
-  if (m_headers.size () != m_nr_cols)
-    internal_error (__FILE__, __LINE__,
-		    _("number of headers differ from number of table "
-		      "columns."));
-
-  m_state = state::BODY;
-  m_headers_iterator = m_headers.begin ();
-}
-
-/* See ui-out.h.  */
-
-void ui_out_table::append_header (int width, ui_align alignment,
-				  const std::string &col_name,
-				  const std::string &col_hdr)
-{
-  if (m_state != state::HEADERS)
-    internal_error (__FILE__, __LINE__,
-		    _("table header must be specified after table_begin and "
-		      "before table_body."));
-
-  std::unique_ptr<ui_out_hdr> header (new ui_out_hdr (m_headers.size () + 1,
-							width, alignment,
-							col_name, col_hdr));
-
-  m_headers.push_back (std::move (header));
-}
-
-/* See ui-out.h.  */
-
-void ui_out_table::start_row ()
-{
-  m_headers_iterator = m_headers.begin ();
-}
-
-/* See ui-out.h.  */
-
-bool ui_out_table::get_next_header (int *colno, int *width, ui_align *alignment,
-				    const char **col_hdr)
-{
-  /* There may be no headers at all or we may have used all columns.  */
-  if (m_headers_iterator == m_headers.end ())
-    return false;
-
-  ui_out_hdr *hdr = m_headers_iterator->get ();
-
-  *colno = hdr->number ();
-  *width = hdr->min_width ();
-  *alignment = hdr->alignment ();
-  *col_hdr = hdr->header ().c_str ();
-
-  /* Advance the header pointer to the next entry.  */
-  m_headers_iterator++;
-
-  return true;
-}
-
-/* See ui-out.h.  */
-
-bool ui_out_table::query_field (int colno, int *width, int *alignment,
-				const char **col_name) const
-{
-  /* Column numbers are 1-based, so convert to 0-based index.  */
-  int index = colno - 1;
-
-  if (index >= 0 && index < m_headers.size ())
-    {
-      ui_out_hdr *hdr = m_headers[index].get ();
-
-      gdb_assert (colno == hdr->number ());
-
-      *width = hdr->min_width ();
-      *alignment = hdr->alignment ();
-      *col_name = hdr->name ().c_str ();
-
-      return true;
-    }
+  uiout->table.flag = 1;
+  uiout->table.body_flag = 0;
+  uiout->table.entry_level = uiout->level + 1;
+  uiout->table.columns = nbrofcols;
+  if (tblid != NULL)
+    uiout->table.id = xstrdup (tblid);
   else
-    return false;
+    uiout->table.id = NULL;
+  clear_header_list (uiout);
+
+  uo_table_begin (uiout, nbrofcols, nr_rows, uiout->table.id);
 }
-
-/* See ui-out.h.  */
-
-ui_out_table::state ui_out_table::current_state () const
-{
-  return m_state;
-}
-
-/* See ui-out.h.  */
-
-int ui_out_table::entry_level () const
-{
-  return m_entry_level;
-}
-
-int
-ui_out::level () const
-{
-  return m_levels.size ();
-}
-
-/* The current (inner most) level.  */
-
-ui_out_level *
-ui_out::current_level () const
-{
-  return m_levels.back ().get ();
-}
-
-/* Create a new level, of TYPE.  */
-void
-ui_out::push_level (ui_out_type type)
-{
-  std::unique_ptr<ui_out_level> level (new ui_out_level (type));
-
-  m_levels.push_back (std::move (level));
-}
-
-/* Discard the current level.  TYPE is the type of the level being
-   discarded.  */
-void
-ui_out::pop_level (ui_out_type type)
-{
-  /* We had better not underflow the buffer.  */
-  gdb_assert (m_levels.size () > 0);
-  gdb_assert (current_level ()->type () == type);
-
-  m_levels.pop_back ();
-}
-
-/* Mark beginning of a table.  */
 
 void
-ui_out::table_begin (int nr_cols, int nr_rows, const std::string &tblid)
+ui_out_table_body (struct ui_out *uiout)
 {
-  if (m_table_up != nullptr)
+  if (!uiout->table.flag)
     internal_error (__FILE__, __LINE__,
-		    _("tables cannot be nested; table_begin found before \
-previous table_end."));
-
-  m_table_up.reset (new ui_out_table (level () + 1, nr_cols, tblid));
-
-  do_table_begin (nr_cols, nr_rows, tblid.c_str ());
-}
-
-void
-ui_out::table_header (int width, ui_align alignment,
-		      const std::string &col_name, const std::string &col_hdr)
-{
-  if (m_table_up == nullptr)
+		    "table_body outside a table is not valid; it must be \
+after a table_begin and before a table_end.");
+  if (uiout->table.body_flag)
     internal_error (__FILE__, __LINE__,
-		    _("table_header outside a table is not valid; it must be \
-after a table_begin and before a table_body."));
-
-  m_table_up->append_header (width, alignment, col_name, col_hdr);
-
-  do_table_header (width, alignment, col_name, col_hdr);
-}
-
-void
-ui_out::table_body ()
-{
-  if (m_table_up == nullptr)
+		    "extra table_body call not allowed; there must be \
+only one table_body after a table_begin and before a table_end.");
+  if (uiout->table.header_next->colno != uiout->table.columns)
     internal_error (__FILE__, __LINE__,
-		    _("table_body outside a table is not valid; it must be "
-		      "after a table_begin and before a table_end."));
+		    "number of headers differ from number of table \
+columns.");
 
-  m_table_up->start_body ();
+  uiout->table.body_flag = 1;
+  uiout->table.header_next = uiout->table.header_first;
 
-  do_table_body ();
+  uo_table_body (uiout);
 }
 
 void
-ui_out::table_end ()
+ui_out_table_end (struct ui_out *uiout)
 {
-  if (m_table_up == nullptr)
+  if (!uiout->table.flag)
     internal_error (__FILE__, __LINE__,
-		    _("misplaced table_end or missing table_begin."));
+		    "misplaced table_end or missing table_begin.");
 
-  do_table_end ();
+  uiout->table.entry_level = 0;
+  uiout->table.body_flag = 0;
+  uiout->table.flag = 0;
 
-  m_table_up = nullptr;
+  uo_table_end (uiout);
+
+  if (uiout->table.id)
+    xfree (uiout->table.id);
+  clear_header_list (uiout);
 }
 
 void
-ui_out::begin (ui_out_type type, const char *id)
+ui_out_table_header (struct ui_out *uiout, int width, enum ui_align alignment,
+		     const char *col_name,
+		     const char *colhdr)
 {
+  if (!uiout->table.flag || uiout->table.body_flag)
+    internal_error (__FILE__, __LINE__,
+		    "table header must be specified after table_begin \
+and before table_body.");
+
+  append_header_to_list (uiout, width, alignment, col_name, colhdr);
+
+  uo_table_header (uiout, width, alignment, col_name, colhdr);
+}
+
+void
+ui_out_begin (struct ui_out *uiout,
+	      enum ui_out_type type,
+	      const char *id)
+{
+  int new_level;
+  if (uiout->table.flag && !uiout->table.body_flag)
+    internal_error (__FILE__, __LINE__,
+		    "table header or table_body expected; lists must be \
+specified after table_body.");
+
   /* Be careful to verify the ``field'' before the new tuple/list is
      pushed onto the stack.  That way the containing list/table/row is
      verified and not the newly created tuple/list.  This verification
@@ -415,475 +372,778 @@ ui_out::begin (ui_out_type type, const char *id)
   {
     int fldno;
     int width;
-    ui_align align;
-
-    verify_field (&fldno, &width, &align);
+    int align;
+    verify_field (uiout, &fldno, &width, &align);
   }
 
-  push_level (type);
+  new_level = push_level (uiout, type, id);
 
   /* If the push puts us at the same level as a table row entry, we've
      got a new table row.  Put the header pointer back to the start.  */
-  if (m_table_up != nullptr
-      && m_table_up->current_state () == ui_out_table::state::BODY
-      && m_table_up->entry_level () == level ())
-    m_table_up->start_row ();
+  if (uiout->table.body_flag
+      && uiout->table.entry_level == new_level)
+    uiout->table.header_next = uiout->table.header_first;
 
-  do_begin (type, id);
+  uo_begin (uiout, type, new_level, id);
 }
 
 void
-ui_out::end (ui_out_type type)
+ui_out_list_begin (struct ui_out *uiout,
+		   const char *id)
 {
-  pop_level (type);
-
-  do_end (type);
+  ui_out_begin (uiout, ui_out_type_list, id);
 }
 
 void
-ui_out::field_signed (const char *fldname, LONGEST value)
+ui_out_tuple_begin (struct ui_out *uiout, const char *id)
+{
+  ui_out_begin (uiout, ui_out_type_tuple, id);
+}
+
+void
+ui_out_end (struct ui_out *uiout,
+	    enum ui_out_type type)
+{
+  int old_level = pop_level (uiout, type);
+  uo_end (uiout, type, old_level);
+}
+
+void
+ui_out_list_end (struct ui_out *uiout)
+{
+  ui_out_end (uiout, ui_out_type_list);
+}
+
+void
+ui_out_tuple_end (struct ui_out *uiout)
+{
+  ui_out_end (uiout, ui_out_type_tuple);
+}
+
+struct ui_out_end_cleanup_data
+{
+  struct ui_out *uiout;
+  enum ui_out_type type;
+};
+
+static void
+do_cleanup_end (void *data)
+{
+  struct ui_out_end_cleanup_data *end_cleanup_data = data;
+  ui_out_end (end_cleanup_data->uiout, end_cleanup_data->type);
+  xfree (end_cleanup_data);
+}
+
+static struct cleanup *
+make_cleanup_ui_out_end (struct ui_out *uiout,
+			 enum ui_out_type type)
+{
+  struct ui_out_end_cleanup_data *end_cleanup_data;
+  end_cleanup_data = XMALLOC (struct ui_out_end_cleanup_data);
+  end_cleanup_data->uiout = uiout;
+  end_cleanup_data->type = type;
+  return make_cleanup (do_cleanup_end, end_cleanup_data);
+}
+
+struct cleanup *
+make_cleanup_ui_out_begin_end (struct ui_out *uiout,
+			       enum ui_out_type type,
+			       const char *id)
+{
+  ui_out_begin (uiout, type, id);
+  return make_cleanup_ui_out_end (uiout, type);
+}
+
+struct cleanup *
+make_cleanup_ui_out_tuple_begin_end (struct ui_out *uiout,
+				     const char *id)
+{
+  ui_out_tuple_begin (uiout, id);
+  return make_cleanup_ui_out_end (uiout, ui_out_type_tuple);
+}
+
+struct cleanup *
+make_cleanup_ui_out_list_begin_end (struct ui_out *uiout,
+				    const char *id)
+{
+  ui_out_list_begin (uiout, id);
+  return make_cleanup_ui_out_end (uiout, ui_out_type_list);
+}
+
+void
+ui_out_field_int (struct ui_out *uiout,
+		  const char *fldname,
+		  int value)
 {
   int fldno;
   int width;
-  ui_align align;
+  int align;
+  struct ui_out_level *current = current_level (uiout);
 
-  verify_field (&fldno, &width, &align);
+  verify_field (uiout, &fldno, &width, &align);
 
-  do_field_signed (fldno, width, align, fldname, value);
+  uo_field_int (uiout, fldno, width, align, fldname, value);
 }
 
 void
-ui_out::field_fmt_signed (int input_width, ui_align input_align,
-			  const char *fldname, LONGEST value)
+ui_out_field_core_addr (struct ui_out *uiout,
+			const char *fldname,
+			CORE_ADDR address)
 {
-  int fldno;
-  int width;
-  ui_align align;
+  char addstr[20];
 
-  verify_field (&fldno, &width, &align);
-
-  do_field_signed (fldno, input_width, input_align, fldname, value);
-}
-
-/* See ui-out.h.  */
-
-void
-ui_out::field_unsigned (const char *fldname, ULONGEST value)
-{
-  int fldno;
-  int width;
-  ui_align align;
-
-  verify_field (&fldno, &width, &align);
-
-  do_field_unsigned (fldno, width, align, fldname, value);
-}
-
-/* Documented in ui-out.h.  */
-
-void
-ui_out::field_core_addr (const char *fldname, struct gdbarch *gdbarch,
-			 CORE_ADDR address)
-{
-  field_string (fldname, print_core_address (gdbarch, address),
-		address_style.style ());
-}
-
-void
-ui_out::field_stream (const char *fldname, string_file &stream,
-		      const ui_file_style &style)
-{
-  if (!stream.empty ())
-    field_string (fldname, stream.c_str (), style);
+  /* FIXME: cagney/2002-05-03: Need local_address_string() function
+     that returns the language localized string formatted to a width
+     based on TARGET_ADDR_BIT.  */
+  /* print_address_numeric (address, 1, local_stream); */
+  if (TARGET_ADDR_BIT <= 32)
+    strcpy (addstr, local_hex_string_custom (address, "08l"));
   else
-    field_skip (fldname);
-  stream.clear ();
+    strcpy (addstr, local_hex_string_custom (address, "016l"));
+
+  ui_out_field_string (uiout, fldname, addstr);
 }
 
-/* Used to omit a field.  */
+void
+ui_out_field_stream (struct ui_out *uiout,
+		     const char *fldname,
+		     struct ui_stream *buf)
+{
+  long length;
+  char *buffer = ui_file_xstrdup (buf->stream, &length);
+  struct cleanup *old_cleanup = make_cleanup (xfree, buffer);
+  if (length > 0)
+    ui_out_field_string (uiout, fldname, buffer);
+  else
+    ui_out_field_skip (uiout, fldname);
+  ui_file_rewind (buf->stream);
+  do_cleanups (old_cleanup);
+}
+
+/* used to ommit a field */
 
 void
-ui_out::field_skip (const char *fldname)
+ui_out_field_skip (struct ui_out *uiout,
+		   const char *fldname)
 {
   int fldno;
   int width;
-  ui_align align;
+  int align;
 
-  verify_field (&fldno, &width, &align);
+  verify_field (uiout, &fldno, &width, &align);
 
-  do_field_skip (fldno, width, align, fldname);
+  uo_field_skip (uiout, fldno, width, align, fldname);
 }
 
 void
-ui_out::field_string (const char *fldname, const char *string,
-		      const ui_file_style &style)
+ui_out_field_string (struct ui_out *uiout,
+		     const char *fldname,
+		     const char *string)
 {
   int fldno;
   int width;
-  ui_align align;
+  int align;
 
-  verify_field (&fldno, &width, &align);
+  verify_field (uiout, &fldno, &width, &align);
 
-  do_field_string (fldno, width, align, fldname, string, style);
-}
-
-void
-ui_out::field_string (const char *fldname, const std::string &string)
-{
-  field_string (fldname, string.c_str ());
+  uo_field_string (uiout, fldno, width, align, fldname, string);
 }
 
 /* VARARGS */
 void
-ui_out::field_fmt (const char *fldname, const char *format, ...)
+ui_out_field_fmt (struct ui_out *uiout,
+		  const char *fldname,
+		  const char *format, ...)
 {
   va_list args;
   int fldno;
   int width;
-  ui_align align;
+  int align;
 
-  verify_field (&fldno, &width, &align);
+  /* will not align, but has to call anyway */
+  verify_field (uiout, &fldno, &width, &align);
 
   va_start (args, format);
 
-  do_field_fmt (fldno, width, align, fldname, ui_file_style (), format, args);
+  uo_field_fmt (uiout, fldno, width, align, fldname, format, args);
 
   va_end (args);
 }
 
 void
-ui_out::field_fmt (const char *fldname, const ui_file_style &style,
-		   const char *format, ...)
+ui_out_spaces (struct ui_out *uiout, int numspaces)
 {
-  va_list args;
-  int fldno;
-  int width;
-  ui_align align;
-
-  verify_field (&fldno, &width, &align);
-
-  va_start (args, format);
-
-  do_field_fmt (fldno, width, align, fldname, style, format, args);
-
-  va_end (args);
+  uo_spaces (uiout, numspaces);
 }
 
 void
-ui_out::spaces (int numspaces)
+ui_out_text (struct ui_out *uiout,
+	     const char *string)
 {
-  do_spaces (numspaces);
+  uo_text (uiout, string);
 }
 
 void
-ui_out::text (const char *string)
-{
-  do_text (string);
-}
-
-void
-ui_out::call_do_message (const ui_file_style &style, const char *format,
-			 ...)
+ui_out_message (struct ui_out *uiout, int verbosity,
+		const char *format,...)
 {
   va_list args;
 
   va_start (args, format);
 
-  /* Since call_do_message is only used as a helper of vmessage, silence the
-     warning here once instead of at all call sites in vmessage, if we were
-     to put a "format" attribute on call_do_message.  */
-  DIAGNOSTIC_PUSH
-  DIAGNOSTIC_IGNORE_FORMAT_NONLITERAL
-  do_message (style, format, args);
-  DIAGNOSTIC_POP
+  uo_message (uiout, verbosity, format, args);
 
   va_end (args);
 }
 
-void
-ui_out::vmessage (const ui_file_style &in_style, const char *format,
-		  va_list args)
+struct ui_stream *
+ui_out_stream_new (struct ui_out *uiout)
 {
-  format_pieces fpieces (&format, true);
+  struct ui_stream *tempbuf;
 
-  ui_file_style style = in_style;
+  tempbuf = XMALLOC (struct ui_stream);
+  tempbuf->uiout = uiout;
+  tempbuf->stream = mem_fileopen ();
+  return tempbuf;
+}
 
-  for (auto &&piece : fpieces)
+void
+ui_out_stream_delete (struct ui_stream *buf)
+{
+  ui_file_delete (buf->stream);
+  xfree (buf);
+}
+
+static void
+do_stream_delete (void *buf)
+{
+  ui_out_stream_delete (buf);
+}
+
+struct cleanup *
+make_cleanup_ui_out_stream_delete (struct ui_stream *buf)
+{
+  return make_cleanup (do_stream_delete, buf);
+}
+
+
+void
+ui_out_wrap_hint (struct ui_out *uiout, char *identstring)
+{
+  uo_wrap_hint (uiout, identstring);
+}
+
+void
+ui_out_flush (struct ui_out *uiout)
+{
+  uo_flush (uiout);
+}
+
+/* set the flags specified by the mask given */
+int
+ui_out_set_flags (struct ui_out *uiout, int mask)
+{
+  int oldflags = uiout->flags;
+
+  uiout->flags |= mask;
+
+  return oldflags;
+}
+
+/* clear the flags specified by the mask given */
+int
+ui_out_clear_flags (struct ui_out *uiout, int mask)
+{
+  int oldflags = uiout->flags;
+
+  uiout->flags &= ~mask;
+
+  return oldflags;
+}
+
+/* test the flags against the mask given */
+int
+ui_out_test_flags (struct ui_out *uiout, int mask)
+{
+  return (uiout->flags & mask);
+}
+
+/* obtain the current verbosity level (as stablished by the
+   'set verbositylevel' command */
+
+int
+ui_out_get_verblvl (struct ui_out *uiout)
+{
+  /* FIXME: not implemented yet */
+  return 0;
+}
+
+#if 0
+void
+ui_out_result_begin (struct ui_out *uiout, char *class)
+{
+}
+
+void
+ui_out_result_end (struct ui_out *uiout)
+{
+}
+
+void
+ui_out_info_begin (struct ui_out *uiout, char *class)
+{
+}
+
+void
+ui_out_info_end (struct ui_out *uiout)
+{
+}
+
+void
+ui_out_notify_begin (struct ui_out *uiout, char *class)
+{
+}
+
+void
+ui_out_notify_end (struct ui_out *uiout)
+{
+}
+
+void
+ui_out_error_begin (struct ui_out *uiout, char *class)
+{
+}
+
+void
+ui_out_error_end (struct ui_out *uiout)
+{
+}
+#endif
+
+#if 0
+void
+gdb_error (ui_out * uiout, int severity, char *format,...)
+{
+  va_list args;
+}
+
+void
+gdb_query (struct ui_out *uiout, int qflags, char *qprompt)
+{
+}
+#endif
+
+int
+ui_out_is_mi_like_p (struct ui_out *uiout)
+{
+  return uiout->impl->is_mi_like_p;
+}
+
+/* default gdb-out hook functions */
+
+static void
+default_table_begin (struct ui_out *uiout, int nbrofcols,
+		     int nr_rows,
+		     const char *tblid)
+{
+}
+
+static void
+default_table_body (struct ui_out *uiout)
+{
+}
+
+static void
+default_table_end (struct ui_out *uiout)
+{
+}
+
+static void
+default_table_header (struct ui_out *uiout, int width, enum ui_align alignment,
+		      const char *col_name,
+		      const char *colhdr)
+{
+}
+
+static void
+default_begin (struct ui_out *uiout,
+	       enum ui_out_type type,
+	       int level,
+	       const char *id)
+{
+}
+
+static void
+default_end (struct ui_out *uiout,
+	     enum ui_out_type type,
+	     int level)
+{
+}
+
+static void
+default_field_int (struct ui_out *uiout, int fldno, int width,
+		   enum ui_align align,
+		   const char *fldname, int value)
+{
+}
+
+static void
+default_field_skip (struct ui_out *uiout, int fldno, int width,
+		    enum ui_align align, const char *fldname)
+{
+}
+
+static void
+default_field_string (struct ui_out *uiout,
+		      int fldno,
+		      int width,
+		      enum ui_align align,
+		      const char *fldname,
+		      const char *string)
+{
+}
+
+static void
+default_field_fmt (struct ui_out *uiout, int fldno, int width,
+		   enum ui_align align,
+		   const char *fldname,
+		   const char *format,
+		   va_list args)
+{
+}
+
+static void
+default_spaces (struct ui_out *uiout, int numspaces)
+{
+}
+
+static void
+default_text (struct ui_out *uiout, const char *string)
+{
+}
+
+static void
+default_message (struct ui_out *uiout, int verbosity,
+		 const char *format,
+		 va_list args)
+{
+}
+
+static void
+default_wrap_hint (struct ui_out *uiout, char *identstring)
+{
+}
+
+static void
+default_flush (struct ui_out *uiout)
+{
+}
+
+/* Interface to the implementation functions */
+
+void
+uo_table_begin (struct ui_out *uiout, int nbrofcols,
+		int nr_rows,
+		const char *tblid)
+{
+  if (!uiout->impl->table_begin)
+    return;
+  uiout->impl->table_begin (uiout, nbrofcols, nr_rows, tblid);
+}
+
+void
+uo_table_body (struct ui_out *uiout)
+{
+  if (!uiout->impl->table_body)
+    return;
+  uiout->impl->table_body (uiout);
+}
+
+void
+uo_table_end (struct ui_out *uiout)
+{
+  if (!uiout->impl->table_end)
+    return;
+  uiout->impl->table_end (uiout);
+}
+
+void
+uo_table_header (struct ui_out *uiout, int width, enum ui_align align,
+		 const char *col_name,
+		 const char *colhdr)
+{
+  if (!uiout->impl->table_header)
+    return;
+  uiout->impl->table_header (uiout, width, align, col_name, colhdr);
+}
+
+void
+uo_begin (struct ui_out *uiout,
+	  enum ui_out_type type,
+	  int level,
+	  const char *id)
+{
+  if (uiout->impl->begin == NULL)
+    return;
+  uiout->impl->begin (uiout, type, level, id);
+}
+
+void
+uo_end (struct ui_out *uiout,
+	enum ui_out_type type,
+	int level)
+{
+  if (uiout->impl->end == NULL)
+    return;
+  uiout->impl->end (uiout, type, level);
+}
+
+void
+uo_field_int (struct ui_out *uiout, int fldno, int width, enum ui_align align,
+	      const char *fldname,
+	      int value)
+{
+  if (!uiout->impl->field_int)
+    return;
+  uiout->impl->field_int (uiout, fldno, width, align, fldname, value);
+}
+
+void
+uo_field_skip (struct ui_out *uiout, int fldno, int width, enum ui_align align,
+	       const char *fldname)
+{
+  if (!uiout->impl->field_skip)
+    return;
+  uiout->impl->field_skip (uiout, fldno, width, align, fldname);
+}
+
+void
+uo_field_string (struct ui_out *uiout, int fldno, int width,
+		 enum ui_align align,
+		 const char *fldname,
+		 const char *string)
+{
+  if (!uiout->impl->field_string)
+    return;
+  uiout->impl->field_string (uiout, fldno, width, align, fldname, string);
+}
+
+void
+uo_field_fmt (struct ui_out *uiout, int fldno, int width, enum ui_align align,
+	      const char *fldname,
+	      const char *format,
+	      va_list args)
+{
+  if (!uiout->impl->field_fmt)
+    return;
+  uiout->impl->field_fmt (uiout, fldno, width, align, fldname, format, args);
+}
+
+void
+uo_spaces (struct ui_out *uiout, int numspaces)
+{
+  if (!uiout->impl->spaces)
+    return;
+  uiout->impl->spaces (uiout, numspaces);
+}
+
+void
+uo_text (struct ui_out *uiout,
+	 const char *string)
+{
+  if (!uiout->impl->text)
+    return;
+  uiout->impl->text (uiout, string);
+}
+
+void
+uo_message (struct ui_out *uiout, int verbosity,
+	    const char *format,
+	    va_list args)
+{
+  if (!uiout->impl->message)
+    return;
+  uiout->impl->message (uiout, verbosity, format, args);
+}
+
+void
+uo_wrap_hint (struct ui_out *uiout, char *identstring)
+{
+  if (!uiout->impl->wrap_hint)
+    return;
+  uiout->impl->wrap_hint (uiout, identstring);
+}
+
+void
+uo_flush (struct ui_out *uiout)
+{
+  if (!uiout->impl->flush)
+    return;
+  uiout->impl->flush (uiout);
+}
+
+/* local functions */
+
+/* list of column headers manipulation routines */
+
+static void
+clear_header_list (struct ui_out *uiout)
+{
+  while (uiout->table.header_first != NULL)
     {
-      const char *current_substring = piece.string;
-
-      gdb_assert (piece.n_int_args >= 0 && piece.n_int_args <= 2);
-      int intvals[2] = { 0, 0 };
-      for (int i = 0; i < piece.n_int_args; ++i)
-	intvals[i] = va_arg (args, int);
-
-      /* The only ones we support for now.  */
-      gdb_assert (piece.n_int_args == 0
-		  || piece.argclass == string_arg
-		  || piece.argclass == int_arg
-		  || piece.argclass == long_arg);
-
-      switch (piece.argclass)
-	{
-	case string_arg:
-	  {
-	    const char *str = va_arg (args, const char *);
-	    switch (piece.n_int_args)
-	      {
-	      case 0:
-		call_do_message (style, current_substring, str);
-		break;
-	      case 1:
-		call_do_message (style, current_substring, intvals[0], str);
-		break;
-	      case 2:
-		call_do_message (style, current_substring,
-				 intvals[0], intvals[1], str);
-		break;
-	      }
-	  }
-	  break;
-	case wide_string_arg:
-	  gdb_assert_not_reached (_("wide_string_arg not supported in vmessage"));
-	  break;
-	case wide_char_arg:
-	  gdb_assert_not_reached (_("wide_char_arg not supported in vmessage"));
-	  break;
-	case long_long_arg:
-	  call_do_message (style, current_substring, va_arg (args, long long));
-	  break;
-	case int_arg:
-	  {
-	    int val = va_arg (args, int);
-	    switch (piece.n_int_args)
-	      {
-	      case 0:
-		call_do_message (style, current_substring, val);
-		break;
-	      case 1:
-		call_do_message (style, current_substring, intvals[0], val);
-		break;
-	      case 2:
-		call_do_message (style, current_substring,
-				 intvals[0], intvals[1], val);
-		break;
-	      }
-	  }
-	  break;
-	case long_arg:
-	  {
-	    long val = va_arg (args, long);
-	    switch (piece.n_int_args)
-	      {
-	      case 0:
-		call_do_message (style, current_substring, val);
-		break;
-	      case 1:
-		call_do_message (style, current_substring, intvals[0], val);
-		break;
-	      case 2:
-		call_do_message (style, current_substring,
-				 intvals[0], intvals[1], val);
-		break;
-	      }
-	  }
-	  break;
-	case size_t_arg:
-	  {
-	    size_t val = va_arg (args, size_t);
-	    switch (piece.n_int_args)
-	      {
-	      case 0:
-		call_do_message (style, current_substring, val);
-		break;
-	      case 1:
-		call_do_message (style, current_substring, intvals[0], val);
-		break;
-	      case 2:
-		call_do_message (style, current_substring,
-				 intvals[0], intvals[1], val);
-		break;
-	      }
-	  }
-	  break;
-	case double_arg:
-	  call_do_message (style, current_substring, va_arg (args, double));
-	  break;
-	case long_double_arg:
-	  gdb_assert_not_reached (_("long_double_arg not supported in vmessage"));
-	  break;
-	case dec32float_arg:
-	  gdb_assert_not_reached (_("dec32float_arg not supported in vmessage"));
-	  break;
-	case dec64float_arg:
-	  gdb_assert_not_reached (_("dec64float_arg not supported in vmessage"));
-	  break;
-	case dec128float_arg:
-	  gdb_assert_not_reached (_("dec128float_arg not supported in vmessage"));
-	  break;
-	case ptr_arg:
-	  switch (current_substring[2])
-	    {
-	    case 'F':
-	      {
-		gdb_assert (!test_flags (disallow_ui_out_field));
-		base_field_s *bf = va_arg (args, base_field_s *);
-		switch (bf->kind)
-		  {
-		  case field_kind::FIELD_SIGNED:
-		    {
-		      auto *f = (signed_field_s *) bf;
-		      field_signed (f->name, f->val);
-		    }
-		    break;
-		  case field_kind::FIELD_STRING:
-		    {
-		      auto *f = (string_field_s *) bf;
-		      field_string (f->name, f->str);
-		    }
-		    break;
-		  }
-	      }
-	      break;
-	    case 's':
-	      {
-		styled_string_s *ss = va_arg (args, styled_string_s *);
-		call_do_message (ss->style, "%s", ss->str);
-	      }
-	      break;
-	    case '[':
-	      style = *va_arg (args, const ui_file_style *);
-	      break;
-	    case ']':
-	      {
-		void *arg = va_arg (args, void *);
-		gdb_assert (arg == nullptr);
-
-		style = {};
-	      }
-	      break;
-	    default:
-	      call_do_message (style, current_substring, va_arg (args, void *));
-	      break;
-	    }
-	  break;
-	case literal_piece:
-	  /* Print a portion of the format string that has no
-	     directives.  Note that this will not include any ordinary
-	     %-specs, but it might include "%%".  That is why we use
-	     call_do_message here.  Also, we pass a dummy argument
-	     because some platforms have modified GCC to include
-	     -Wformat-security by default, which will warn here if
-	     there is no argument.  */
-	  call_do_message (style, current_substring, 0);
-	  break;
-	default:
-	  internal_error (__FILE__, __LINE__,
-			  _("failed internal consistency check"));
-	}
+      uiout->table.header_next = uiout->table.header_first;
+      uiout->table.header_first = uiout->table.header_first->next;
+      if (uiout->table.header_next->colhdr != NULL)
+	xfree (uiout->table.header_next->colhdr);
+      xfree (uiout->table.header_next);
     }
+  gdb_assert (uiout->table.header_first == NULL);
+  uiout->table.header_last = NULL;
+  uiout->table.header_next = NULL;
 }
 
-void
-ui_out::message (const char *format, ...)
+static void
+append_header_to_list (struct ui_out *uiout,
+		       int width,
+		       int alignment,
+		       const char *col_name,
+		       const char *colhdr)
 {
-  va_list args;
-  va_start (args, format);
+  struct ui_out_hdr *temphdr;
 
-  vmessage (ui_file_style (), format, args);
-
-  va_end (args);
+  temphdr = XMALLOC (struct ui_out_hdr);
+  temphdr->width = width;
+  temphdr->alignment = alignment;
+  /* we have to copy the column title as the original may be an automatic */
+  if (colhdr != NULL)
+    temphdr->colhdr = xstrdup (colhdr);
+  else
+    temphdr->colhdr = NULL;
+  if (col_name != NULL)
+    temphdr->col_name = xstrdup (colhdr);
+  else
+    temphdr->col_name = xstrdup (colhdr);
+  temphdr->next = NULL;
+  if (uiout->table.header_first == NULL)
+    {
+      temphdr->colno = 1;
+      uiout->table.header_first = temphdr;
+      uiout->table.header_last = temphdr;
+    }
+  else
+    {
+      temphdr->colno = uiout->table.header_last->colno + 1;
+      uiout->table.header_last->next = temphdr;
+      uiout->table.header_last = temphdr;
+    }
+  uiout->table.header_next = uiout->table.header_last;
 }
 
-void
-ui_out::wrap_hint (const char *identstring)
+/* Extract the format information for the NEXT header and and advance
+   the header pointer.  Return 0 if there was no next header.  */
+
+static int
+get_next_header (struct ui_out *uiout,
+		 int *colno,
+		 int *width,
+		 int *alignment,
+		 char **colhdr)
 {
-  do_wrap_hint (identstring);
+  /* There may be no headers at all or we may have used all columns.  */
+  if (uiout->table.header_next == NULL)
+    return 0;
+  *colno = uiout->table.header_next->colno;
+  *width = uiout->table.header_next->width;
+  *alignment = uiout->table.header_next->alignment;
+  *colhdr = uiout->table.header_next->colhdr;
+  /* Advance the header pointer to the next entry.  */
+  uiout->table.header_next = uiout->table.header_next->next;
+  return 1;
 }
 
-void
-ui_out::flush ()
-{
-  do_flush ();
-}
-
-void
-ui_out::redirect (ui_file *outstream)
-{
-  do_redirect (outstream);
-}
-
-/* Test the flags against the mask given.  */
-ui_out_flags
-ui_out::test_flags (ui_out_flags mask)
-{
-  return m_flags & mask;
-}
-
-bool
-ui_out::is_mi_like_p () const
-{
-  return do_is_mi_like_p ();
-}
 
 /* Verify that the field/tuple/list is correctly positioned.  Return
    the field number and corresponding alignment (if
    available/applicable).  */
 
-void
-ui_out::verify_field (int *fldno, int *width, ui_align *align)
+static void
+verify_field (struct ui_out *uiout, int *fldno, int *width, int *align)
 {
-  ui_out_level *current = current_level ();
-  const char *text;
+  struct ui_out_level *current = current_level (uiout);
+  char *text;
 
-  if (m_table_up != nullptr
-      && m_table_up->current_state () != ui_out_table::state::BODY)
+  if (uiout->table.flag)
     {
-      internal_error (__FILE__, __LINE__,
-		      _("table_body missing; table fields must be \
-specified after table_body and inside a list."));
+      if (!uiout->table.body_flag)
+	internal_error (__FILE__, __LINE__,
+			"table_body missing; table fields must be \
+specified after table_body and inside a list.");
+      /* NOTE: cagney/2001-12-08: There was a check here to ensure
+	 that this code was only executed when uiout->level was
+	 greater than zero.  That no longer applies - this code is run
+	 before each table row tuple is started and at that point the
+	 level is zero.  */
     }
 
-  current->inc_field_count ();
+  current->field_count += 1;
 
-  if (m_table_up != nullptr
-      && m_table_up->current_state () == ui_out_table::state::BODY
-      && m_table_up->entry_level () == level ()
-      && m_table_up->get_next_header (fldno, width, align, &text))
+  if (uiout->table.body_flag
+      && uiout->table.entry_level == uiout->level
+      && get_next_header (uiout, fldno, width, align, &text))
     {
-      if (*fldno != current->field_count ())
+      if (*fldno != current->field_count)
 	internal_error (__FILE__, __LINE__,
-			_("ui-out internal error in handling headers."));
+			"ui-out internal error in handling headers.");
     }
   else
     {
       *width = 0;
       *align = ui_noalign;
-      *fldno = current->field_count ();
+      *fldno = current->field_count;
     }
 }
 
-/* Access table field parameters.  */
 
-bool
-ui_out::query_table_field (int colno, int *width, int *alignment,
-			   const char **col_name)
+/* access to ui_out format private members */
+
+void
+ui_out_get_field_separator (struct ui_out *uiout)
 {
-  if (m_table_up == nullptr)
-    return false;
-
-  return m_table_up->query_field (colno, width, alignment, col_name);
 }
 
-/* The constructor.  */
+/* Access to ui-out members data */
 
-ui_out::ui_out (ui_out_flags flags)
-: m_flags (flags)
+struct ui_out_data *
+ui_out_data (struct ui_out *uiout)
 {
-  /* Create the ui-out level #1, the default level.  */
-  push_level (ui_out_type_tuple);
+  return uiout->data;
 }
 
-ui_out::~ui_out ()
+/* initalize private members at startup */
+
+struct ui_out *
+ui_out_new (struct ui_out_impl *impl,
+	    struct ui_out_data *data,
+	    int flags)
 {
+  struct ui_out *uiout = XMALLOC (struct ui_out);
+  uiout->data = data;
+  uiout->impl = impl;
+  uiout->flags = flags;
+  uiout->table.flag = 0;
+  uiout->table.body_flag = 0;
+  uiout->level = 0;
+  memset (uiout->levels, 0, sizeof (uiout->levels));
+  uiout->table.header_first = NULL;
+  uiout->table.header_last = NULL;
+  uiout->table.header_next = NULL;
+  return uiout;
+}
+
+/* standard gdb initialization hook */
+
+void
+_initialize_ui_out (void)
+{
+  /* nothing needs to be done */
 }

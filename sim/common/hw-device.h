@@ -1,27 +1,29 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1998, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #ifndef HW_DEVICE_H
 #define HW_DEVICE_H
+
+/* declared in sim-basics.h, this object is used everywhere */
+/* typedef struct _device device; */
 
 
 /* Introduction:
@@ -291,8 +293,7 @@ typedef unsigned (hw_dma_write_buffer_method)
    The number of words determined by the number of {address,size}
    cells attributes of the device. */
 
-typedef struct _hw_unit
-{
+typedef struct _hw_unit {
   int nr_cells;
   unsigned_cell cells[4]; /* unused cells are zero */
 } hw_unit;
@@ -339,7 +340,7 @@ typedef int (hw_unit_encode_method)
       const hw_unit *unit,
       char *encoded,
       int sizeof_buf);
-
+     
 #define hw_unit_encode(bus, unit, encoded, sizeof_encoded) \
 ((bus)->to_unit_encode (bus, unit, encoded, sizeof_encoded))
 
@@ -397,8 +398,7 @@ extern char *hw_strdup (struct hw *me, const char *str);
 
    */
 
-typedef enum
-{
+typedef enum {
   hw_ioctl_break, /* unsigned_word requested_break */
   hw_ioctl_set_trace, /* void */
   hw_ioctl_create_stack, /* unsigned_word *sp, char **argv, char **envp */
@@ -432,17 +432,17 @@ int hw_ioctl
 void hw_abort
 (struct hw *me,
  const char *fmt,
- ...) __attribute__ ((format (printf, 2, 3), noreturn));
+ ...) __attribute__ ((format (printf, 2, 3)));
 
 void hw_vabort
 (struct hw *me,
  const char *fmt,
- va_list ap) __attribute__ ((noreturn));
+ va_list ap);
 
 void hw_halt
 (struct hw *me,
  int reason,
- int status) __attribute__ ((noreturn));
+ int status);
 
 
 #define hw_trace_p(hw) ((hw)->trace_of_hw_p + 0)
@@ -474,8 +474,7 @@ struct hw_instance_data;
 /* Finally the hardware device - keep your grubby little mits off of
    these internals! :-) */
 
-struct hw
-{
+struct hw {
 
   /* our relatives */
   struct hw *parent_of_hw;

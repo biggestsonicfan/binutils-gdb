@@ -1,12 +1,12 @@
 /* Remote target system call support.
-   Copyright 1997-2020 Free Software Foundation, Inc.
+   Copyright 1997, 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,7 +15,8 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with GAS; see the file COPYING.  If not, write to the Free Software
+   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* This interface isn't intended to be specific to any particular kind
    of remote (hardware, simulator, whatever).  As such, support for it
@@ -28,15 +29,14 @@
 #endif
 #include "ansidecl.h"
 #include "libiberty.h"
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 #include <stdio.h>
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-#ifdef HAVE_STRING_H
-#include <string.h>
-#elif defined (HAVE_STRINGS_H)
-#include <strings.h>
 #endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -68,16 +68,16 @@
 #define TWORD long
 #define TADDR unsigned long
 
-/* Path to be prepended to syscalls with absolute paths, and to be
-   chdir:ed at startup, if not empty.  */
-char *simulator_sysroot = "";
-
 /* Utility of cb_syscall to fetch a path name or other string from the target.
    The result is 0 for success or a host errno value.  */
 
-int
-cb_get_string (host_callback *cb, CB_SYSCALL *sc, char *buf, int buflen,
-	       TADDR addr)
+static int
+get_string (cb, sc, buf, buflen, addr)
+     host_callback *cb;
+     CB_SYSCALL *sc;
+     char *buf;
+     int buflen;
+     TADDR addr;
 {
   char *p, *pend;
 
@@ -88,7 +88,7 @@ cb_get_string (host_callback *cb, CB_SYSCALL *sc, char *buf, int buflen,
 	 path name along with the syscall request, and cache the file
 	 name somewhere (or otherwise tweak this as desired).  */
       unsigned int count = (*sc->read_mem) (cb, sc, addr, p, 1);
-
+				    
       if (count != 1)
 	return EINVAL;
       if (*p == 0)
@@ -101,36 +101,22 @@ cb_get_string (host_callback *cb, CB_SYSCALL *sc, char *buf, int buflen,
 
 /* Utility of cb_syscall to fetch a path name.
    The buffer is malloc'd and the address is stored in BUFP.
-   The result is that of get_string, but prepended with
-   simulator_sysroot if the string starts with '/'.
+   The result is that of get_string.
    If an error occurs, no buffer is left malloc'd.  */
 
 static int
-get_path (host_callback *cb, CB_SYSCALL *sc, TADDR addr, char **bufp)
+get_path (cb, sc, addr, bufp)
+     host_callback *cb;
+     CB_SYSCALL *sc;
+     TADDR addr;
+     char **bufp;
 {
   char *buf = xmalloc (MAX_PATH_LEN);
   int result;
-  int sysroot_len = strlen (simulator_sysroot);
 
-  result = cb_get_string (cb, sc, buf, MAX_PATH_LEN - sysroot_len, addr);
+  result = get_string (cb, sc, buf, MAX_PATH_LEN, addr);
   if (result == 0)
-    {
-      /* Prepend absolute paths with simulator_sysroot.  Relative paths
-	 are supposed to be relative to a chdir within that path, but at
-	 this point unknown where.  */
-      if (simulator_sysroot[0] != '\0' && *buf == '/')
-	{
-	  /* Considering expected rareness of syscalls with absolute
-	     file paths (compared to relative file paths and insn
-	     execution), it does not seem worthwhile to rearrange things
-	     to get rid of the string moves here; we'd need at least an
-	     extra call to check the initial '/' in the path.  */
-	  memmove (buf + sysroot_len, buf, sysroot_len);
-	  memcpy (buf, simulator_sysroot, sysroot_len);
-	}
-
-      *bufp = buf;
-    }
+    *bufp = buf;
   else
     free (buf);
   return result;
@@ -139,7 +125,9 @@ get_path (host_callback *cb, CB_SYSCALL *sc, TADDR addr, char **bufp)
 /* Perform a system call on behalf of the target.  */
 
 CB_RC
-cb_syscall (host_callback *cb, CB_SYSCALL *sc)
+cb_syscall (cb, sc)
+     host_callback *cb;
+     CB_SYSCALL *sc;
 {
   TWORD result = 0, errcode = 0;
 
@@ -240,7 +228,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 #endif /* wip */
 
     case CB_SYS_exit :
-      /* Caller must catch and handle; see sim_syscall as an example.  */
+      /* Caller must catch and handle.  */
       break;
 
     case CB_SYS_open :
@@ -281,7 +269,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 
 	while (count > 0)
 	  {
-	    if (cb_is_stdin (cb, fd))
+	    if (fd == 0)
 	      result = (int) (*cb->read_stdin) (cb, buf,
 						(count < FILE_XFR_SIZE
 						 ? count : FILE_XFR_SIZE));
@@ -334,12 +322,12 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 		errcode = EINVAL;
 		goto FinishSyscall;
 	      }
-	    if (cb_is_stdout (cb, fd))
+	    if (fd == 1)
 	      {
 		result = (int) (*cb->write_stdout) (cb, buf, bytes_read);
 		(*cb->flush_stdout) (cb);
 	      }
-	    else if (cb_is_stderr (cb, fd))
+	    else if (fd == 2)
 	      {
 		result = (int) (*cb->write_stderr) (cb, buf, bytes_read);
 		(*cb->flush_stderr) (cb);
@@ -385,63 +373,6 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
       }
       break;
 
-    case CB_SYS_truncate :
-      {
-	char *path;
-	long len = sc->arg2;
-
-	errcode = get_path (cb, sc, sc->arg1, &path);
-	if (errcode != 0)
-	  {
-	    result = -1;
-	    errcode = EFAULT;
-	    goto FinishSyscall;
-	  }
-	result = (*cb->truncate) (cb, path, len);
-	free (path);
-	if (result < 0)
-	  goto ErrorFinish;
-      }
-      break;
-
-    case CB_SYS_ftruncate :
-      {
-	int fd = sc->arg1;
-	long len = sc->arg2;
-
-	result = (*cb->ftruncate) (cb, fd, len);
-	if (result < 0)
-	  goto ErrorFinish;
-      }
-      break;
-
-    case CB_SYS_rename :
-      {
-	char *path1, *path2;
-
-	errcode = get_path (cb, sc, sc->arg1, &path1);
-	if (errcode != 0)
-	  {
-	    result = -1;
-	    errcode = EFAULT;
-	    goto FinishSyscall;
-	  }
-	errcode = get_path (cb, sc, sc->arg2, &path2);
-	if (errcode != 0)
-	  {
-	    result = -1;
-	    errcode = EFAULT;
-	    free (path1);
-	    goto FinishSyscall;
-	  }
-	result = (*cb->rename) (cb, path1, path2);
-	free (path1);
-	free (path2);
-	if (result < 0)
-	  goto ErrorFinish;
-      }
-      break;
-
     case CB_SYS_stat :
       {
 	char *path,*buf;
@@ -455,7 +386,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 	    result = -1;
 	    goto FinishSyscall;
 	  }
-	result = (*cb->to_stat) (cb, path, &statbuf);
+	result = (*cb->stat) (cb, path, &statbuf);
 	free (path);
 	if (result < 0)
 	  goto ErrorFinish;
@@ -488,7 +419,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 	struct stat statbuf;
 	TADDR addr = sc->arg2;
 
-	result = (*cb->to_fstat) (cb, sc->arg1, &statbuf);
+	result = (*cb->fstat) (cb, sc->arg1, &statbuf);
 	if (result < 0)
 	  goto ErrorFinish;
 	buflen = cb_host_to_target_stat (cb, NULL, NULL);
@@ -510,77 +441,6 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 	    goto FinishSyscall;
 	  }
 	free (buf);
-      }
-      break;
-
-    case CB_SYS_lstat :
-      {
-	char *path, *buf;
-	int buflen;
-	struct stat statbuf;
-	TADDR addr = sc->arg2;
-
-	errcode = get_path (cb, sc, sc->arg1, &path);
-	if (errcode != 0)
-	  {
-	    result = -1;
-	    goto FinishSyscall;
-	  }
-	result = (*cb->to_lstat) (cb, path, &statbuf);
-	free (path);
-	if (result < 0)
-	  goto ErrorFinish;
-
-	buflen = cb_host_to_target_stat (cb, NULL, NULL);
-	buf = xmalloc (buflen);
-	if (cb_host_to_target_stat (cb, &statbuf, buf) != buflen)
-	  {
-	    /* The translation failed.  This is due to an internal
-	       host program error, not the target's fault.
-	       Unfortunately, it's hard to test this case, so there's no
-	       test-case for this execution path.  */
-	    free (buf);
-	    errcode = ENOSYS;
-	    result = -1;
-	    goto FinishSyscall;
-	  }
-
-	if ((*sc->write_mem) (cb, sc, addr, buf, buflen) != buflen)
-	  {
-	    free (buf);
-	    errcode = EINVAL;
-	    result = -1;
-	    goto FinishSyscall;
-	  }
-
-	free (buf);
-      }
-      break;
-
-    case CB_SYS_pipe :
-      {
-	int p[2];
-	char *target_p = xcalloc (1, cb->target_sizeof_int * 2);
-
-	result = (*cb->pipe) (cb, p);
-	if (result != 0)
-	  goto ErrorFinish;
-
-	cb_store_target_endian (cb, target_p, cb->target_sizeof_int, p[0]);
-	cb_store_target_endian (cb, target_p + cb->target_sizeof_int,
-				cb->target_sizeof_int, p[1]);
-	if ((*sc->write_mem) (cb, sc, sc->arg1, target_p,
-			      cb->target_sizeof_int * 2)
-	    != cb->target_sizeof_int * 2)
-	  {
-	    /* Close the pipe fd:s.  */
-	    (*cb->close) (cb, p[0]);
-	    (*cb->close) (cb, p[1]);
-	    errcode = EFAULT;
-	    result = -1;
-	  }
-
-	free (target_p);
       }
       break;
 

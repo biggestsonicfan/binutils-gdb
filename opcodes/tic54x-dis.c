@@ -1,40 +1,38 @@
 /* Disassembly routines for TMS320C54X architecture
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001 Free Software Foundation, Inc.
    Contributed by Timothy Wall (twall@cygnus.com)
 
-   This file is part of the GNU opcodes library.
-
-   This library is free software; you can redistribute it and/or modify
+   This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "sysdep.h"
 #include <errno.h>
 #include <math.h>
 #include <stdlib.h>
-#include "disassemble.h"
+#include "sysdep.h"
+#include "dis-asm.h"
 #include "opcode/tic54x.h"
 #include "coff/tic54x.h"
 
-static int has_lkaddr (unsigned short, const insn_template *);
-static int get_insn_size (unsigned short, const insn_template *);
+static int has_lkaddr (unsigned short, const template *);
+static int get_insn_size (unsigned short, const template *);
 static int print_instruction (disassemble_info *, bfd_vma,
                               unsigned short, const char *,
                               const enum optype [], int, int);
 static int print_parallel_instruction (disassemble_info *, bfd_vma,
-                                       unsigned short,
-                                       const insn_template *, int);
+                                       unsigned short, 
+                                       const template *, int);
 static int sprint_dual_address (disassemble_info *,char [],
                                 unsigned short);
 static int sprint_indirect_address (disassemble_info *,char [],
@@ -51,7 +49,7 @@ print_insn_tic54x (bfd_vma memaddr, disassemble_info *info)
   bfd_byte opbuf[2];
   unsigned short opcode;
   int status, size;
-  const insn_template* tm;
+  const template* tm;
 
   status = (*info->read_memory_func) (memaddr, opbuf, 2, info);
   if (status != 0)
@@ -86,7 +84,7 @@ print_insn_tic54x (bfd_vma memaddr, disassemble_info *info)
 }
 
 static int
-has_lkaddr (unsigned short memdata, const insn_template *tm)
+has_lkaddr (unsigned short memdata, const template *tm)
 {
   return (IS_LKADDR (memdata)
 	  && (OPTYPE (tm->operand_types[0]) == OP_Smem
@@ -99,11 +97,11 @@ has_lkaddr (unsigned short memdata, const insn_template *tm)
 
 /* always returns 1 (whether an insn template was found) since we provide an
    "unknown instruction" template */
-const insn_template*
-tic54x_get_insn (disassemble_info *info, bfd_vma addr,
+const template*
+tic54x_get_insn (disassemble_info *info, bfd_vma addr, 
                  unsigned short memdata, int *size)
 {
-  const insn_template *tm = NULL;
+  const template *tm = NULL;
 
   for (tm = tic54x_optab; tm->name; tm++)
   {
@@ -135,7 +133,7 @@ tic54x_get_insn (disassemble_info *info, bfd_vma addr,
         }
     }
   }
-  for (tm = (insn_template *) tic54x_paroptab; tm->name; tm++)
+  for (tm = (template *) tic54x_paroptab; tm->name; tm++)
   {
     if (tm->opcode == (memdata & tm->mask))
     {
@@ -149,7 +147,7 @@ tic54x_get_insn (disassemble_info *info, bfd_vma addr,
 }
 
 static int
-get_insn_size (unsigned short memdata, const insn_template *insn)
+get_insn_size (unsigned short memdata, const template *insn)
 {
   int size;
 
@@ -167,13 +165,14 @@ get_insn_size (unsigned short memdata, const insn_template *insn)
 }
 
 int
-print_instruction (disassemble_info *info,
-		   bfd_vma memaddr,
-		   unsigned short opcode,
-		   const char *tm_name,
-		   const enum optype tm_operands[],
-		   int size,
-		   int ext)
+print_instruction (info, memaddr, opcode, tm_name, tm_operands, size, ext)
+  disassemble_info *info;
+  bfd_vma memaddr;
+  unsigned short opcode;
+  const char *tm_name;
+  const enum optype tm_operands[];
+  int size;
+  int ext;
 {
   static int n;
   /* string storage for multiple operands */
@@ -379,10 +378,7 @@ print_instruction (disassemble_info *info,
         case OP_CC3:
         {
           const char *code[] = { "eq", "lt", "gt", "neq" };
-
-	  /* Do not use sprintf with only two parameters as a
-	     compiler warning could be generated in such conditions.  */
-	  sprintf (operand[i], "%s", code[CC3 (opcode)]);
+          sprintf (operand[i], code[CC3 (opcode)]);
           info->fprintf_func (info->stream, "%s%s", comma, operand[i]);
           break;
         }
@@ -394,7 +390,8 @@ print_instruction (disassemble_info *info,
             break;
           }
         case OP_k5:
-          sprintf (operand[i], "#%d", ((opcode & 0x1F) ^ 0x10) - 0x10);
+          sprintf (operand[i], "#%d",
+                   (int) (((signed char) opcode & 0x1F) << 3) >> 3);
           info->fprintf_func (info->stream, "%s%s", comma, operand[i]);
           break;
         case OP_k8u:
@@ -466,11 +463,12 @@ print_instruction (disassemble_info *info,
 }
 
 static int
-print_parallel_instruction (disassemble_info *info,
-			    bfd_vma memaddr,
-			    unsigned short opcode,
-			    const insn_template *ptm,
-			    int size)
+print_parallel_instruction (info, memaddr, opcode, ptm, size)
+  disassemble_info *info;
+  bfd_vma memaddr;
+  unsigned short opcode;
+  const template *ptm;
+  int size;
 {
   print_instruction (info, memaddr, opcode,
                      ptm->name, ptm->operand_types, size, 0);
@@ -480,9 +478,10 @@ print_parallel_instruction (disassemble_info *info,
 }
 
 static int
-sprint_dual_address (disassemble_info *info ATTRIBUTE_UNUSED,
-		     char buf[],
-		     unsigned short code)
+sprint_dual_address (info, buf, code)
+  disassemble_info *info ATTRIBUTE_UNUSED;
+  char buf[];
+  unsigned short code;
 {
   const char *formats[] = {
     "*ar%d",
@@ -494,9 +493,10 @@ sprint_dual_address (disassemble_info *info ATTRIBUTE_UNUSED,
 }
 
 static int
-sprint_indirect_address (disassemble_info *info ATTRIBUTE_UNUSED,
-			 char buf[],
-			 unsigned short opcode)
+sprint_indirect_address (info, buf, opcode)
+  disassemble_info *info ATTRIBUTE_UNUSED;
+  char buf[];
+  unsigned short opcode;
 {
   const char *formats[] = {
     "*ar%d",
@@ -516,20 +516,22 @@ sprint_indirect_address (disassemble_info *info ATTRIBUTE_UNUSED,
 }
 
 static int
-sprint_direct_address (disassemble_info *info ATTRIBUTE_UNUSED,
-		       char buf[],
-		       unsigned short opcode)
+sprint_direct_address (info, buf, opcode)
+  disassemble_info *info ATTRIBUTE_UNUSED;
+  char buf[];
+  unsigned short opcode;
 {
   /* FIXME -- look up relocation if available */
   return sprintf (buf, "DP+0x%02x", (int) (opcode & 0x7F));
 }
 
 static int
-sprint_mmr (disassemble_info *info ATTRIBUTE_UNUSED,
-	    char buf[],
-	    int mmr)
+sprint_mmr (info, buf, mmr)
+  disassemble_info *info ATTRIBUTE_UNUSED;
+  char buf[];
+  int mmr;
 {
-  tic54x_symbol *reg = (tic54x_symbol *) mmregs;
+  symbol *reg = (symbol *) mmregs;
   while (reg->name != NULL)
     {
       if (mmr == reg->value)
@@ -544,9 +546,10 @@ sprint_mmr (disassemble_info *info ATTRIBUTE_UNUSED,
 }
 
 static int
-sprint_cc2 (disassemble_info *info ATTRIBUTE_UNUSED,
-	    char *buf,
-	    unsigned short opcode)
+sprint_cc2 (info, buf, opcode)
+  disassemble_info *info ATTRIBUTE_UNUSED;
+  char *buf;
+  unsigned short opcode;
 {
   const char *cc2[] = {
     "??", "??", "ageq", "alt", "aneq", "aeq", "agt", "aleq",
@@ -556,9 +559,10 @@ sprint_cc2 (disassemble_info *info ATTRIBUTE_UNUSED,
 }
 
 static int
-sprint_condition (disassemble_info *info ATTRIBUTE_UNUSED,
-		  char *buf,
-		  unsigned short opcode)
+sprint_condition (info, buf, opcode)
+  disassemble_info *info ATTRIBUTE_UNUSED;
+  char *buf;
+  unsigned short opcode;
 {
   char *start = buf;
   const char *cmp[] = {

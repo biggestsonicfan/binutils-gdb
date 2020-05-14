@@ -39,5 +39,3 @@
 	.long	foo@PLT + . - (.LPLTcall_old + 2)
 .Lfooplt_new:
 	.long	foo@PLT - (.LPLTcall_new + 2 - .)
-.Lfooplt_old2:
-	.long	foo@PLT + . - 2 - .LPLTcall_old

@@ -1,5 +1,5 @@
 /* Utility to pick a temporary filename prefix.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998 Free Software Foundation, Inc.
 
 This file is part of the libiberty library.
 Libiberty is free software; you can redistribute it and/or
@@ -14,18 +14,14 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
 #include <stdio.h>	/* May get P_tmpdir.  */
-#include <sys/types.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
 #endif
@@ -34,6 +30,7 @@ Boston, MA 02110-1301, USA.  */
 #endif
 
 #include "libiberty.h"
+extern char *choose_tmpdir PARAMS ((void));
 
 /* Name of temporary file.
    mktemp requires 6 trailing X's.  */
@@ -49,7 +46,7 @@ find one.  The current directory is chosen if all else fails so the
 program is exited if a temporary directory can't be found (@code{mktemp}
 fails).  The buffer for the result is obtained with @code{xmalloc}.
 
-This function is provided for backwards compatibility only.  Its use is
+This function is provided for backwards compatability only.  Its use is
 not recommended.
 
 @end deftypefn
@@ -57,18 +54,19 @@ not recommended.
 */
 
 char *
-choose_temp_base (void)
+choose_temp_base ()
 {
   const char *base = choose_tmpdir ();
   char *temp_filename;
   int len;
 
   len = strlen (base);
-  temp_filename = XNEWVEC (char, len + TEMP_FILE_LEN + 1);
+  temp_filename = xmalloc (len + TEMP_FILE_LEN + 1);
   strcpy (temp_filename, base);
   strcpy (temp_filename + len, TEMP_FILE);
 
-  if (mktemp (temp_filename) == 0)
+  mktemp (temp_filename);
+  if (strlen (temp_filename) == 0)
     abort ();
   return temp_filename;
 }

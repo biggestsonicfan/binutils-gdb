@@ -12,7 +12,6 @@ exists, it is removed.
 
 */
 
-#include "ansidecl.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -22,7 +21,9 @@ exists, it is removed.
 #endif
 
 int
-rename (const char *zfrom, const char *zto)
+rename (zfrom, zto)
+     char *zfrom;
+     char *zto;
 {
   if (link (zfrom, zto) < 0)
     {

@@ -1,10 +1,10 @@
 /*  This file is part of the program psim.
     
-    Copyright 1994, 1997, 2003, 2004 Andrew Cagney
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
     
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
     
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
     
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
     
     */
 
@@ -324,39 +325,39 @@ update_for_binary_section(bfd *abfd,
   device *me = (device*)obj;
 
   /* skip the section if no memory to allocate */
-  if (! (bfd_section_flags (the_section) & SEC_ALLOC))
+  if (! (bfd_get_section_flags(abfd, the_section) & SEC_ALLOC))
     return;
 
   /* check/ignore any sections of size zero */
-  section_size = bfd_section_size (the_section);
+  section_size = bfd_get_section_size_before_reloc(the_section);
   if (section_size == 0)
     return;
 
   /* find where it is to go */
-  section_vma = bfd_section_vma (the_section);
+  section_vma = bfd_get_section_vma(abfd, the_section);
 
   DTRACE(binary,
 	 ("name=%-7s, vma=0x%.8lx, size=%6ld, flags=%3lx(%s%s%s%s%s )\n",
-	  bfd_section_name (the_section),
+	  bfd_get_section_name(abfd, the_section),
 	  (long)section_vma,
 	  (long)section_size,
-	  (long)bfd_section_flags (the_section),
-	  bfd_section_flags (the_section) & SEC_LOAD ? " LOAD" : "",
-	  bfd_section_flags (the_section) & SEC_CODE ? " CODE" : "",
-	  bfd_section_flags (the_section) & SEC_DATA ? " DATA" : "",
-	  bfd_section_flags (the_section) & SEC_ALLOC ? " ALLOC" : "",
-	  bfd_section_flags (the_section) & SEC_READONLY ? " READONLY" : ""
+	  (long)bfd_get_section_flags(abfd, the_section),
+	  bfd_get_section_flags(abfd, the_section) & SEC_LOAD ? " LOAD" : "",
+	  bfd_get_section_flags(abfd, the_section) & SEC_CODE ? " CODE" : "",
+	  bfd_get_section_flags(abfd, the_section) & SEC_DATA ? " DATA" : "",
+	  bfd_get_section_flags(abfd, the_section) & SEC_ALLOC ? " ALLOC" : "",
+	  bfd_get_section_flags(abfd, the_section) & SEC_READONLY ? " READONLY" : ""
 	  ));
 
   /* If there is an .interp section, it means it needs a shared library interpreter.  */
-  if (strcmp(".interp", bfd_section_name (the_section)) == 0)
+  if (strcmp(".interp", bfd_get_section_name(abfd, the_section)) == 0)
     error("Shared libraries are not yet supported.\n");
 
   /* determine the devices access */
   access = access_read;
-  if (bfd_section_flags (the_section) & SEC_CODE)
+  if (bfd_get_section_flags(abfd, the_section) & SEC_CODE)
     access |= access_exec;
-  if (!(bfd_section_flags (the_section) & SEC_READONLY))
+  if (!(bfd_get_section_flags(abfd, the_section) & SEC_READONLY))
     access |= access_write;
 
   /* if claim specified, allocate region from the memory device */
@@ -386,7 +387,7 @@ update_for_binary_section(bfd *abfd,
 			  me);
 
   /* if a load dma in the required data */
-  if (bfd_section_flags (the_section) & SEC_LOAD) {
+  if (bfd_get_section_flags(abfd, the_section) & SEC_LOAD) {
     void *section_init = zalloc(section_size);
     if (!bfd_get_section_contents(abfd,
 				  the_section,
@@ -404,7 +405,7 @@ update_for_binary_section(bfd *abfd,
 				1 /*violate_read_only*/)
 	!= section_size)
       device_error(me, "broken transfer\n");
-    free(section_init); /* only free if load */
+    zfree(section_init); /* only free if load */
   }
 }
 
@@ -590,16 +591,16 @@ create_ppc_elf_stack_frame(device *me,
 			start_argv, start_envp);
 
   /* set up the registers */
-  ASSERT (psim_write_register(device_system(me), -1,
-			      &top_of_stack, "sp", cooked_transfer) > 0);
-  ASSERT (psim_write_register(device_system(me), -1,
-			      &argc, "r3", cooked_transfer) > 0);
-  ASSERT (psim_write_register(device_system(me), -1,
-			      &start_argv, "r4", cooked_transfer) > 0);
-  ASSERT (psim_write_register(device_system(me), -1,
-			      &start_envp, "r5", cooked_transfer) > 0);
-  ASSERT (psim_write_register(device_system(me), -1,
-			      &start_aux, "r6", cooked_transfer) > 0);
+  psim_write_register(device_system(me), -1,
+		      &top_of_stack, "sp", cooked_transfer);
+  psim_write_register(device_system(me), -1,
+		      &argc, "r3", cooked_transfer);
+  psim_write_register(device_system(me), -1,
+		      &start_argv, "r4", cooked_transfer);
+  psim_write_register(device_system(me), -1,
+		      &start_envp, "r5", cooked_transfer);
+  psim_write_register(device_system(me), -1,
+		      &start_aux, "r6", cooked_transfer);
 }
 
 static void
@@ -618,16 +619,16 @@ create_ppc_aix_stack_frame(device *me,
   create_ppc_elf_stack_frame(me, bottom_of_stack, argv, envp);
   
   /* extract argument addresses from registers */
-  ASSERT (psim_read_register(device_system(me), 0,
-			     &top_of_stack, "r1", cooked_transfer) > 0);
-  ASSERT (psim_read_register(device_system(me), 0,
-			     &core_argc, "r3", cooked_transfer) > 0);
-  ASSERT (psim_read_register(device_system(me), 0,
-			     &core_argv, "r4", cooked_transfer) > 0);
-  ASSERT (psim_read_register(device_system(me), 0,
-			     &core_envp, "r5", cooked_transfer) > 0);
-  ASSERT (psim_read_register(device_system(me), 0,
-			     &core_aux, "r6", cooked_transfer) > 0);
+  psim_read_register(device_system(me), 0,
+		     &top_of_stack, "r1", cooked_transfer);
+  psim_read_register(device_system(me), 0,
+		     &core_argc, "r3", cooked_transfer);
+  psim_read_register(device_system(me), 0,
+		     &core_argv, "r4", cooked_transfer);
+  psim_read_register(device_system(me), 0,
+		     &core_envp, "r5", cooked_transfer);
+  psim_read_register(device_system(me), 0,
+		     &core_aux, "r6", cooked_transfer);
 
   /* extract arguments from registers */
   device_error(me, "Unfinished procedure create_ppc_aix_stack_frame\n");
@@ -717,4 +718,4 @@ const device_descriptor hw_init_device_descriptor[] = {
   { NULL },
 };
 
-#endif /* _HW_INIT_C_ */
+#endif _HW_INIT_C_

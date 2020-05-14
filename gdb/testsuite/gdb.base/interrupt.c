@@ -2,28 +2,14 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-
-#include "../lib/unbuffer_output.c"
-
-#ifdef SIGNALS
-#include <signal.h>
-
-static void
-sigint_handler (int signo)
-{
-}
-#endif
-
 int
 main ()
 {
   char x;
   int nbytes;
-
-  gdb_unbuffer_output ();
-
-#ifdef SIGNALS
-  signal (SIGINT, sigint_handler);
+#ifdef usestubs
+  set_debug_traps();
+  breakpoint();
 #endif
   printf ("talk to me baby\n");
   while (1)
@@ -34,10 +20,7 @@ main ()
 #ifdef EINTR
 	  if (errno != EINTR)
 #endif
-	    {
-	      perror ("");
-	      return 1;
-	    }
+	    perror ("");
 	}
       else if (nbytes == 0)
 	{

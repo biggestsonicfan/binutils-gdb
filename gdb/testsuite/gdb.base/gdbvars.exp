@@ -1,43 +1,47 @@
-# Copyright (C) 1992-2020 Free Software Foundation, Inc.
+# Copyright (C) 1992, 1997 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Fred Fish. (fnf@cygnus.com)
 
-
-standard_testfile
-
-if {[prepare_for_testing "failed to prepare" $testfile $srcfile debug]} {
-    return -1
+if $tracelevel then {
+	strace $tracelevel
 }
+
+set prms_id 0
+set bug_id 0
 
 proc test_convenience_variables {} {
     global gdb_prompt
 
-    gdb_test_no_output "set \$foo = 101" \
+    gdb_test "set \$foo = 101"	"" \
 	"Set a new convenience variable"
 
     gdb_test "print \$foo"		" = 101" \
 	"Print contents of new convenience variable"
 
-    gdb_test_no_output "set \$foo = 301" \
+    gdb_test "set \$foo = 301"	"" \
 	"Set convenience variable to a new value"
 
     gdb_test "print \$foo"		" = 301" \
 	"Print new contents of convenience variable"
 
-    gdb_test_no_output "set \$_ = 11" \
+    gdb_test "set \$_ = 11"		"" \
 	"Set convenience variable \$_"
 
     gdb_test "print \$_"		" = 11" \
@@ -51,49 +55,6 @@ proc test_convenience_variables {} {
 
     gdb_test "print \$bar"		" = void" \
 	"Print contents of uninitialized convenience variable"
-
-
-    gdb_test "print \$str = \"some string\"" \
-	" = \"some string\"" \
-	"Set convenience variable to string value"
-    gdb_test "print \$str = \"some other string\"" \
-	" = \"some other string\"" \
-	"Change convenience variable to different string value"
-
-    gdb_test "print \$arr = {1, 2, 3}" \
-	" = \\{1, 2, 3\\}" \
-	"Set convenience variable to array value"
-    gdb_test "print \$arr = {0, 1, 2, 3}" \
-	" = \\{0, 1, 2, 3\\}" \
-	"Set convenience variable to different array value"
-}
-
-proc test_convenience_functions {} {
-    gdb_test "print \$_isvoid" " = <internal function _isvoid>" \
-	"Print internal function \$_isvoid"
-
-    gdb_test "print \$isvoid_foo" " = void" \
-	"Print void convenience variable"
-
-    gdb_test "print \$_isvoid (\$isvoid_foo)" " = 1" \
-	"Check whether void convenience variable is void"
-
-    gdb_test_no_output "set \$isvoid_foo = 1" \
-	"Set void convenience variable to 1"
-
-    gdb_test "print \$_isvoid (\$isvoid_foo)" " = 0" \
-	"Check whether non-void convenience variable is void"
-
-    # For the next test, we need the inferior to be running.
-    if { ![runto_main] } {
-	return -1
-    }
-
-    gdb_test "print \$_isvoid (foo_void ())" " = 1" \
-	"Check whether void function is void"
-
-    gdb_test "print \$_isvoid (foo_int ())" " = 0" \
-	"Check whether non-void function is void"
 }
 
 proc test_value_history {} {
@@ -144,17 +105,13 @@ proc test_value_history {} {
 	"Use value-history element in arithmetic expression"
 }
 
-proc test_with_program {} {
-    global hex
-    gdb_test_no_output "set \$prog_var = p" \
-	"Set a new convenience variable to a program variable"
-    gdb_test "print /x \$prog_var" " = $hex" \
-	"Print contents of new convenience variable of program variable"
-}
+# Start with a fresh gdb.
 
-gdb_test_no_output "set print sevenbit-strings"
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+send_gdb "set print sevenbit-strings\n" ; gdb_expect -re ".*$gdb_prompt $"
 
 test_value_history
 test_convenience_variables
-test_convenience_functions
-test_with_program

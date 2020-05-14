@@ -1,10 +1,10 @@
 /*  This file is part of the program psim.
 
-    Copyright 1994, 1995, 1996, 1998, 2003 Andrew Cagney
+    Copyright (C) 1994-1996,1998, Andrew Cagney <cagney@highland.com.au>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -39,11 +40,10 @@
 #endif
 #endif
 
-#include "libiberty.h"
+#include "defs.h"
 #include "bfd.h"
 #include "gdb/callback.h"
 #include "gdb/remote-sim.h"
-#include "gdb/signals.h"
 
 /* Define the rate at which the simulator should poll the host
    for a quit. */
@@ -55,15 +55,38 @@ static int poll_quit_count = POLL_QUIT_INTERVAL;
 
 /* Structures used by the simulator, for gdb just have static structures */
 
-psim *simulator;
+static psim *simulator;
 static device *root_device;
 static host_callback *callbacks;
+
+/* We use GDB's gdbarch_register_name function to map GDB register
+   numbers onto names, which we can then look up in the register
+   table.  Since the `set architecture' command can select a new
+   processor variant at run-time, the meanings of the register numbers
+   can change, so we need to make sure the sim uses the same
+   name/number mapping that GDB uses.
+
+   (We don't use the REGISTER_NAME macro, which is a wrapper for
+   gdbarch_register_name.  We #include GDB's "defs.h", which tries to
+   #include GDB's "config.h", but gets ours instead, and REGISTER_NAME
+   ends up not getting defined.  Simpler to just use
+   gdbarch_register_name directly.)
+
+   We used to just use the REGISTER_NAMES macro from GDB's
+   target-dependent header files, which expanded into an initializer
+   for an array of strings.  That was kind of nice, because it meant
+   that libsim.a had only a compile-time dependency on GDB; using
+   gdbarch_register_name directly means that there are now link-time
+   and run-time dependencies too.
+
+   Perhaps the host_callback structure could provide a function for
+   retrieving register names; that would be cleaner.  */
 
 SIM_DESC
 sim_open (SIM_OPEN_KIND kind,
 	  host_callback *callback,
-	  struct bfd *abfd,
-	  char * const *argv)
+	  struct _bfd *abfd,
+	  char **argv)
 {
   callbacks = callback;
 
@@ -77,8 +100,7 @@ sim_open (SIM_OPEN_KIND kind,
   root_device = psim_tree();
   simulator = NULL;
 
-  if (psim_options (root_device, argv + 1, kind) == NULL)
-    return NULL;
+  psim_options(root_device, argv + 1);
 
   if (ppc_trace[trace_opts])
     print_options ();
@@ -98,7 +120,7 @@ sim_close (SIM_DESC sd, int quitting)
 
 
 SIM_RC
-sim_load (SIM_DESC sd, const char *prog, bfd *abfd, int from_tty)
+sim_load (SIM_DESC sd, char *prog, bfd *abfd, int from_tty)
 {
   TRACE(trace_gdb, ("sim_load(prog=%s, from_tty=%d) called\n",
 		    prog, from_tty));
@@ -144,7 +166,7 @@ sim_read (SIM_DESC sd, SIM_ADDR mem, unsigned char *buf, int length)
 
 
 int
-sim_write (SIM_DESC sd, SIM_ADDR mem, const unsigned char *buf, int length)
+sim_write (SIM_DESC sd, SIM_ADDR mem, unsigned char *buf, int length)
 {
   int result = psim_write_memory(simulator, MAX_NR_PROCESSORS,
 				 buf, mem, length,
@@ -153,6 +175,64 @@ sim_write (SIM_DESC sd, SIM_ADDR mem, const unsigned char *buf, int length)
 		    (long)mem, (long)buf, length, result));
   return result;
 }
+
+
+int
+sim_fetch_register (SIM_DESC sd, int regno, unsigned char *buf, int length)
+{
+  char *regname;
+
+  if (simulator == NULL) {
+    return 0;
+  }
+
+  /* GDB will sometimes ask for the contents of a register named "";
+     we ignore such requests, and leave garbage in *BUF.  In GDB
+     terms, the empty string means "the register with this number is
+     not present in the currently selected architecture variant."
+     That's following the kludge we're using for the MIPS processors.
+     But there are loops that just walk through the entire list of
+     names and try to get everything.  */
+  regname = gdbarch_register_name (current_gdbarch, regno);
+  /* FIXME: ezannoni 2002/04/15 Remove the 'vr' and 'vscr' check
+     once AltiVec support is committed.  */
+  if (! regname || regname[0] == '\0'
+      || (regname[0] == 'v' && regname[1] == 'r')
+      || (strcmp (regname, "vscr") == 0))
+    return -1;
+
+  TRACE(trace_gdb, ("sim_fetch_register(regno=%d(%s), buf=0x%lx)\n",
+		    regno, regname, (long)buf));
+  psim_read_register(simulator, MAX_NR_PROCESSORS,
+		     buf, regname, raw_transfer);
+  return -1;
+}
+
+
+int
+sim_store_register (SIM_DESC sd, int regno, unsigned char *buf, int length)
+{
+  char *regname;
+
+  if (simulator == NULL)
+    return 0;
+
+  /* See comments in sim_fetch_register, above.  */
+  regname = gdbarch_register_name (current_gdbarch, regno);
+  /* FIXME: ezannoni 2002/04/15 Remove the 'vr' and 'vscr' check
+     once AltiVec support is committed.  */
+  if (! regname || regname[0] == '\0'
+      || (regname[0] == 'v' && regname[1] == 'r')
+      || (strcmp (regname, "vscr") == 0))
+    return -1;
+
+  TRACE(trace_gdb, ("sim_store_register(regno=%d(%s), buf=0x%lx)\n",
+		    regno, regname, (long)buf));
+  psim_write_register(simulator, MAX_NR_PROCESSORS,
+		      buf, regname, raw_transfer);
+  return -1;
+}
+
 
 void
 sim_info (SIM_DESC sd, int verbose)
@@ -164,9 +244,9 @@ sim_info (SIM_DESC sd, int verbose)
 
 SIM_RC
 sim_create_inferior (SIM_DESC sd,
-		     struct bfd *abfd,
-		     char * const *argv,
-		     char * const *envp)
+		     struct _bfd *abfd,
+		     char **argv,
+		     char **envp)
 {
   unsigned_word entry_point;
   TRACE(trace_gdb, ("sim_create_inferior(start_address=0x%x, ...)\n",
@@ -183,8 +263,8 @@ sim_create_inferior (SIM_DESC sd,
   psim_init(simulator);
   psim_stack(simulator, argv, envp);
 
-  ASSERT (psim_write_register(simulator, -1 /* all start at same PC */,
-			      &entry_point, "pc", cooked_transfer) > 0);
+  psim_write_register(simulator, -1 /* all start at same PC */,
+		      &entry_point, "pc", cooked_transfer);
   return SIM_RC_OK;
 }
 
@@ -198,13 +278,13 @@ sim_stop_reason (SIM_DESC sd, enum sim_stop *reason, int *sigrc)
   case was_continuing:
     *reason = sim_stopped;
     if (status.signal == 0)
-      *sigrc = GDB_SIGNAL_TRAP;
+      *sigrc = SIGTRAP;
     else
       *sigrc = status.signal;
     break;
   case was_trap:
     *reason = sim_stopped;
-    *sigrc = GDB_SIGNAL_TRAP;
+    *sigrc = SIGTRAP;
     break;
   case was_exited:
     *reason = sim_exited;
@@ -248,7 +328,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 }
 
 void
-sim_do_command (SIM_DESC sd, const char *cmd)
+sim_do_command (SIM_DESC sd, char *cmd)
 {
   TRACE(trace_gdb, ("sim_do_commands(cmd=%s) called\n",
 		    cmd ? cmd : "(null)"));
@@ -259,11 +339,6 @@ sim_do_command (SIM_DESC sd, const char *cmd)
   }
 }
 
-char **
-sim_complete_command (SIM_DESC sd, const char *text, const char *word)
-{
-  return NULL;
-}
 
 /* Polling, if required */
 
@@ -386,16 +461,6 @@ sim_io_error (SIM_DESC sd, const char *fmt, ...)
 
 /****/
 
-void NORETURN
-error (const char *msg, ...)
-{
-  va_list ap;
-  va_start(ap, msg);
-  callbacks->evprintf_filtered (callbacks, msg, ap);
-  va_end(ap);
-  callbacks->error (callbacks, "");
-}
-
 void *
 zalloc(long size)
 {
@@ -404,4 +469,9 @@ zalloc(long size)
     error("xmalloc failed\n");
   memset(memory, 0, size);
   return memory;
+}
+
+void zfree(void *data)
+{
+  free(data);
 }

@@ -1,6 +1,6 @@
 MACHINE=
 SCRIPT_NAME=elf
-TEMPLATE_NAME=elf
+TEMPLATE_NAME=elf32
 OUTPUT_FORMAT="elf32-m32r"
 TEXT_START_ADDR=0x100
 ARCH=m32r
@@ -9,4 +9,4 @@ MAXPAGESIZE=32
 EMBEDDED=yes
 
 # This sets the stack to the top of simulator memory (8MB).
-OTHER_SYMBOLS='PROVIDE (_stack = 0x800000);'
+OTHER_END_SYMBOLS='PROVIDE (_stack = 0x800000);'

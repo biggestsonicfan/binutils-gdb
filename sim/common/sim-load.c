@@ -1,10 +1,10 @@
 /* Utility to load a file into the simulator.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997 Free Software Foundation, Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -12,18 +12,21 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+along with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* This is a standalone loader, independent of the sim-basic.h machinery,
    as it is used by simulators that don't use it [though that doesn't mean
    to suggest that they shouldn't :-)].  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 #include "ansidecl.h"
 #include <stdio.h> /* for NULL */
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
 #endif
@@ -36,11 +39,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "gdb/callback.h"
 #include "gdb/remote-sim.h"
 
-static void eprintf (host_callback *, const char *, ...);
-static void xprintf (host_callback *, const char *, ...);
+static void eprintf PARAMS ((host_callback *, const char *, ...));
+static void xprintf PARAMS ((host_callback *, const char *, ...));
 static void report_transfer_performance
-  (host_callback *, unsigned long, time_t, time_t);
-static void xprintf_bfd_vma (host_callback *, bfd_vma);
+  PARAMS ((host_callback *, unsigned long, time_t, time_t));
+static void xprintf_bfd_vma PARAMS ((host_callback *, bfd_vma));
 
 /* Load program PROG into the simulator using the function DO_LOAD.
    If PROG_BFD is non-NULL, the file has already been opened.
@@ -56,9 +59,15 @@ static void xprintf_bfd_vma (host_callback *, bfd_vma);
 
 
 bfd *
-sim_load_file (SIM_DESC sd, const char *myname, host_callback *callback,
-	       const char *prog, bfd *prog_bfd, int verbose_p, int lma_p,
-	       sim_write_fn do_write)
+sim_load_file (sd, myname, callback, prog, prog_bfd, verbose_p, lma_p, do_write)
+     SIM_DESC sd;
+     const char *myname;
+     host_callback *callback;
+     char *prog;
+     bfd *prog_bfd;
+     int verbose_p;
+     int lma_p;
+     sim_write_fn do_write;
 {
   asection *s;
   /* Record separately as we don't want to close PROG_BFD if it was passed.  */
@@ -75,13 +84,13 @@ sim_load_file (SIM_DESC sd, const char *myname, host_callback *callback,
       result_bfd = bfd_openr (prog, 0);
       if (result_bfd == NULL)
 	{
-	  eprintf (callback, "%s: can't open \"%s\": %s\n",
+	  eprintf (callback, "%s: can't open \"%s\": %s\n", 
 		   myname, prog, bfd_errmsg (bfd_get_error ()));
 	  return NULL;
 	}
     }
 
-  if (!bfd_check_format (result_bfd, bfd_object))
+  if (!bfd_check_format (result_bfd, bfd_object)) 
     {
       eprintf (callback, "%s: \"%s\" is not an object file: %s\n",
 	       myname, prog, bfd_errmsg (bfd_get_error ()));
@@ -95,16 +104,16 @@ sim_load_file (SIM_DESC sd, const char *myname, host_callback *callback,
     start_time = time (NULL);
 
   found_loadable_section = 0;
-  for (s = result_bfd->sections; s; s = s->next)
+  for (s = result_bfd->sections; s; s = s->next) 
     {
-      if (s->flags & SEC_LOAD)
+      if (s->flags & SEC_LOAD) 
 	{
 	  bfd_size_type size;
 
-	  size = bfd_section_size (s);
+	  size = bfd_get_section_size_before_reloc (s);
 	  if (size > 0)
 	    {
-	      unsigned char *buffer;
+	      char *buffer;
 	      bfd_vma lma;
 
 	      buffer = malloc (size);
@@ -119,13 +128,13 @@ sim_load_file (SIM_DESC sd, const char *myname, host_callback *callback,
 		  return NULL;
 		}
 	      if (lma_p)
-		lma = bfd_section_lma (s);
+		lma = bfd_section_lma (result_bfd, s);
 	      else
-		lma = bfd_section_vma (s);
+		lma = bfd_section_vma (result_bfd, s);
 	      if (verbose_p)
 		{
 		  xprintf (callback, "Loading section %s, size 0x%lx %s ",
-			   bfd_section_name (s),
+			   bfd_get_section_name (result_bfd, s),
 			   (unsigned long) size,
 			   (lma_p ? "lma" : "vma"));
 		  xprintf_bfd_vma (callback, lma);
@@ -163,11 +172,19 @@ sim_load_file (SIM_DESC sd, const char *myname, host_callback *callback,
 }
 
 static void
-xprintf (host_callback *callback, const char *fmt, ...)
+xprintf VPARAMS ((host_callback *callback, const char *fmt, ...))
 {
+#ifndef ANSI_PROTOTYPES
+  host_callback *callback;
+  char *fmt;
+#endif
   va_list ap;
 
-  va_start (ap, fmt);
+  VA_START (ap, fmt);
+#ifndef ANSI_PROTOTYPES
+  callback = va_arg (ap, host_callback *);
+  fmt = va_arg (ap, char *);
+#endif
 
   (*callback->vprintf_filtered) (callback, fmt, ap);
 
@@ -175,11 +192,19 @@ xprintf (host_callback *callback, const char *fmt, ...)
 }
 
 static void
-eprintf (host_callback *callback, const char *fmt, ...)
+eprintf VPARAMS ((host_callback *callback, const char *fmt, ...))
 {
+#ifndef ANSI_PROTOTYPES
+  host_callback *callback;
+  char *fmt;
+#endif
   va_list ap;
 
-  va_start (ap, fmt);
+  VA_START (ap, fmt);
+#ifndef ANSI_PROTOTYPES
+  callback = va_arg (ap, host_callback *);
+  fmt = va_arg (ap, char *);
+#endif
 
   (*callback->evprintf_filtered) (callback, fmt, ap);
 
@@ -189,8 +214,10 @@ eprintf (host_callback *callback, const char *fmt, ...)
 /* Report how fast the transfer went. */
 
 static void
-report_transfer_performance (host_callback *callback, unsigned long data_count,
-			     time_t start_time, time_t end_time)
+report_transfer_performance (callback, data_count, start_time, end_time)
+     host_callback *callback;
+     unsigned long data_count;
+     time_t start_time, end_time;
 {
   xprintf (callback, "Transfer rate: ");
   if (end_time != start_time)
@@ -205,7 +232,9 @@ report_transfer_performance (host_callback *callback, unsigned long data_count,
    This is intended to handle the vagaries of 32 vs 64 bits, etc.  */
 
 static void
-xprintf_bfd_vma (host_callback *callback, bfd_vma vma)
+xprintf_bfd_vma (callback, vma)
+     host_callback *callback;
+     bfd_vma vma;
 {
   /* FIXME: for now */
   xprintf (callback, "0x%lx", (unsigned long) vma);

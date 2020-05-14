@@ -1,6 +1,6 @@
-	.text
-	.align 0
-l:
+.text
+.align 0
+	
 	mrs	r8, cpsr
 	mrs	r2, spsr
 
@@ -16,3 +16,4 @@ l:
 	msrne	CPSR_flg, #0xf0000000
 	msr	SPSR_flg, r8
 	msr	SPSR_all, r9
+

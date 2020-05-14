@@ -1,21 +1,22 @@
 /* interrupts.c -- 68HC11 Interrupts Emulation
-   Copyright 1999-2020 Free Software Foundation, Inc.
-   Written by Stephane Carrez (stcarrez@nerim.fr)
+   Copyright 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
+   Written by Stephane Carrez (stcarrez@worldnet.fr)
 
 This file is part of GDB, GAS, and the GNU binutils.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "sim-main.h"
 #include "sim-options.h"
@@ -91,6 +92,7 @@ struct interrupt_def idefs[] = {
 #endif
 };
 
+#define TableSize(X) (sizeof X / sizeof(X[0]))
 #define CYCLES_MAX ((((signed64) 1) << 62) - 1)
 
 enum
@@ -122,11 +124,11 @@ static const OPTION interrupt_options[] =
 
 /* Initialize the interrupts module.  */
 void
-interrupts_initialize (SIM_DESC sd, sim_cpu *cpu)
+interrupts_initialize (SIM_DESC sd, struct _sim_cpu *proc)
 {
-  struct interrupts *interrupts = &cpu->cpu_interrupts;
+  struct interrupts *interrupts = &proc->cpu_interrupts;
   
-  interrupts->cpu          = cpu;
+  interrupts->cpu          = proc;
 
   sim_add_option_table (sd, 0, interrupt_options);
 }
@@ -164,20 +166,6 @@ interrupts_reset (struct interrupts *interrupts)
 
   memset (interrupts->interrupts, 0,
           sizeof (interrupts->interrupts));
-
-  /* In bootstrap mode, initialize the vector table to point
-     to the RAM location.  */
-  if (interrupts->cpu->cpu_mode == M6811_SMOD)
-    {
-      bfd_vma addr = interrupts->vectors_addr;
-      uint16 vector = 0x0100 - 3 * (M6811_INT_NUMBER - 1);
-      for (i = 0; i < M6811_INT_NUMBER; i++)
-        {
-          memory_write16 (interrupts->cpu, addr, vector);
-          addr += 2;
-          vector += 3;
-        }
-    }
 }
 
 static int
@@ -289,7 +277,7 @@ interrupts_update_pending (struct interrupts *interrupts)
   set_mask = 0;
   ioregs = &interrupts->cpu->ios[0];
   
-  for (i = 0; i < ARRAY_SIZE (idefs); i++)
+  for (i = 0; i < TableSize(idefs); i++)
     {
       struct interrupt_def *idef = &idefs[i];
       uint8 data;
@@ -529,7 +517,7 @@ interrupts_raise (struct interrupts *interrupts, enum M6811_INT number)
 void
 interrupts_info (SIM_DESC sd, struct interrupts *interrupts)
 {
-  signed64 t, prev_interrupt;
+  signed64 t;
   int i;
   
   sim_io_printf (sd, "Interrupts Info:\n");
@@ -545,25 +533,21 @@ interrupts_info (SIM_DESC sd, struct interrupts *interrupts)
         interrupts->max_mask_cycles = t;
 
       sim_io_printf (sd, "  Current interrupts masked sequence:   %s\n",
-                     cycle_to_string (interrupts->cpu, t,
-                                      PRINT_TIME | PRINT_CYCLE));
+                     cycle_to_string (interrupts->cpu, t));
     }
   t = interrupts->min_mask_cycles == CYCLES_MAX ?
     interrupts->max_mask_cycles :
     interrupts->min_mask_cycles;
   sim_io_printf (sd, "  Shortest interrupts masked sequence:  %s\n",
-                 cycle_to_string (interrupts->cpu, t,
-                                  PRINT_TIME | PRINT_CYCLE));
+                 cycle_to_string (interrupts->cpu, t));
 
   t = interrupts->max_mask_cycles;
   sim_io_printf (sd, "  Longest interrupts masked sequence:   %s\n",
-                 cycle_to_string (interrupts->cpu, t,
-                                  PRINT_TIME | PRINT_CYCLE));
+                 cycle_to_string (interrupts->cpu, t));
 
   t = interrupts->last_mask_cycles;
   sim_io_printf (sd, "  Last interrupts masked sequence:      %s\n",
-                 cycle_to_string (interrupts->cpu, t,
-                                  PRINT_TIME | PRINT_CYCLE));
+                 cycle_to_string (interrupts->cpu, t));
   
   if (interrupts->xirq_start_mask_cycle >= 0)
     {
@@ -574,26 +558,22 @@ interrupts_info (SIM_DESC sd, struct interrupts *interrupts)
         interrupts->xirq_max_mask_cycles = t;
 
       sim_io_printf (sd, "  XIRQ Current interrupts masked sequence: %s\n",
-                     cycle_to_string (interrupts->cpu, t,
-                                      PRINT_TIME | PRINT_CYCLE));
+                     cycle_to_string (interrupts->cpu, t));
     }
 
   t = interrupts->xirq_min_mask_cycles == CYCLES_MAX ?
     interrupts->xirq_max_mask_cycles :
     interrupts->xirq_min_mask_cycles;
   sim_io_printf (sd, "  XIRQ Min interrupts masked sequence:  %s\n",
-                 cycle_to_string (interrupts->cpu, t,
-                                  PRINT_TIME | PRINT_CYCLE));
+                 cycle_to_string (interrupts->cpu, t));
 
   t = interrupts->xirq_max_mask_cycles;
   sim_io_printf (sd, "  XIRQ Max interrupts masked sequence:  %s\n",
-                 cycle_to_string (interrupts->cpu, t,
-                                  PRINT_TIME | PRINT_CYCLE));
+                 cycle_to_string (interrupts->cpu, t));
 
   t = interrupts->xirq_last_mask_cycles;
   sim_io_printf (sd, "  XIRQ Last interrupts masked sequence: %s\n",
-                 cycle_to_string (interrupts->cpu, t,
-                                  PRINT_TIME | PRINT_CYCLE));
+                 cycle_to_string (interrupts->cpu, t));
 
   if (interrupts->pending_mask)
     {
@@ -610,9 +590,6 @@ interrupts_info (SIM_DESC sd, struct interrupts *interrupts)
       sim_io_printf (sd, "\n");
     }
 
-  prev_interrupt = 0;
-  sim_io_printf (sd, "N  Interrupt     Cycle Taken         Latency"
-                 "   Delta between interrupts\n");
   for (i = 0; i < MAX_INT_HISTORY; i++)
     {
       int which;
@@ -627,18 +604,10 @@ interrupts_info (SIM_DESC sd, struct interrupts *interrupts)
         break;
 
       dt = h->taken_cycle - h->raised_cycle;
-      sim_io_printf (sd, "%2d %-9.9s %15.15s ", i,
+      sim_io_printf (sd, "%2d %-10.10s %30.30s ", i,
                      interrupt_names[h->type],
-                     cycle_to_string (interrupts->cpu, h->taken_cycle, 0));
-      sim_io_printf (sd, "%15.15s",
-                     cycle_to_string (interrupts->cpu, dt, 0));
-      if (prev_interrupt)
-        {
-          dt = prev_interrupt - h->taken_cycle;
-          sim_io_printf (sd, " %s",
-                         cycle_to_string (interrupts->cpu, dt, PRINT_TIME));
-        }
-      sim_io_printf (sd, "\n");
-      prev_interrupt = h->taken_cycle;
+                     cycle_to_string (interrupts->cpu, h->taken_cycle));
+      sim_io_printf (sd, "%s\n",
+                     cycle_to_string (interrupts->cpu, dt));
     }
 }

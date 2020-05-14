@@ -1,8 +1,8 @@
 #source: gotrel1.s
-#as: --pic --underscore --em=criself
+#as: --pic
 #ld: -m crislinux -shared
 #objdump: -dr
-#error: \A[^\nc][^\n]*o: uses _-prefixed [^\nc]*\n[^\nc][^\n]* failed to merge [^\n]*\n[^\nc][^\n]* no GOT [^\n]*\n[^\nc][^\n]* bad value\Z
+#error: ^[^c][^h][^i][^l][^d].* uses _-prefixed .* failed to merge .* no GOT .* Bad value$
 
 # The error regex above is supposed to not match if we get a
 # SEGV, in which case we'll see "child killed: segmentation

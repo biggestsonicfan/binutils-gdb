@@ -1,11 +1,12 @@
 /* ELF object file format
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+   2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 3,
+   published by the Free Software Foundation; either version 2,
    or (at your option) any later version.
 
    GAS is distributed in the hope that it will be useful, but
@@ -15,15 +16,15 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #define OBJ_HEADER "obj-elf.h"
 #include "as.h"
 #include "safe-ctype.h"
 #include "subsegs.h"
 #include "obstack.h"
-#include "dwarf2dbg.h"
+#include "struc-symbol.h"
 
 #ifndef ECOFF_DEBUGGING
 #define ECOFF_DEBUGGING 0
@@ -33,7 +34,6 @@
 
 #ifdef NEED_ECOFF_DEBUG
 #include "ecoff.h"
-#include "bfd/ecoff-bfd.h"
 #endif
 
 #ifdef TC_ALPHA
@@ -48,43 +48,51 @@
 #include "elf/ppc.h"
 #endif
 
-#ifdef TC_I386
-#include "elf/x86-64.h"
+#ifdef TC_I370
+#include "elf/i370.h"
 #endif
 
-#ifdef TC_MEP
-#include "elf/mep.h"
+static bfd_vma elf_s_get_size PARAMS ((symbolS *));
+static void elf_s_set_size PARAMS ((symbolS *, bfd_vma));
+static bfd_vma elf_s_get_align PARAMS ((symbolS *));
+static void elf_s_set_align PARAMS ((symbolS *, bfd_vma));
+static void elf_s_set_other PARAMS ((symbolS *, int));
+static int elf_sec_sym_ok_for_reloc PARAMS ((asection *));
+static void adjust_stab_sections PARAMS ((bfd *, asection *, PTR));
+static void build_group_lists PARAMS ((bfd *, asection *, PTR));
+static int elf_separate_stab_sections PARAMS ((void));
+static void elf_init_stab_section PARAMS ((segT));
+static symbolS *elf_common PARAMS ((int));
+
+#ifdef NEED_ECOFF_DEBUG
+static boolean elf_get_extr PARAMS ((asymbol *, EXTR *));
+static void elf_set_index PARAMS ((asymbol *, bfd_size_type));
 #endif
 
-#ifdef TC_NIOS2
-#include "elf/nios2.h"
-#endif
-
-#ifdef TC_PRU
-#include "elf/pru.h"
-#endif
-
-static void obj_elf_line (int);
-static void obj_elf_size (int);
-static void obj_elf_type (int);
-static void obj_elf_ident (int);
-static void obj_elf_weak (int);
-static void obj_elf_local (int);
-static void obj_elf_visibility (int);
-static void obj_elf_symver (int);
-static void obj_elf_subsection (int);
-static void obj_elf_popsection (int);
-static void obj_elf_gnu_attribute (int);
-static void obj_elf_tls_common (int);
-static void obj_elf_lcomm (int);
-static void obj_elf_struct (int);
+static void obj_elf_line PARAMS ((int));
+void obj_elf_version PARAMS ((int));
+static void obj_elf_size PARAMS ((int));
+static void obj_elf_type PARAMS ((int));
+static void obj_elf_ident PARAMS ((int));
+static void obj_elf_weak PARAMS ((int));
+static void obj_elf_local PARAMS ((int));
+static void obj_elf_visibility PARAMS ((int));
+void obj_elf_change_section
+  PARAMS ((const char *, int, int, int, const char *, int, int));
+static int obj_elf_parse_section_letters PARAMS ((char *, size_t));
+static int obj_elf_section_word PARAMS ((char *, size_t));
+static char *obj_elf_section_name PARAMS ((void));
+static int obj_elf_section_type PARAMS ((char *, size_t));
+static void obj_elf_symver PARAMS ((int));
+static void obj_elf_subsection PARAMS ((int));
+static void obj_elf_popsection PARAMS ((int));
+static void obj_elf_tls_common PARAMS ((int));
 
 static const pseudo_typeS elf_pseudo_table[] =
 {
   {"comm", obj_elf_common, 0},
   {"common", obj_elf_common, 1},
   {"ident", obj_elf_ident, 0},
-  {"lcomm", obj_elf_lcomm, 0},
   {"local", obj_elf_local, 0},
   {"previous", obj_elf_previous, 0},
   {"section", obj_elf_section, 0},
@@ -113,25 +121,16 @@ static const pseudo_typeS elf_pseudo_table[] =
   {"subsection", obj_elf_subsection, 0},
 
   /* These are GNU extensions to aid in garbage collecting C++ vtables.  */
-  {"vtable_inherit", obj_elf_vtable_inherit, 0},
-  {"vtable_entry", obj_elf_vtable_entry, 0},
-
-  /* A GNU extension for object attributes.  */
-  {"gnu_attribute", obj_elf_gnu_attribute, 0},
+  {"vtable_inherit", (void (*) PARAMS ((int))) &obj_elf_vtable_inherit, 0},
+  {"vtable_entry", (void (*) PARAMS ((int))) &obj_elf_vtable_entry, 0},
 
   /* These are used for dwarf.  */
   {"2byte", cons, 2},
   {"4byte", cons, 4},
   {"8byte", cons, 8},
-  /* These are used for dwarf2.  */
-  { "file", dwarf2_directive_file, 0 },
-  { "loc",  dwarf2_directive_loc,  0 },
-  { "loc_mark_labels", dwarf2_directive_loc_mark_labels, 0 },
 
   /* We need to trap the section changing calls to handle .previous.  */
   {"data", obj_elf_data, 0},
-  {"offset", obj_elf_struct, 0},
-  {"struct", obj_elf_struct, 0},
   {"text", obj_elf_text, 0},
 
   {"tls_common", obj_elf_tls_common, 0},
@@ -160,7 +159,6 @@ static const pseudo_typeS ecoff_debug_pseudo_table[] =
   { "etype",	ecoff_directive_type,	0 },
 
   /* ECOFF specific debugging information.  */
-  { "aent",	ecoff_directive_ent,	1 },
   { "begin",	ecoff_directive_begin,	0 },
   { "bend",	ecoff_directive_bend,	0 },
   { "end",	ecoff_directive_end,	0 },
@@ -191,25 +189,20 @@ static const pseudo_typeS ecoff_debug_pseudo_table[] =
 
 /* This is called when the assembler starts.  */
 
-asection *elf_com_section_ptr;
-
 void
-elf_begin (void)
+elf_begin ()
 {
-  asection *s;
-
   /* Add symbols for the known sections to the symbol table.  */
-  s = bfd_get_section_by_name (stdoutput, TEXT_SECTION_NAME);
-  symbol_table_insert (section_symbol (s));
-  s = bfd_get_section_by_name (stdoutput, DATA_SECTION_NAME);
-  symbol_table_insert (section_symbol (s));
-  s = bfd_get_section_by_name (stdoutput, BSS_SECTION_NAME);
-  symbol_table_insert (section_symbol (s));
-  elf_com_section_ptr = bfd_com_section_ptr;
+  symbol_table_insert (section_symbol (bfd_get_section_by_name (stdoutput,
+								TEXT_SECTION_NAME)));
+  symbol_table_insert (section_symbol (bfd_get_section_by_name (stdoutput,
+								DATA_SECTION_NAME)));
+  symbol_table_insert (section_symbol (bfd_get_section_by_name (stdoutput,
+								BSS_SECTION_NAME)));
 }
 
 void
-elf_pop_insert (void)
+elf_pop_insert ()
 {
   pop_insert (elf_pseudo_table);
   if (ECOFF_DEBUGGING)
@@ -217,222 +210,276 @@ elf_pop_insert (void)
 }
 
 static bfd_vma
-elf_s_get_size (symbolS *sym)
+elf_s_get_size (sym)
+     symbolS *sym;
 {
   return S_GET_SIZE (sym);
 }
 
 static void
-elf_s_set_size (symbolS *sym, bfd_vma sz)
+elf_s_set_size (sym, sz)
+     symbolS *sym;
+     bfd_vma sz;
 {
   S_SET_SIZE (sym, sz);
 }
 
 static bfd_vma
-elf_s_get_align (symbolS *sym)
+elf_s_get_align (sym)
+     symbolS *sym;
 {
   return S_GET_ALIGN (sym);
 }
 
 static void
-elf_s_set_align (symbolS *sym, bfd_vma align)
+elf_s_set_align (sym, align)
+     symbolS *sym;
+     bfd_vma align;
 {
   S_SET_ALIGN (sym, align);
 }
 
 int
-elf_s_get_other (symbolS *sym)
+elf_s_get_other (sym)
+     symbolS *sym;
 {
   return elf_symbol (symbol_get_bfdsym (sym))->internal_elf_sym.st_other;
 }
 
 static void
-elf_s_set_other (symbolS *sym, int other)
+elf_s_set_other (sym, other)
+     symbolS *sym;
+     int other;
 {
   S_SET_OTHER (sym, other);
 }
 
 static int
-elf_sec_sym_ok_for_reloc (asection *sec)
+elf_sec_sym_ok_for_reloc (sec)
+     asection *sec;
 {
   return obj_sec_sym_ok_for_reloc (sec);
 }
 
 void
-elf_file_symbol (const char *s, int appfile)
+elf_file_symbol (s)
+     const char *s;
 {
-  asymbol *bsym;
+  symbolS *sym;
 
-  if (!appfile
-      || symbol_rootP == NULL
-      || (bsym = symbol_get_bfdsym (symbol_rootP)) == NULL
-      || (bsym->flags & BSF_FILE) == 0)
+  sym = symbol_new (s, absolute_section, (valueT) 0, (struct frag *) 0);
+  symbol_set_frag (sym, &zero_address_frag);
+  symbol_get_bfdsym (sym)->flags |= BSF_FILE;
+
+  if (symbol_rootP != sym)
     {
-      symbolS *sym;
-      size_t name_length;
-
-      sym = symbol_new (s, absolute_section, 0, NULL);
-      symbol_set_frag (sym, &zero_address_frag);
-
-      name_length = strlen (s);
-      if (name_length > strlen (S_GET_NAME (sym)))
-	{
-	  obstack_grow (&notes, s, name_length + 1);
-	  S_SET_NAME (sym, (const char *) obstack_finish (&notes));
-	}
-      else
-	strcpy ((char *) S_GET_NAME (sym), s);
-
-      symbol_get_bfdsym (sym)->flags |= BSF_FILE;
-
-      if (symbol_rootP != sym
-	  && ((bsym = symbol_get_bfdsym (symbol_rootP)) == NULL
-	      || (bsym->flags & BSF_FILE) == 0))
-	{
-	  symbol_remove (sym, &symbol_rootP, &symbol_lastP);
-	  symbol_insert (sym, symbol_rootP, &symbol_rootP, &symbol_lastP);
-	}
-
+      symbol_remove (sym, &symbol_rootP, &symbol_lastP);
+      symbol_insert (sym, symbol_rootP, &symbol_rootP, &symbol_lastP);
 #ifdef DEBUG
       verify_symbol_chain (symbol_rootP, symbol_lastP);
 #endif
     }
 
 #ifdef NEED_ECOFF_DEBUG
-  ecoff_new_file (s, appfile);
+  ecoff_new_file (s);
 #endif
 }
 
-/* Called from read.c:s_comm after we've parsed .comm symbol, size.
-   Parse a possible alignment value.  */
-
-symbolS *
-elf_common_parse (int ignore ATTRIBUTE_UNUSED, symbolS *symbolP, addressT size)
+static symbolS *
+elf_common (is_common)
+     int is_common;
 {
-  addressT align = 0;
-  int is_local = symbol_get_obj (symbolP)->local;
+  char *name;
+  char c;
+  char *p;
+  int temp, size;
+  symbolS *symbolP;
+  int have_align;
 
-  if (*input_line_pointer == ',')
+  if (flag_mri && is_common)
     {
-      char *save = input_line_pointer;
+      s_mri_common (0);
+      return NULL;
+    }
 
+  name = input_line_pointer;
+  c = get_symbol_end ();
+  /* just after name is now '\0' */
+  p = input_line_pointer;
+  *p = c;
+  SKIP_WHITESPACE ();
+  if (*input_line_pointer != ',')
+    {
+      as_bad (_("expected comma after symbol-name"));
+      ignore_rest_of_line ();
+      return NULL;
+    }
+  input_line_pointer++;		/* skip ',' */
+  if ((temp = get_absolute_expression ()) < 0)
+    {
+      as_bad (_(".COMMon length (%d.) <0! Ignored."), temp);
+      ignore_rest_of_line ();
+      return NULL;
+    }
+  size = temp;
+  *p = 0;
+  symbolP = symbol_find_or_make (name);
+  *p = c;
+  if (S_IS_DEFINED (symbolP) && ! S_IS_COMMON (symbolP))
+    {
+      as_bad (_("symbol `%s' is already defined"), S_GET_NAME (symbolP));
+      ignore_rest_of_line ();
+      return NULL;
+    }
+  if (S_GET_VALUE (symbolP) != 0)
+    {
+      if (S_GET_VALUE (symbolP) != (valueT) size)
+	{
+	  as_warn (_("length of .comm \"%s\" is already %ld; not changed to %d"),
+		   S_GET_NAME (symbolP), (long) S_GET_VALUE (symbolP), size);
+	}
+    }
+  know (symbolP->sy_frag == &zero_address_frag);
+  if (*input_line_pointer != ',')
+    have_align = 0;
+  else
+    {
+      have_align = 1;
       input_line_pointer++;
       SKIP_WHITESPACE ();
-
-      if (*input_line_pointer == '"')
+    }
+  if (! have_align || *input_line_pointer != '"')
+    {
+      if (! have_align)
+	temp = 0;
+      else
 	{
-	  /* For sparc.  Accept .common symbol, length, "bss"  */
-	  input_line_pointer++;
-	  /* Some use the dot, some don't.  */
-	  if (*input_line_pointer == '.')
-	    input_line_pointer++;
-	  /* Some say data, some say bss.  */
-	  if (strncmp (input_line_pointer, "bss\"", 4) == 0)
-	    input_line_pointer += 4;
-	  else if (strncmp (input_line_pointer, "data\"", 5) == 0)
-	    input_line_pointer += 5;
-	  else
+	  temp = get_absolute_expression ();
+	  if (temp < 0)
 	    {
-	      char *p = input_line_pointer;
-	      char c;
-
-	      while (*--p != '"')
-		;
-	      while (!is_end_of_line[(unsigned char) *input_line_pointer])
-		if (*input_line_pointer++ == '"')
-		  break;
-	      c = *input_line_pointer;
-	      *input_line_pointer = '\0';
-	      as_bad (_("bad .common segment %s"), p);
-	      *input_line_pointer = c;
-	      ignore_rest_of_line ();
-	      return NULL;
+	      temp = 0;
+	      as_warn (_("common alignment negative; 0 assumed"));
 	    }
-	  /* ??? Don't ask me why these are always global.  */
-	  is_local = 0;
+	}
+      if (symbol_get_obj (symbolP)->local)
+	{
+	  segT old_sec;
+	  int old_subsec;
+	  char *pfrag;
+	  int align;
+
+	/* allocate_bss: */
+	  old_sec = now_seg;
+	  old_subsec = now_subseg;
+	  if (temp)
+	    {
+	      /* convert to a power of 2 alignment */
+	      for (align = 0; (temp & 1) == 0; temp >>= 1, ++align);
+	      if (temp != 1)
+		{
+		  as_bad (_("common alignment not a power of 2"));
+		  ignore_rest_of_line ();
+		  return NULL;
+		}
+	    }
+	  else
+	    align = 0;
+	  record_alignment (bss_section, align);
+	  subseg_set (bss_section, 0);
+	  if (align)
+	    frag_align (align, 0, 0);
+	  if (S_GET_SEGMENT (symbolP) == bss_section)
+	    symbol_get_frag (symbolP)->fr_symbol = 0;
+	  symbol_set_frag (symbolP, frag_now);
+	  pfrag = frag_var (rs_org, 1, 1, (relax_substateT) 0, symbolP,
+			    (offsetT) size, (char *) 0);
+	  *pfrag = 0;
+	  S_SET_SIZE (symbolP, size);
+	  S_SET_SEGMENT (symbolP, bss_section);
+	  S_CLEAR_EXTERNAL (symbolP);
+	  subseg_set (old_sec, old_subsec);
 	}
       else
 	{
-	  input_line_pointer = save;
-	  align = parse_align (is_local);
-	  if (align == (addressT) -1)
-	    return NULL;
+	allocate_common:
+	  S_SET_VALUE (symbolP, (valueT) size);
+	  S_SET_ALIGN (symbolP, temp);
+	  S_SET_EXTERNAL (symbolP);
+	  S_SET_SEGMENT (symbolP, bfd_com_section_ptr);
 	}
-    }
-
-  if (is_local)
-    {
-      bss_alloc (symbolP, size, align);
-      S_CLEAR_EXTERNAL (symbolP);
     }
   else
     {
-      S_SET_VALUE (symbolP, size);
-      S_SET_ALIGN (symbolP, align);
-      S_SET_EXTERNAL (symbolP);
-      S_SET_SEGMENT (symbolP, elf_com_section_ptr);
+      input_line_pointer++;
+      /* @@ Some use the dot, some don't.  Can we get some consistency??  */
+      if (*input_line_pointer == '.')
+	input_line_pointer++;
+      /* @@ Some say data, some say bss.  */
+      if (strncmp (input_line_pointer, "bss\"", 4)
+	  && strncmp (input_line_pointer, "data\"", 5))
+	{
+	  while (*--input_line_pointer != '"')
+	    ;
+	  input_line_pointer--;
+	  goto bad_common_segment;
+	}
+      while (*input_line_pointer++ != '"')
+	;
+      goto allocate_common;
     }
 
   symbol_get_bfdsym (symbolP)->flags |= BSF_OBJECT;
 
+  demand_empty_rest_of_line ();
   return symbolP;
+
+  {
+  bad_common_segment:
+    p = input_line_pointer;
+    while (*p && *p != '\n')
+      p++;
+    c = *p;
+    *p = '\0';
+    as_bad (_("bad .common segment %s"), input_line_pointer + 1);
+    *p = c;
+    input_line_pointer = p;
+    ignore_rest_of_line ();
+    return NULL;
+  }
 }
 
 void
-obj_elf_common (int is_common)
+obj_elf_common (is_common)
+     int is_common;
 {
-  if (flag_mri && is_common)
-    s_mri_common (0);
-  else
-    s_comm_internal (0, elf_common_parse);
+  elf_common (is_common);
 }
 
 static void
-obj_elf_tls_common (int ignore ATTRIBUTE_UNUSED)
+obj_elf_tls_common (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
-  symbolS *symbolP = s_comm_internal (0, elf_common_parse);
+  symbolS *symbolP = elf_common (0);
 
   if (symbolP)
     symbol_get_bfdsym (symbolP)->flags |= BSF_THREAD_LOCAL;
 }
 
 static void
-obj_elf_lcomm (int ignore ATTRIBUTE_UNUSED)
-{
-  symbolS *symbolP = s_comm_internal (0, s_lcomm_internal);
-
-  if (symbolP)
-    symbol_get_bfdsym (symbolP)->flags |= BSF_OBJECT;
-}
-
-static symbolS *
-get_sym_from_input_line_and_check (void)
+obj_elf_local (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   char *name;
-  char c;
-  symbolS *sym;
-
-  c = get_symbol_name (& name);
-  sym = symbol_find_or_make (name);
-  *input_line_pointer = c;
-  SKIP_WHITESPACE_AFTER_NAME ();
-
-  /* There is no symbol name if input_line_pointer has not moved.  */
-  if (name == input_line_pointer)
-    as_bad (_("Missing symbol name in directive"));
-  return sym;
-}
-
-static void
-obj_elf_local (int ignore ATTRIBUTE_UNUSED)
-{
   int c;
   symbolS *symbolP;
 
   do
     {
-      symbolP = get_sym_from_input_line_and_check ();
-      c = *input_line_pointer;
+      name = input_line_pointer;
+      c = get_symbol_end ();
+      symbolP = symbol_find_or_make (name);
+      *input_line_pointer = c;
+      SKIP_WHITESPACE ();
       S_CLEAR_EXTERNAL (symbolP);
       symbol_get_obj (symbolP)->local = 1;
       if (c == ',')
@@ -448,16 +495,22 @@ obj_elf_local (int ignore ATTRIBUTE_UNUSED)
 }
 
 static void
-obj_elf_weak (int ignore ATTRIBUTE_UNUSED)
+obj_elf_weak (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
+  char *name;
   int c;
   symbolS *symbolP;
 
   do
     {
-      symbolP = get_sym_from_input_line_and_check ();
-      c = *input_line_pointer;
+      name = input_line_pointer;
+      c = get_symbol_end ();
+      symbolP = symbol_find_or_make (name);
+      *input_line_pointer = c;
+      SKIP_WHITESPACE ();
       S_SET_WEAK (symbolP);
+      symbol_get_obj (symbolP)->local = 1;
       if (c == ',')
 	{
 	  input_line_pointer++;
@@ -471,8 +524,10 @@ obj_elf_weak (int ignore ATTRIBUTE_UNUSED)
 }
 
 static void
-obj_elf_visibility (int visibility)
+obj_elf_visibility (visibility)
+     int visibility;
 {
+  char *name;
   int c;
   symbolS *symbolP;
   asymbol *bfdsym;
@@ -480,17 +535,20 @@ obj_elf_visibility (int visibility)
 
   do
     {
-      symbolP = get_sym_from_input_line_and_check ();
+      name = input_line_pointer;
+      c = get_symbol_end ();
+      symbolP = symbol_find_or_make (name);
+      *input_line_pointer = c;
+
+      SKIP_WHITESPACE ();
 
       bfdsym = symbol_get_bfdsym (symbolP);
       elfsym = elf_symbol_from (bfd_asymbol_bfd (bfdsym), bfdsym);
 
-      gas_assert (elfsym);
+      assert (elfsym);
 
-      elfsym->internal_elf_sym.st_other &= ~3;
-      elfsym->internal_elf_sym.st_other |= visibility;
+      elfsym->internal_elf_sym.st_other = visibility;
 
-      c = *input_line_pointer;
       if (c == ',')
 	{
 	  input_line_pointer ++;
@@ -518,31 +576,6 @@ struct section_stack
 
 static struct section_stack *section_stack;
 
-static bfd_boolean
-get_section (bfd *abfd ATTRIBUTE_UNUSED, asection *sec, void *inf)
-{
-  struct elf_section_match *match = (struct elf_section_match *) inf;
-  const char *gname = match->group_name;
-  const char *group_name = elf_group_name (sec);
-  const char *linked_to_symbol_name
-    = sec->map_head.linked_to_symbol_name;
-  unsigned int info = elf_section_data (sec)->this_hdr.sh_info;
-
-  return (info == match->info
-	  && ((bfd_section_flags (sec) & SEC_ASSEMBLER_SECTION_ID)
-	       == (match->flags & SEC_ASSEMBLER_SECTION_ID))
-	  && sec->section_id == match->section_id
-	  && (group_name == gname
-	      || (group_name != NULL
-		  && gname != NULL
-		  && strcmp (group_name, gname) == 0))
-	  && (linked_to_symbol_name == match->linked_to_symbol_name
-	      || (linked_to_symbol_name != NULL
-		  && match->linked_to_symbol_name != NULL
-		  && strcmp (linked_to_symbol_name,
-			     match->linked_to_symbol_name) == 0)));
-}
-
 /* Handle the .section pseudo-op.  This code supports two different
    syntaxes.
 
@@ -561,26 +594,90 @@ get_section (bfd *abfd ATTRIBUTE_UNUSED, asection *sec, void *inf)
    other possibilities, but I don't know what they are.  In any case,
    BFD doesn't really let us set the section type.  */
 
+/* Certain named sections have particular defined types, listed on p.
+   4-19 of the ABI.  */
+struct special_section
+{
+  const char *name;
+  int type;
+  int attributes;
+};
+
+static struct special_section const special_sections[] =
+{
+  { ".bss",	SHT_NOBITS,	SHF_ALLOC + SHF_WRITE		},
+  { ".comment",	SHT_PROGBITS,	0				},
+  { ".data",	SHT_PROGBITS,	SHF_ALLOC + SHF_WRITE		},
+  { ".data1",	SHT_PROGBITS,	SHF_ALLOC + SHF_WRITE		},
+  { ".debug",	SHT_PROGBITS,	0				},
+  { ".fini",	SHT_PROGBITS,	SHF_ALLOC + SHF_EXECINSTR	},
+  { ".init",	SHT_PROGBITS,	SHF_ALLOC + SHF_EXECINSTR	},
+  { ".line",	SHT_PROGBITS,	0				},
+  { ".note",	SHT_NOTE,	0				},
+  { ".rodata",	SHT_PROGBITS,	SHF_ALLOC			},
+  { ".rodata1",	SHT_PROGBITS,	SHF_ALLOC			},
+  { ".tbss",	SHT_NOBITS,	SHF_ALLOC + SHF_WRITE + SHF_TLS	},
+  { ".tdata",	SHT_PROGBITS,	SHF_ALLOC + SHF_WRITE + SHF_TLS	},
+  { ".text",	SHT_PROGBITS,	SHF_ALLOC + SHF_EXECINSTR	},
+#if 0
+  /* FIXME: The current gcc, as of 2002-03-03, will emit
+
+	.section .init_array,"aw",@progbits
+
+     for __attribute__ ((section (".init_array"))). "@progbits" marks
+     the incorrect section type. For now, we make them with
+     SHT_PROGBITS. BFD will fix the section type. Gcc should be changed
+     to emit
+
+	.section .init_array
+
+   */
+  { ".init_array",SHT_INIT_ARRAY, SHF_ALLOC + SHF_WRITE         },
+  { ".fini_array",SHT_FINI_ARRAY, SHF_ALLOC + SHF_WRITE         },
+  { ".preinit_array",SHT_PREINIT_ARRAY, SHF_ALLOC + SHF_WRITE   },
+#else
+  { ".init_array",SHT_PROGBITS, SHF_ALLOC + SHF_WRITE         },
+  { ".fini_array",SHT_PROGBITS, SHF_ALLOC + SHF_WRITE         },
+  { ".preinit_array",SHT_PROGBITS, SHF_ALLOC + SHF_WRITE   },
+#endif
+
+#ifdef ELF_TC_SPECIAL_SECTIONS
+  ELF_TC_SPECIAL_SECTIONS
+#endif
+
+#if 0
+  /* The following section names are special, but they can not
+     reasonably appear in assembler code.  Some of the attributes are
+     processor dependent.  */
+  { ".dynamic",	SHT_DYNAMIC,	SHF_ALLOC /* + SHF_WRITE */ 	},
+  { ".dynstr",	SHT_STRTAB,	SHF_ALLOC			},
+  { ".dynsym",	SHT_DYNSYM,	SHF_ALLOC			},
+  { ".got",	SHT_PROGBITS,	0				},
+  { ".hash",	SHT_HASH,	SHF_ALLOC			},
+  { ".interp",	SHT_PROGBITS,	/* SHF_ALLOC */			},
+  { ".plt",	SHT_PROGBITS,	0				},
+  { ".shstrtab",SHT_STRTAB,	0				},
+  { ".strtab",	SHT_STRTAB,	/* SHF_ALLOC */			},
+  { ".symtab",	SHT_SYMTAB,	/* SHF_ALLOC */			},
+#endif
+
+  { NULL,	0,		0				}
+};
+
 void
-obj_elf_change_section (const char *name,
-			unsigned int type,
-			bfd_vma attr,
-			int entsize,
-			struct elf_section_match *match_p,
-			int linkonce,
-			int push)
+obj_elf_change_section (name, type, attr, entsize, group_name, linkonce, push)
+     const char *name;
+     int type;
+     int attr;
+     int entsize;
+     const char *group_name;
+     int linkonce;
+     int push;
 {
   asection *old_sec;
   segT sec;
   flagword flags;
-  const struct elf_backend_data *bed;
-  const struct bfd_elf_special_section *ssect;
-
-  if (match_p == NULL)
-    {
-      static struct elf_section_match unused_match;
-      match_p = &unused_match;
-    }
+  int i;
 
 #ifdef md_flush_pending_output
   md_flush_pending_output ();
@@ -590,7 +687,7 @@ obj_elf_change_section (const char *name,
   if (push)
     {
       struct section_stack *elt;
-      elt = XNEW (struct section_stack);
+      elt = xmalloc (sizeof (struct section_stack));
       elt->next = section_stack;
       elt->seg = now_seg;
       elt->prev_seg = previous_section;
@@ -601,116 +698,42 @@ obj_elf_change_section (const char *name,
   previous_section = now_seg;
   previous_subsection = now_subseg;
 
-  old_sec = bfd_get_section_by_name_if (stdoutput, name, get_section,
-					(void *) match_p);
-  if (old_sec)
-    {
-      sec = old_sec;
-      subseg_set (sec, 0);
-    }
-  else
-    sec = subseg_force_new (name, 0);
+  old_sec = bfd_get_section_by_name (stdoutput, name);
+  sec = subseg_new (name, 0);
 
-  bed = get_elf_backend_data (stdoutput);
-  ssect = (*bed->get_sec_type_attr) (stdoutput, sec);
-
-  if (ssect != NULL)
-    {
-      bfd_boolean override = FALSE;
-
-      if (type == SHT_NULL)
-	type = ssect->type;
-      else if (type != ssect->type)
-	{
-	  if (old_sec == NULL
-	      /* Some older versions of gcc will emit
-
-		 .section .init_array,"aw",@progbits
-
-		 for __attribute__ ((section (".init_array"))).
-		 "@progbits" is incorrect.  Also for x86-64 large bss
-		 sections, some older versions of gcc will emit
-
-		 .section .lbss,"aw",@progbits
-
-		 "@progbits" is incorrect.  */
-#ifdef TC_I386
-	      && (bed->s->arch_size != 64
-		  || !(ssect->attr & SHF_X86_64_LARGE))
-#endif
-	      && ssect->type != SHT_INIT_ARRAY
-	      && ssect->type != SHT_FINI_ARRAY
-	      && ssect->type != SHT_PREINIT_ARRAY)
-	    {
-	      /* We allow to specify any type for a .note section.  */
-	      if (ssect->type != SHT_NOTE
-		  /* Processor and application defined types are allowed too.  */
-		  && type < SHT_LOPROC)
-		as_warn (_("setting incorrect section type for %s"),
-			 name);
-	    }
-	  else
-	    {
-	      as_warn (_("ignoring incorrect section type for %s"),
+  /* See if this is one of the special sections.  */
+  for (i = 0; special_sections[i].name != NULL; i++)
+    if (strcmp (name, special_sections[i].name) == 0)
+      {
+	if (type == SHT_NULL)
+	  type = special_sections[i].type;
+	else if (type != special_sections[i].type)
+	  {
+	    if (old_sec == NULL)
+	      {
+		as_warn (_("setting incorrect section type for %s"), name);
+	      }
+	    else
+	      {
+		as_warn (_("ignoring incorrect section type for %s"), name);
+		type = special_sections[i].type;
+	      }
+	  }
+	if ((attr &~ special_sections[i].attributes) != 0
+	    && old_sec == NULL)
+	  {
+	    /* As a GNU extension, we permit a .note section to be
+	       allocatable.  If the linker sees an allocateable .note
+	       section, it will create a PT_NOTE segment in the output
+	       file.  */
+	    if (strcmp (name, ".note") != 0
+		|| attr != SHF_ALLOC)
+	      as_warn (_("setting incorrect section attributes for %s"),
 		       name);
-	      type = ssect->type;
-	    }
-	}
-
-      if (old_sec == NULL && ((attr & ~(SHF_MASKOS | SHF_MASKPROC))
-			      & ~ssect->attr) != 0)
-	{
-	  /* As a GNU extension, we permit a .note section to be
-	     allocatable.  If the linker sees an allocatable .note
-	     section, it will create a PT_NOTE segment in the output
-	     file.  We also allow "x" for .note.GNU-stack.  */
-	  if (ssect->type == SHT_NOTE
-	      && (attr == SHF_ALLOC || attr == SHF_EXECINSTR))
-	    ;
-	  /* Allow different SHF_MERGE and SHF_STRINGS if we have
-	     something like .rodata.str.  */
-	  else if (ssect->suffix_length == -2
-		   && name[ssect->prefix_length] == '.'
-		   && (attr
-		       & ~ssect->attr
-		       & ~SHF_MERGE
-		       & ~SHF_STRINGS) == 0)
-	    ;
-	  /* .interp, .strtab and .symtab can have SHF_ALLOC.  */
-	  else if (attr == SHF_ALLOC
-		   && (strcmp (name, ".interp") == 0
-		       || strcmp (name, ".strtab") == 0
-		       || strcmp (name, ".symtab") == 0))
-	    override = TRUE;
-	  /* .note.GNU-stack can have SHF_EXECINSTR.  */
-	  else if (attr == SHF_EXECINSTR
-		   && strcmp (name, ".note.GNU-stack") == 0)
-	    override = TRUE;
-#ifdef TC_ALPHA
-	  /* A section on Alpha may have SHF_ALPHA_GPREL.  */
-	  else if ((attr & ~ssect->attr) == SHF_ALPHA_GPREL)
-	    override = TRUE;
-#endif
-#ifdef TC_RX
-	  else if (attr == (SHF_EXECINSTR | SHF_WRITE | SHF_ALLOC)
-		   && (ssect->type == SHT_INIT_ARRAY
-		       || ssect->type == SHT_FINI_ARRAY
-		       || ssect->type == SHT_PREINIT_ARRAY))
-	    /* RX init/fini arrays can and should have the "awx" attributes set.  */
-	    ;
-#endif
-	  else
-	    {
-	      if (match_p->group_name == NULL)
-		as_warn (_("setting incorrect section attributes for %s"),
-			 name);
-	      override = TRUE;
-	    }
-	}
-
-      if (!override && old_sec == NULL)
-	attr |= ssect->attr;
-    }
+	  }
+	attr |= special_sections[i].attributes;
+	break;
+      }
 
   /* Convert ELF type and flags to BFD flags.  */
   flags = (SEC_RELOC
@@ -720,89 +743,48 @@ obj_elf_change_section (const char *name,
 	   | ((attr & SHF_EXECINSTR) ? SEC_CODE : 0)
 	   | ((attr & SHF_MERGE) ? SEC_MERGE : 0)
 	   | ((attr & SHF_STRINGS) ? SEC_STRINGS : 0)
-	   | ((attr & SHF_EXCLUDE) ? SEC_EXCLUDE: 0)
 	   | ((attr & SHF_TLS) ? SEC_THREAD_LOCAL : 0));
 #ifdef md_elf_section_flags
   flags = md_elf_section_flags (flags, attr, type);
 #endif
 
-  if (linkonce)
-    flags |= SEC_LINK_ONCE | SEC_LINK_DUPLICATES_DISCARD;
-
   if (old_sec == NULL)
     {
       symbolS *secsym;
 
-      if (type == SHT_NULL)
-	type = bfd_elf_get_default_section_type (flags);
-      elf_section_type (sec) = type;
-      elf_section_flags (sec) = attr;
-      elf_section_data (sec)->this_hdr.sh_info = match_p->info;
-
       /* Prevent SEC_HAS_CONTENTS from being inadvertently set.  */
       if (type == SHT_NOBITS)
-	seg_info (sec)->bss = 1;
+        seg_info (sec)->bss = 1;
 
-      /* Set the section ID and flags.  */
-      sec->section_id = match_p->section_id;
-      flags |= match_p->flags;
-
-      /* Set the linked-to symbol name.  */
-      sec->map_head.linked_to_symbol_name
-	= match_p->linked_to_symbol_name;
-
-      bfd_set_section_flags (sec, flags);
+      bfd_set_section_flags (stdoutput, sec, flags);
       if (flags & SEC_MERGE)
 	sec->entsize = entsize;
-      elf_group_name (sec) = match_p->group_name;
+      elf_group_name (sec) = group_name;
+      elf_linkonce_p (sec) = linkonce;
 
       /* Add a symbol for this section to the symbol table.  */
       secsym = symbol_find (name);
       if (secsym != NULL)
 	symbol_set_bfdsym (secsym, sec->symbol);
       else
-	symbol_table_insert (section_symbol (sec));
+        symbol_table_insert (section_symbol (sec));
     }
-  else
+  else if (attr != 0)
     {
-      if (type != SHT_NULL
-	  && (unsigned) type != elf_section_type (old_sec))
-	{
-	  if (ssect != NULL)
-	    /* This is a special section with known type.  User
-	       assembly might get the section type wrong; Even high
-	       profile projects like glibc have done so in the past.
-	       So don't error in this case.  */
-	    as_warn (_("ignoring changed section type for %s"), name);
-	  else
-	    /* Do error when assembly isn't self-consistent.  */
-	    as_bad (_("changed section type for %s"), name);
-	}
-
-      if (attr != 0)
-	{
-	  /* If section attributes are specified the second time we see a
-	     particular section, then check that they are the same as we
-	     saw the first time.  */
-	  if (((old_sec->flags ^ flags)
-	       & (SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE
-		  | SEC_EXCLUDE | SEC_SORT_ENTRIES | SEC_MERGE | SEC_STRINGS
-		  | SEC_LINK_ONCE | SEC_LINK_DUPLICATES_DISCARD
-		  | SEC_THREAD_LOCAL)))
-	    {
-	      if (ssect != NULL)
-		as_warn (_("ignoring changed section attributes for %s"), name);
-	      else
-		as_bad (_("changed section attributes for %s"), name);
-	    }
-	  else
-	    /* FIXME: Maybe we should consider removing a previously set
-	       processor or application specific attribute as suspicious ?  */
-	    elf_section_flags (sec) = attr;
-
-	  if ((flags & SEC_MERGE) && old_sec->entsize != (unsigned) entsize)
-	    as_bad (_("changed section entity size for %s"), name);
-	}
+      /* If section attributes are specified the second time we see a
+	 particular section, then check that they are the same as we
+	 saw the first time.  */
+      if (((old_sec->flags ^ flags)
+	   & (SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE
+	      | SEC_EXCLUDE | SEC_SORT_ENTRIES | SEC_MERGE | SEC_STRINGS
+	      | SEC_THREAD_LOCAL))
+	  || linkonce != elf_linkonce_p (sec))
+	as_warn (_("ignoring changed section attributes for %s"), name);
+      if ((flags & SEC_MERGE) && old_sec->entsize != (unsigned) entsize)
+	as_warn (_("ignoring changed section entity size for %s"), name);
+      if ((attr & SHF_GROUP) != 0
+	  && strcmp (elf_group_name (old_sec), group_name) != 0)
+	as_warn (_("ignoring new section group for %s"), name);
     }
 
 #ifdef md_elf_section_change_hook
@@ -810,12 +792,12 @@ obj_elf_change_section (const char *name,
 #endif
 }
 
-static bfd_vma
-obj_elf_parse_section_letters (char *str, size_t len,
-			       bfd_boolean *is_clone, bfd_vma *gnu_attr)
+static int
+obj_elf_parse_section_letters (str, len)
+     char *str;
+     size_t len;
 {
-  bfd_vma attr = 0;
-  *is_clone = FALSE;
+  int attr = 0;
 
   while (len > 0)
     {
@@ -823,12 +805,6 @@ obj_elf_parse_section_letters (char *str, size_t len,
 	{
 	case 'a':
 	  attr |= SHF_ALLOC;
-	  break;
-	case 'e':
-	  attr |= SHF_EXCLUDE;
-	  break;
-	case 'o':
-	  attr |= SHF_LINK_ORDER;
 	  break;
 	case 'w':
 	  attr |= SHF_WRITE;
@@ -848,12 +824,6 @@ obj_elf_parse_section_letters (char *str, size_t len,
 	case 'T':
 	  attr |= SHF_TLS;
 	  break;
-	case 'd':
-	  *gnu_attr |= SHF_GNU_MBIND;
-	  break;
-	case '?':
-	  *is_clone = TRUE;
-	  break;
 	/* Compatibility.  */
 	case 'm':
 	  if (*(str - 1) == 'a')
@@ -866,30 +836,19 @@ obj_elf_parse_section_letters (char *str, size_t len,
 		}
 	      break;
 	    }
-	  /* Fall through.  */
 	default:
 	  {
-	    const char *bad_msg = _("unrecognized .section attribute:"
-				    " want a,e,o,w,x,M,S,G,T or number");
+	    char *bad_msg = _("unrecognized .section attribute: want a,w,x,M,S,G,T");
 #ifdef md_elf_section_letter
-	    bfd_vma md_attr = md_elf_section_letter (*str, &bad_msg);
-	    if (md_attr != (bfd_vma) -1)
+	    int md_attr = md_elf_section_letter (*str, &bad_msg);
+	    if (md_attr >= 0)
 	      attr |= md_attr;
 	    else
 #endif
-	      if (ISDIGIT (*str))
-		{
-		  char * end;
-
-		  attr |= strtoul (str, & end, 0);
-		  /* Update str and len, allowing for the fact that
-		     we will execute str++ and len-- below.  */
-		  end --;
-		  len -= (end - str);
-		  str = end;
-		}
-	      else
-		as_fatal ("%s", bad_msg);
+	      {
+		as_warn ("%s", bad_msg);
+		attr = -1;
+	      }
 	  }
 	  break;
 	}
@@ -900,20 +859,38 @@ obj_elf_parse_section_letters (char *str, size_t len,
 }
 
 static int
-obj_elf_section_type (char *str, size_t len, bfd_boolean warn)
+obj_elf_section_word (str, len)
+     char *str;
+     size_t len;
+{
+  if (len == 5 && strncmp (str, "write", 5) == 0)
+    return SHF_WRITE;
+  if (len == 5 && strncmp (str, "alloc", 5) == 0)
+    return SHF_ALLOC;
+  if (len == 9 && strncmp (str, "execinstr", 9) == 0)
+    return SHF_EXECINSTR;
+
+#ifdef md_elf_section_word
+  {
+    int md_attr = md_elf_section_word (str, len);
+    if (md_attr >= 0)
+      return md_attr;
+  }
+#endif
+
+  as_warn (_("unrecognized section attribute"));
+  return 0;
+}
+
+static int
+obj_elf_section_type (str, len)
+     char *str;
+     size_t len;
 {
   if (len == 8 && strncmp (str, "progbits", 8) == 0)
     return SHT_PROGBITS;
   if (len == 6 && strncmp (str, "nobits", 6) == 0)
     return SHT_NOBITS;
-  if (len == 4 && strncmp (str, "note", 4) == 0)
-    return SHT_NOTE;
-  if (len == 10 && strncmp (str, "init_array", 10) == 0)
-    return SHT_INIT_ARRAY;
-  if (len == 10 && strncmp (str, "fini_array", 10) == 0)
-    return SHT_FINI_ARRAY;
-  if (len == 13 && strncmp (str, "preinit_array", 13) == 0)
-    return SHT_PREINIT_ARRAY;
 
 #ifdef md_elf_section_type
   {
@@ -923,58 +900,13 @@ obj_elf_section_type (char *str, size_t len, bfd_boolean warn)
   }
 #endif
 
-  if (ISDIGIT (*str))
-    {
-      char * end;
-      int type = strtoul (str, & end, 0);
-
-      if (warn && (size_t) (end - str) != len)
-	as_warn (_("extraneous characters at end of numeric section type"));
-
-      return type;
-    }
-
-  if (warn)
-    as_warn (_("unrecognized section type"));
-  return 0;
-}
-
-static bfd_vma
-obj_elf_section_word (char *str, size_t len, int *type)
-{
-  int ret;
-
-  if (len == 5 && strncmp (str, "write", 5) == 0)
-    return SHF_WRITE;
-  if (len == 5 && strncmp (str, "alloc", 5) == 0)
-    return SHF_ALLOC;
-  if (len == 9 && strncmp (str, "execinstr", 9) == 0)
-    return SHF_EXECINSTR;
-  if (len == 7 && strncmp (str, "exclude", 7) == 0)
-    return SHF_EXCLUDE;
-  if (len == 3 && strncmp (str, "tls", 3) == 0)
-    return SHF_TLS;
-
-#ifdef md_elf_section_word
-  {
-    bfd_vma md_attr = md_elf_section_word (str, len);
-    if (md_attr > 0)
-      return md_attr;
-  }
-#endif
-
-  ret = obj_elf_section_type (str, len, FALSE);
-  if (ret != 0)
-    *type = ret;
-  else
-    as_warn (_("unrecognized section attribute"));
-
+  as_warn (_("unrecognized section type"));
   return 0;
 }
 
 /* Get name of section.  */
-const char *
-obj_elf_section_name (void)
+static char *
+obj_elf_section_name ()
 {
   char *name;
 
@@ -998,36 +930,14 @@ obj_elf_section_name (void)
 	end++;
       if (end == input_line_pointer)
 	{
-	  as_bad (_("missing name"));
+	  as_warn (_("missing name"));
 	  ignore_rest_of_line ();
 	  return NULL;
 	}
 
-      name = xmemdup0 (input_line_pointer, end - input_line_pointer);
-
-      while (flag_sectname_subst)
-        {
-	  char *subst = strchr (name, '%');
-	  if (subst && subst[1] == 'S')
-	    {
-	      int oldlen = strlen (name);
-	      int substlen = strlen (now_seg->name);
-	      int newlen = oldlen - 2 + substlen;
-	      char *newname = XNEWVEC (char, newlen + 1);
-	      int headlen = subst - name;
-	      memcpy (newname, name, headlen);
-	      strcpy (newname + headlen, now_seg->name);
-	      strcat (newname + headlen, subst + 2);
-	      xfree (name);
-	      name = newname;
-	    }
-	  else
-	    break;
-	}
-
-#ifdef tc_canonicalize_section_name
-      name = tc_canonicalize_section_name (name);
-#endif
+      name = xmalloc (end - input_line_pointer + 1);
+      memcpy (name, input_line_pointer, end - input_line_pointer);
+      name[end - input_line_pointer] = '\0';
       input_line_pointer = end;
     }
   SKIP_WHITESPACE ();
@@ -1035,18 +945,15 @@ obj_elf_section_name (void)
 }
 
 void
-obj_elf_section (int push)
+obj_elf_section (push)
+     int push;
 {
-  const char *name;
-  char *beg;
-  int type, dummy;
-  bfd_vma attr;
-  bfd_vma gnu_attr;
+  char *name, *group_name, *beg;
+  int type, attr, dummy;
   int entsize;
   int linkonce;
-  subsegT new_subsection = -1;
-  struct elf_section_match match;
 
+#ifndef TC_I370
   if (flag_mri)
     {
       char mri_type;
@@ -1066,27 +973,14 @@ obj_elf_section (int push)
 
       return;
     }
+#endif /* ! defined (TC_I370) */
 
   name = obj_elf_section_name ();
   if (name == NULL)
     return;
-
-  memset (&match, 0, sizeof (match));
-
-  symbolS * sym;
-  if ((sym = symbol_find (name)) != NULL
-      && ! symbol_section_p (sym)
-      && S_IS_DEFINED (sym)
-      && ! S_IS_VOLATILE (sym)
-      && ! S_CAN_BE_REDEFINED (sym))
-    {
-      as_bad (_("section name '%s' already defined as another symbol"), name);
-      ignore_rest_of_line ();
-      return;
-    }
   type = SHT_NULL;
   attr = 0;
-  gnu_attr = 0;
+  group_name = NULL;
   entsize = 0;
   linkonce = 0;
 
@@ -1096,34 +990,15 @@ obj_elf_section (int push)
       ++input_line_pointer;
       SKIP_WHITESPACE ();
 
-      if (push && ISDIGIT (*input_line_pointer))
-	{
-	  /* .pushsection has an optional subsection.  */
-	  new_subsection = (subsegT) get_absolute_expression ();
-
-	  SKIP_WHITESPACE ();
-
-	  /* Stop if we don't see a comma.  */
-	  if (*input_line_pointer != ',')
-	    goto done;
-
-	  /* Skip the comma.  */
-	  ++input_line_pointer;
-	  SKIP_WHITESPACE ();
-	}
-
       if (*input_line_pointer == '"')
 	{
-	  bfd_boolean is_clone;
-
 	  beg = demand_copy_C_string (&dummy);
 	  if (beg == NULL)
 	    {
 	      ignore_rest_of_line ();
 	      return;
 	    }
-	  attr |= obj_elf_parse_section_letters (beg, strlen (beg),
-						 &is_clone, &gnu_attr);
+	  attr |= obj_elf_parse_section_letters (beg, strlen (beg));
 
 	  SKIP_WHITESPACE ();
 	  if (*input_line_pointer == ',')
@@ -1142,22 +1017,14 @@ obj_elf_section (int push)
 		      ignore_rest_of_line ();
 		      return;
 		    }
-		  type = obj_elf_section_type (beg, strlen (beg), TRUE);
+		  type = obj_elf_section_type (beg, strlen (beg));
 		}
 	      else if (c == '@' || c == '%')
 		{
-		  ++input_line_pointer;
-
-		  if (ISDIGIT (* input_line_pointer))
-		    type = strtoul (input_line_pointer, &input_line_pointer, 0);
-		  else
-		    {
-		      c = get_symbol_name (& beg);
-		      (void) restore_line_pointer (c);
-		      type = obj_elf_section_type (beg,
-						   input_line_pointer - beg,
-						   TRUE);
-		    }
+		  beg = ++input_line_pointer;
+		  c = get_symbol_end ();
+		  *input_line_pointer = c;
+		  type = obj_elf_section_type (beg, input_line_pointer - beg);
 		}
 	      else
 		input_line_pointer = save;
@@ -1183,39 +1050,16 @@ obj_elf_section (int push)
 	      attr &= ~SHF_MERGE;
 	    }
 
-	  if ((attr & SHF_LINK_ORDER) != 0 && *input_line_pointer == ',')
-	    {
-	      char c;
-	      unsigned int length;
-	      ++input_line_pointer;
-	      SKIP_WHITESPACE ();
-	      c = get_symbol_name (& beg);
-	      (void) restore_line_pointer (c);
-	      length = input_line_pointer - beg;
-	      if (length)
-		match.linked_to_symbol_name = xmemdup0 (beg, length);
-	    }
-
-	  if ((attr & SHF_GROUP) != 0 && is_clone)
-	    {
-	      as_warn (_("? section flag ignored with G present"));
-	      is_clone = FALSE;
-	    }
 	  if ((attr & SHF_GROUP) != 0 && *input_line_pointer == ',')
 	    {
 	      ++input_line_pointer;
-	      match.group_name = obj_elf_section_name ();
-	      if (match.group_name == NULL)
+	      group_name = obj_elf_section_name ();
+	      if (group_name == NULL)
 		attr &= ~SHF_GROUP;
-	      else if (*input_line_pointer == ',')
+	      else if (strncmp (input_line_pointer, ",comdat", 7) == 0)
 		{
-		  ++input_line_pointer;
-		  SKIP_WHITESPACE ();
-		  if (strncmp (input_line_pointer, "comdat", 6) == 0)
-		    {
-		      input_line_pointer += 6;
-		      linkonce = 1;
-		    }
+		  input_line_pointer += 7;
+		  linkonce = 1;
 		}
 	      else if (strncmp (name, ".gnu.linkonce", 13) == 0)
 		linkonce = 1;
@@ -1224,93 +1068,6 @@ obj_elf_section (int push)
 	    {
 	      as_warn (_("group name for SHF_GROUP not specified"));
 	      attr &= ~SHF_GROUP;
-	    }
-
-	  if (is_clone)
-	    {
-	      const char *now_group = elf_group_name (now_seg);
-	      if (now_group != NULL)
-		{
-		  match.group_name = xstrdup (now_group);
-		  linkonce = (now_seg->flags & SEC_LINK_ONCE) != 0;
-		}
-	    }
-
-	  if ((gnu_attr & SHF_GNU_MBIND) != 0 && *input_line_pointer == ',')
-	    {
-	      char *save = input_line_pointer;
-	      ++input_line_pointer;
-	      SKIP_WHITESPACE ();
-	      if (ISDIGIT (* input_line_pointer))
-		{
-		  char *t = input_line_pointer;
-		  match.info = strtoul (input_line_pointer,
-					&input_line_pointer, 0);
-		  if (match.info == (unsigned int) -1)
-		    {
-		      as_warn (_("unsupported mbind section info: %s"), t);
-		      match.info = 0;
-		    }
-		}
-	      else
-		input_line_pointer = save;
-	    }
-
-	  if (*input_line_pointer == ',')
-	    {
-	      char *save = input_line_pointer;
-	      ++input_line_pointer;
-	      SKIP_WHITESPACE ();
-	      if (strncmp (input_line_pointer, "unique", 6) == 0)
-		{
-		  input_line_pointer += 6;
-		  SKIP_WHITESPACE ();
-		  if (*input_line_pointer == ',')
-		    {
-		      ++input_line_pointer;
-		      SKIP_WHITESPACE ();
-		      if (ISDIGIT (* input_line_pointer))
-			{
-			  bfd_vma id;
-			  bfd_boolean overflow;
-			  char *t = input_line_pointer;
-			  if (sizeof (bfd_vma) <= sizeof (unsigned long))
-			    {
-			      errno = 0;
-			      id = strtoul (input_line_pointer,
-					    &input_line_pointer, 0);
-			      overflow = (id == (unsigned long) -1
-					  && errno == ERANGE);
-			    }
-			  else
-			    {
-			      id = bfd_scan_vma
-				(input_line_pointer,
-				 (const char **) &input_line_pointer, 0);
-			      overflow = id == ~(bfd_vma) 0;
-			    }
-			  if (overflow || id > (unsigned int) -1)
-			    {
-			      char *linefeed, saved_char = 0;
-			      if ((linefeed = strchr (t, '\n')) != NULL)
-				{
-				  saved_char = *linefeed;
-				  *linefeed = '\0';
-				}
-			      as_bad (_("unsupported section id: %s"), t);
-			      if (saved_char)
-				*linefeed = saved_char;
-			    }
-			  else
-			    {
-			      match.section_id = id;
-			      match.flags |= SEC_ASSEMBLER_SECTION_ID;
-			    }
-			}
-		    }
-		}
-	      else
-		input_line_pointer = save;
 	    }
 	}
       else
@@ -1322,16 +1079,15 @@ obj_elf_section (int push)
 	      SKIP_WHITESPACE ();
 	      if (*input_line_pointer != '#')
 		{
-		  as_bad (_("character following name is not '#'"));
+		  as_warn (_("character following name is not '#'"));
 		  ignore_rest_of_line ();
 		  return;
 		}
-	      ++input_line_pointer;
-	      c = get_symbol_name (& beg);
-	      (void) restore_line_pointer (c);
+	      beg = ++input_line_pointer;
+	      c = get_symbol_end ();
+	      *input_line_pointer = c;
 
-	      attr |= obj_elf_section_word (beg, input_line_pointer - beg,
-					    &type);
+	      attr |= obj_elf_section_word (beg, input_line_pointer - beg);
 
 	      SKIP_WHITESPACE ();
 	    }
@@ -1340,38 +1096,16 @@ obj_elf_section (int push)
 	}
     }
 
- done:
   demand_empty_rest_of_line ();
 
-  obj_elf_change_section (name, type, attr, entsize, &match, linkonce,
-			  push);
-
-  if ((gnu_attr & SHF_GNU_MBIND) != 0)
-    {
-      struct elf_backend_data *bed;
-
-      if ((attr & SHF_ALLOC) == 0)
-	as_bad (_("SHF_ALLOC isn't set for GNU_MBIND section: %s"), name);
-
-      bed = (struct elf_backend_data *) get_elf_backend_data (stdoutput);
-      if (bed->elf_osabi == ELFOSABI_NONE)
-	bed->elf_osabi = ELFOSABI_GNU;
-      else if (bed->elf_osabi != ELFOSABI_GNU
-	       && bed->elf_osabi != ELFOSABI_FREEBSD)
-	as_bad (_("GNU_MBIND section is supported only by GNU "
-		  "and FreeBSD targets"));
-      elf_tdata (stdoutput)->has_gnu_osabi |= elf_gnu_osabi_mbind;
-    }
-  elf_section_flags (now_seg) |= gnu_attr;
-
-  if (push && new_subsection != -1)
-    subseg_set (now_seg, new_subsection);
+  obj_elf_change_section (name, type, attr, entsize, group_name, linkonce, push);
 }
 
 /* Change to the .data section.  */
 
 void
-obj_elf_data (int i)
+obj_elf_data (i)
+     int i;
 {
 #ifdef md_flush_pending_output
   md_flush_pending_output ();
@@ -1389,7 +1123,8 @@ obj_elf_data (int i)
 /* Change to the .text section.  */
 
 void
-obj_elf_text (int i)
+obj_elf_text (i)
+     int i;
 {
 #ifdef md_flush_pending_output
   md_flush_pending_output ();
@@ -1404,28 +1139,11 @@ obj_elf_text (int i)
 #endif
 }
 
-/* Change to the *ABS* section.  */
-
-void
-obj_elf_struct (int i)
-{
-#ifdef md_flush_pending_output
-  md_flush_pending_output ();
-#endif
-
-  previous_section = now_seg;
-  previous_subsection = now_subseg;
-  s_struct (i);
-
-#ifdef md_elf_section_change_hook
-  md_elf_section_change_hook ();
-#endif
-}
-
 static void
-obj_elf_subsection (int ignore ATTRIBUTE_UNUSED)
+obj_elf_subsection (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
-  int temp;
+  register int temp;
 
 #ifdef md_flush_pending_output
   md_flush_pending_output ();
@@ -1447,14 +1165,15 @@ obj_elf_subsection (int ignore ATTRIBUTE_UNUSED)
    sections.  */
 
 void
-obj_elf_section_change_hook (void)
+obj_elf_section_change_hook ()
 {
   previous_section = now_seg;
   previous_subsection = now_subseg;
 }
 
 void
-obj_elf_previous (int ignore ATTRIBUTE_UNUSED)
+obj_elf_previous (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   segT new_section;
   int new_subsection;
@@ -1481,7 +1200,8 @@ obj_elf_previous (int ignore ATTRIBUTE_UNUSED)
 }
 
 static void
-obj_elf_popsection (int xxx ATTRIBUTE_UNUSED)
+obj_elf_popsection (xxx)
+     int xxx ATTRIBUTE_UNUSED;
 {
   struct section_stack *top = section_stack;
 
@@ -1507,76 +1227,13 @@ obj_elf_popsection (int xxx ATTRIBUTE_UNUSED)
 }
 
 static void
-obj_elf_line (int ignore ATTRIBUTE_UNUSED)
+obj_elf_line (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   /* Assume delimiter is part of expression.  BSD4.2 as fails with
      delightful bug, so we are not being incompatible here.  */
-  new_logical_line (NULL, get_absolute_expression ());
+  new_logical_line ((char *) NULL, (int) (get_absolute_expression ()));
   demand_empty_rest_of_line ();
-}
-
-static struct elf_versioned_name_list *
-obj_elf_find_and_add_versioned_name (const char *version_name,
-				     const char *sym_name,
-				     const char *ver,
-				     struct elf_obj_sy *sy_obj)
-{
-  struct elf_versioned_name_list *versioned_name;
-  const char *p;
-
-  for (p = ver + 1; *p == ELF_VER_CHR; p++)
-    ;
-
-  /* NB: Since some tests in ld/testsuite/ld-elfvers have no version
-     names, we have to disable this.  */
-  if (0 && *p == '\0')
-    {
-      as_bad (_("missing version name in `%s' for symbol `%s'"),
-	      version_name, sym_name);
-      return NULL;
-    }
-
-  versioned_name = sy_obj->versioned_name;
-
-  switch (p - ver)
-    {
-    case 1:
-    case 2:
-      break;
-    case 3:
-      if (sy_obj->rename)
-	{
-	  if (strcmp (versioned_name->name, version_name) == 0)
-	    return versioned_name;
-	  else
-	    {
-	      as_bad (_("only one version name with `@@@' is allowed "
-			"for symbol `%s'"), sym_name);
-	      return NULL;
-	    }
-	}
-      sy_obj->rename = TRUE;
-      break;
-    default:
-      as_bad (_("invalid version name '%s' for symbol `%s'"),
-	      version_name, sym_name);
-      return NULL;
-    }
-
-  for (;
-       versioned_name != NULL;
-       versioned_name = versioned_name->next)
-    if (strcmp (versioned_name->name, version_name) == 0)
-      return versioned_name;
-
-  /* Add this versioned name to the head of the list,  */
-  versioned_name = (struct elf_versioned_name_list *)
-    xmalloc (sizeof (*versioned_name));
-  versioned_name->name = xstrdup (version_name);
-  versioned_name->next = sy_obj->versioned_name;
-  sy_obj->versioned_name = versioned_name;
-
-  return versioned_name;
 }
 
 /* This handles the .symver pseudo-op, which is used to specify a
@@ -1586,18 +1243,22 @@ obj_elf_find_and_add_versioned_name (const char *version_name,
    with the same value as the symbol NAME.  */
 
 static void
-obj_elf_symver (int ignore ATTRIBUTE_UNUSED)
+obj_elf_symver (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   char *name;
-  const char *sym_name;
   char c;
   char old_lexat;
   symbolS *sym;
-  struct elf_obj_sy *sy_obj;
-  char *p;
 
-  sym = get_sym_from_input_line_and_check ();
+  name = input_line_pointer;
+  c = get_symbol_end ();
 
+  sym = symbol_find_or_make (name);
+
+  *input_line_pointer = c;
+
+  SKIP_WHITESPACE ();
   if (*input_line_pointer != ',')
     {
       as_bad (_("expected comma after name in .symver"));
@@ -1606,66 +1267,42 @@ obj_elf_symver (int ignore ATTRIBUTE_UNUSED)
     }
 
   ++input_line_pointer;
-  SKIP_WHITESPACE ();
+  name = input_line_pointer;
 
   /* Temporarily include '@' in symbol names.  */
   old_lexat = lex_type[(unsigned char) '@'];
   lex_type[(unsigned char) '@'] |= LEX_NAME;
-  c = get_symbol_name (& name);
+  c = get_symbol_end ();
   lex_type[(unsigned char) '@'] = old_lexat;
-  sym_name = S_GET_NAME (sym);
 
-  if (S_IS_COMMON (sym))
+  if (symbol_get_obj (sym)->versioned_name == NULL)
     {
-      as_bad (_("`%s' can't be versioned to common symbol '%s'"),
-	      name, sym_name);
-      ignore_rest_of_line ();
-      return;
-    }
+      symbol_get_obj (sym)->versioned_name = xstrdup (name);
 
-  p = strchr (name, ELF_VER_CHR);
-  if (p == NULL)
-    {
-      as_bad (_("missing version name in `%s' for symbol `%s'"),
-	      name, sym_name);
-      ignore_rest_of_line ();
-      return;
-    }
+      *input_line_pointer = c;
 
-  sy_obj = symbol_get_obj (sym);
-  if (obj_elf_find_and_add_versioned_name (name, sym_name,
-					   p, sy_obj) == NULL)
-    {
-      sy_obj->bad_version = TRUE;
-      ignore_rest_of_line ();
-      return;
-    }
-
-  (void) restore_line_pointer (c);
-
-  if (*input_line_pointer == ',')
-    {
-      char *save = input_line_pointer;
-
-      ++input_line_pointer;
-      SKIP_WHITESPACE ();
-      if (strncmp (input_line_pointer, "local", 5) == 0)
+      if (strchr (symbol_get_obj (sym)->versioned_name,
+		  ELF_VER_CHR) == NULL)
 	{
-	  input_line_pointer += 5;
-	  sy_obj->visibility = visibility_local;
+	  as_bad (_("missing version name in `%s' for symbol `%s'"),
+		  symbol_get_obj (sym)->versioned_name,
+		  S_GET_NAME (sym));
+	  ignore_rest_of_line ();
+	  return;
 	}
-      else if (strncmp (input_line_pointer, "hidden", 6) == 0)
+    }
+  else
+    {
+      if (strcmp (symbol_get_obj (sym)->versioned_name, name))
 	{
-	  input_line_pointer += 6;
-	  sy_obj->visibility = visibility_hidden;
+	  as_bad (_("multiple versions [`%s'|`%s'] for symbol `%s'"),
+		  name, symbol_get_obj (sym)->versioned_name,
+		  S_GET_NAME (sym));
+	  ignore_rest_of_line ();
+	  return;
 	}
-      else if (strncmp (input_line_pointer, "remove", 6) == 0)
-	{
-	  input_line_pointer += 6;
-	  sy_obj->visibility = visibility_remove;
-	}
-      else
-	input_line_pointer = save;
+
+      *input_line_pointer = c;
     }
 
   demand_empty_rest_of_line ();
@@ -1676,7 +1313,8 @@ obj_elf_symver (int ignore ATTRIBUTE_UNUSED)
    syntax is ".vtable_inherit CHILDNAME, PARENTNAME".  */
 
 struct fix *
-obj_elf_get_vtable_inherit (void)
+obj_elf_vtable_inherit (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   char *cname, *pname;
   symbolS *csym, *psym;
@@ -1685,7 +1323,8 @@ obj_elf_get_vtable_inherit (void)
   if (*input_line_pointer == '#')
     ++input_line_pointer;
 
-  c = get_symbol_name (& cname);
+  cname = input_line_pointer;
+  c = get_symbol_end ();
   csym = symbol_find (cname);
 
   /* GCFIXME: should check that we don't have two .vtable_inherits for
@@ -1694,17 +1333,17 @@ obj_elf_get_vtable_inherit (void)
 
   if (csym == NULL || symbol_get_frag (csym) == NULL)
     {
-      as_bad (_("expected `%s' to have already been set for .vtable_inherit"),
+      as_bad ("expected `%s' to have already been set for .vtable_inherit",
 	      cname);
       bad = 1;
     }
 
   *input_line_pointer = c;
 
-  SKIP_WHITESPACE_AFTER_NAME ();
+  SKIP_WHITESPACE ();
   if (*input_line_pointer != ',')
     {
-      as_bad (_("expected comma after name in .vtable_inherit"));
+      as_bad ("expected comma after name in .vtable_inherit");
       ignore_rest_of_line ();
       return NULL;
     }
@@ -1724,9 +1363,10 @@ obj_elf_get_vtable_inherit (void)
     }
   else
     {
-      c = get_symbol_name (& pname);
+      pname = input_line_pointer;
+      c = get_symbol_end ();
       psym = symbol_find_or_make (pname);
-      restore_line_pointer (c);
+      *input_line_pointer = c;
     }
 
   demand_empty_rest_of_line ();
@@ -1734,19 +1374,10 @@ obj_elf_get_vtable_inherit (void)
   if (bad)
     return NULL;
 
-  gas_assert (symbol_get_value_expression (csym)->X_op == O_constant);
+  assert (symbol_get_value_expression (csym)->X_op == O_constant);
   return fix_new (symbol_get_frag (csym),
 		  symbol_get_value_expression (csym)->X_add_number,
 		  0, psym, 0, 0, BFD_RELOC_VTABLE_INHERIT);
-}
-
-/* This is a version of obj_elf_get_vtable_inherit() that is
-   suitable for use in struct _pseudo_type tables.  */
-
-void
-obj_elf_vtable_inherit (int ignore ATTRIBUTE_UNUSED)
-{
-  (void) obj_elf_get_vtable_inherit ();
 }
 
 /* This handles the .vtable_entry pseudo-op, which is used to indicate
@@ -1754,18 +1385,26 @@ obj_elf_vtable_inherit (int ignore ATTRIBUTE_UNUSED)
    ".vtable_entry tablename, offset".  */
 
 struct fix *
-obj_elf_get_vtable_entry (void)
+obj_elf_vtable_entry (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
+  char *name;
   symbolS *sym;
   offsetT offset;
+  char c;
 
   if (*input_line_pointer == '#')
     ++input_line_pointer;
 
-  sym = get_sym_from_input_line_and_check ();
+  name = input_line_pointer;
+  c = get_symbol_end ();
+  sym = symbol_find_or_make (name);
+  *input_line_pointer = c;
+
+  SKIP_WHITESPACE ();
   if (*input_line_pointer != ',')
     {
-      as_bad (_("expected comma after name in .vtable_entry"));
+      as_bad ("expected comma after name in .vtable_entry");
       ignore_rest_of_line ();
       return NULL;
     }
@@ -1782,206 +1421,8 @@ obj_elf_get_vtable_entry (void)
 		  BFD_RELOC_VTABLE_ENTRY);
 }
 
-/* This is a version of obj_elf_get_vtable_entry() that is
-   suitable for use in struct _pseudo_type tables.  */
-
 void
-obj_elf_vtable_entry (int ignore ATTRIBUTE_UNUSED)
-{
-  (void) obj_elf_get_vtable_entry ();
-}
-
-#define skip_whitespace(str)  do { if (*(str) == ' ') ++(str); } while (0)
-
-static inline int
-skip_past_char (char ** str, char c)
-{
-  if (**str == c)
-    {
-      (*str)++;
-      return 0;
-    }
-  else
-    return -1;
-}
-#define skip_past_comma(str) skip_past_char (str, ',')
-
-/* A list of attributes that have been explicitly set by the assembly code.
-   VENDOR is the vendor id, BASE is the tag shifted right by the number
-   of bits in MASK, and bit N of MASK is set if tag BASE+N has been set.  */
-struct recorded_attribute_info {
-  struct recorded_attribute_info *next;
-  int vendor;
-  unsigned int base;
-  unsigned long mask;
-};
-static struct recorded_attribute_info *recorded_attributes;
-
-/* Record that we have seen an explicit specification of attribute TAG
-   for vendor VENDOR.  */
-
-static void
-record_attribute (int vendor, unsigned int tag)
-{
-  unsigned int base;
-  unsigned long mask;
-  struct recorded_attribute_info *rai;
-
-  base = tag / (8 * sizeof (rai->mask));
-  mask = 1UL << (tag % (8 * sizeof (rai->mask)));
-  for (rai = recorded_attributes; rai; rai = rai->next)
-    if (rai->vendor == vendor && rai->base == base)
-      {
-	rai->mask |= mask;
-	return;
-      }
-
-  rai = XNEW (struct recorded_attribute_info);
-  rai->next = recorded_attributes;
-  rai->vendor = vendor;
-  rai->base = base;
-  rai->mask = mask;
-  recorded_attributes = rai;
-}
-
-/* Return true if we have seen an explicit specification of attribute TAG
-   for vendor VENDOR.  */
-
-bfd_boolean
-obj_elf_seen_attribute (int vendor, unsigned int tag)
-{
-  unsigned int base;
-  unsigned long mask;
-  struct recorded_attribute_info *rai;
-
-  base = tag / (8 * sizeof (rai->mask));
-  mask = 1UL << (tag % (8 * sizeof (rai->mask)));
-  for (rai = recorded_attributes; rai; rai = rai->next)
-    if (rai->vendor == vendor && rai->base == base)
-      return (rai->mask & mask) != 0;
-  return FALSE;
-}
-
-/* Parse an attribute directive for VENDOR.
-   Returns the attribute number read, or zero on error.  */
-
-int
-obj_elf_vendor_attribute (int vendor)
-{
-  expressionS exp;
-  int type;
-  int tag;
-  unsigned int i = 0;
-  char *s = NULL;
-
-  /* Read the first number or name.  */
-  skip_whitespace (input_line_pointer);
-  s = input_line_pointer;
-  if (ISDIGIT (*input_line_pointer))
-    {
-      expression (& exp);
-      if (exp.X_op != O_constant)
-	goto bad;
-      tag = exp.X_add_number;
-    }
-  else
-    {
-      char *name;
-
-      /* A name may contain '_', but no other punctuation.  */
-      for (; ISALNUM (*input_line_pointer) || *input_line_pointer == '_';
-	   ++input_line_pointer)
-	i++;
-      if (i == 0)
-	goto bad;
-
-      name = xstrndup (s, i);
-
-#ifndef CONVERT_SYMBOLIC_ATTRIBUTE
-#define CONVERT_SYMBOLIC_ATTRIBUTE(a) -1
-#endif
-
-      tag = CONVERT_SYMBOLIC_ATTRIBUTE (name);
-      if (tag == -1)
-	{
-	  as_bad (_("Attribute name not recognised: %s"), name);
-	  ignore_rest_of_line ();
-	  free (name);
-	  return 0;
-	}
-      free (name);
-    }
-
-  type = _bfd_elf_obj_attrs_arg_type (stdoutput, vendor, tag);
-
-  if (skip_past_comma (&input_line_pointer) == -1)
-    goto bad;
-  if (type & 1)
-    {
-      expression (& exp);
-      if (exp.X_op != O_constant)
-	{
-	  as_bad (_("expected numeric constant"));
-	  ignore_rest_of_line ();
-	  return 0;
-	}
-      i = exp.X_add_number;
-    }
-  if ((type & 3) == 3
-      && skip_past_comma (&input_line_pointer) == -1)
-    {
-      as_bad (_("expected comma"));
-      ignore_rest_of_line ();
-      return 0;
-    }
-  if (type & 2)
-    {
-      int len;
-
-      skip_whitespace (input_line_pointer);
-      if (*input_line_pointer != '"')
-	goto bad_string;
-      s = demand_copy_C_string (&len);
-    }
-
-  record_attribute (vendor, tag);
-  switch (type & 3)
-    {
-    case 3:
-      bfd_elf_add_obj_attr_int_string (stdoutput, vendor, tag, i, s);
-      break;
-    case 2:
-      bfd_elf_add_obj_attr_string (stdoutput, vendor, tag, s);
-      break;
-    case 1:
-      bfd_elf_add_obj_attr_int (stdoutput, vendor, tag, i);
-      break;
-    default:
-      abort ();
-    }
-
-  demand_empty_rest_of_line ();
-  return tag;
- bad_string:
-  as_bad (_("bad string constant"));
-  ignore_rest_of_line ();
-  return 0;
- bad:
-  as_bad (_("expected <tag> , <value>"));
-  ignore_rest_of_line ();
-  return 0;
-}
-
-/* Parse a .gnu_attribute directive.  */
-
-static void
-obj_elf_gnu_attribute (int ignored ATTRIBUTE_UNUSED)
-{
-  obj_elf_vendor_attribute (OBJ_ATTR_GNU);
-}
-
-void
-elf_obj_read_begin_hook (void)
+elf_obj_read_begin_hook ()
 {
 #ifdef NEED_ECOFF_DEBUG
   if (ECOFF_DEBUGGING)
@@ -1990,7 +1431,8 @@ elf_obj_read_begin_hook (void)
 }
 
 void
-elf_obj_symbol_new_hook (symbolS *symbolP)
+elf_obj_symbol_new_hook (symbolP)
+     symbolS *symbolP;
 {
   struct elf_obj_sy *sy_obj;
 
@@ -2009,14 +1451,16 @@ elf_obj_symbol_new_hook (symbolS *symbolP)
    context.  */
 
 void
-elf_copy_symbol_attributes (symbolS *dest, symbolS *src)
+elf_copy_symbol_attributes (dest, src)
+     symbolS *dest, *src;
 {
   struct elf_obj_sy *srcelf = symbol_get_obj (src);
   struct elf_obj_sy *destelf = symbol_get_obj (dest);
   if (srcelf->size)
     {
       if (destelf->size == NULL)
-	destelf->size = XNEW (expressionS);
+	destelf->size =
+	  (expressionS *) xmalloc (sizeof (expressionS));
       *destelf->size = *srcelf->size;
     }
   else
@@ -2032,7 +1476,8 @@ elf_copy_symbol_attributes (symbolS *dest, symbolS *src)
 }
 
 void
-obj_elf_version (int ignore ATTRIBUTE_UNUSED)
+obj_elf_version (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   char *name;
   unsigned int c;
@@ -2041,13 +1486,12 @@ obj_elf_version (int ignore ATTRIBUTE_UNUSED)
   subsegT subseg = now_subseg;
   Elf_Internal_Note i_note;
   Elf_External_Note e_note;
-  asection *note_secp = NULL;
+  asection *note_secp = (asection *) NULL;
+  int len;
 
   SKIP_WHITESPACE ();
   if (*input_line_pointer == '\"')
     {
-      unsigned int len;
-
       ++input_line_pointer;	/* -> 1st char of string.  */
       name = input_line_pointer;
 
@@ -2058,50 +1502,53 @@ obj_elf_version (int ignore ATTRIBUTE_UNUSED)
       *(input_line_pointer - 1) = '\0';
       *input_line_pointer = c;
 
-      /* Create the .note section.  */
+      /* create the .note section */
+
       note_secp = subseg_new (".note", 0);
-      bfd_set_section_flags (note_secp, SEC_HAS_CONTENTS | SEC_READONLY);
-      record_alignment (note_secp, 2);
+      bfd_set_section_flags (stdoutput,
+			     note_secp,
+			     SEC_HAS_CONTENTS | SEC_READONLY);
 
-      /* Process the version string.  */
-      len = strlen (name) + 1;
+      /* process the version string */
 
-      /* PR 3456: Although the name field is padded out to an 4-byte
-	 boundary, the namesz field should not be adjusted.  */
-      i_note.namesz = len;
-      i_note.descsz = 0;	/* No description.  */
+      len = strlen (name);
+
+      i_note.namesz = ((len + 1) + 3) & ~3; /* round this to word boundary */
+      i_note.descsz = 0;	/* no description */
       i_note.type = NT_VERSION;
       p = frag_more (sizeof (e_note.namesz));
-      md_number_to_chars (p, i_note.namesz, sizeof (e_note.namesz));
+      md_number_to_chars (p, (valueT) i_note.namesz, sizeof (e_note.namesz));
       p = frag_more (sizeof (e_note.descsz));
-      md_number_to_chars (p, i_note.descsz, sizeof (e_note.descsz));
+      md_number_to_chars (p, (valueT) i_note.descsz, sizeof (e_note.descsz));
       p = frag_more (sizeof (e_note.type));
-      md_number_to_chars (p, i_note.type, sizeof (e_note.type));
-      p = frag_more (len);
-      memcpy (p, name, len);
+      md_number_to_chars (p, (valueT) i_note.type, sizeof (e_note.type));
+      p = frag_more (len + 1);
+      strcpy (p, name);
 
       frag_align (2, 0, 0);
 
       subseg_set (seg, subseg);
     }
   else
-    as_bad (_("expected quoted string"));
-
+    {
+      as_bad (_("expected quoted string"));
+    }
   demand_empty_rest_of_line ();
 }
 
 static void
-obj_elf_size (int ignore ATTRIBUTE_UNUSED)
+obj_elf_size (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
-  char *name;
-  char c = get_symbol_name (&name);
+  char *name = input_line_pointer;
+  char c = get_symbol_end ();
   char *p;
   expressionS exp;
   symbolS *sym;
 
   p = input_line_pointer;
   *p = c;
-  SKIP_WHITESPACE_AFTER_NAME ();
+  SKIP_WHITESPACE ();
   if (*input_line_pointer != ',')
     {
       *p = 0;
@@ -2132,14 +1579,15 @@ obj_elf_size (int ignore ATTRIBUTE_UNUSED)
     }
   else
     {
-      symbol_get_obj (sym)->size = XNEW (expressionS);
+      symbol_get_obj (sym)->size =
+	(expressionS *) xmalloc (sizeof (expressionS));
       *symbol_get_obj (sym)->size = exp;
     }
   demand_empty_rest_of_line ();
 }
 
 /* Handle the ELF .type pseudo-op.  This sets the type of a symbol.
-   There are six syntaxes:
+   There are five syntaxes:
 
    The first (used on Solaris) is
        .type SYM,#function
@@ -2151,45 +1599,26 @@ obj_elf_size (int ignore ATTRIBUTE_UNUSED)
        .type SYM,%function
    The fifth (used on SVR4/860) is
        .type SYM,"function"
-   The sixth (emitted by recent SunPRO under Solaris) is
-       .type SYM,[0-9]
-   where the integer is the STT_* value.
    */
 
-static char *
-obj_elf_type_name (char *cp)
-{
-  char *p;
-
-  p = input_line_pointer;
-  if (*input_line_pointer >= '0'
-      && *input_line_pointer <= '9')
-    {
-      while (*input_line_pointer >= '0'
-	     && *input_line_pointer <= '9')
-	++input_line_pointer;
-      *cp = *input_line_pointer;
-      *input_line_pointer = '\0';
-    }
-  else
-    *cp = get_symbol_name (&p);
-
-  return p;
-}
-
 static void
-obj_elf_type (int ignore ATTRIBUTE_UNUSED)
+obj_elf_type (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
+  char *name;
   char c;
   int type;
-  const char *type_name;
+  const char *typename;
   symbolS *sym;
   elf_symbol_type *elfsym;
 
-  sym = get_sym_from_input_line_and_check ();
-  c = *input_line_pointer;
+  name = input_line_pointer;
+  c = get_symbol_end ();
+  sym = symbol_find_or_make (name);
   elfsym = (elf_symbol_type *) symbol_get_bfdsym (sym);
+  *input_line_pointer = c;
 
+  SKIP_WHITESPACE ();
   if (*input_line_pointer == ',')
     ++input_line_pointer;
 
@@ -2200,136 +1629,36 @@ obj_elf_type (int ignore ATTRIBUTE_UNUSED)
       || *input_line_pointer == '%')
     ++input_line_pointer;
 
-  type_name = obj_elf_type_name (& c);
+  typename = input_line_pointer;
+  c = get_symbol_end ();
 
   type = 0;
-  if (strcmp (type_name, "function") == 0
-      || strcmp (type_name, "2") == 0
-      || strcmp (type_name, "STT_FUNC") == 0)
+  if (strcmp (typename, "function") == 0
+      || strcmp (typename, "STT_FUNC") == 0)
     type = BSF_FUNCTION;
-  else if (strcmp (type_name, "object") == 0
-	   || strcmp (type_name, "1") == 0
-	   || strcmp (type_name, "STT_OBJECT") == 0)
+  else if (strcmp (typename, "object") == 0
+	   || strcmp (typename, "STT_OBJECT") == 0)
     type = BSF_OBJECT;
-  else if (strcmp (type_name, "tls_object") == 0
-	   || strcmp (type_name, "6") == 0
-	   || strcmp (type_name, "STT_TLS") == 0)
-    type = BSF_OBJECT | BSF_THREAD_LOCAL;
-  else if (strcmp (type_name, "notype") == 0
-	   || strcmp (type_name, "0") == 0
-	   || strcmp (type_name, "STT_NOTYPE") == 0)
-    ;
-  else if (strcmp (type_name, "common") == 0
-	   || strcmp (type_name, "5") == 0
-	   || strcmp (type_name, "STT_COMMON") == 0)
-    {
-      type = BSF_OBJECT;
-
-      if (! S_IS_COMMON (sym))
-	{
-	  if (S_IS_VOLATILE (sym))
-	    {
-	      sym = symbol_clone (sym, 1);
-	      S_SET_SEGMENT (sym, bfd_com_section_ptr);
-	      S_SET_VALUE (sym, 0);
-	      S_SET_EXTERNAL (sym);
-	      symbol_set_frag (sym, &zero_address_frag);
-	      S_CLEAR_VOLATILE (sym);
-	    }
-	  else if (S_IS_DEFINED (sym) || symbol_equated_p (sym))
-	    as_bad (_("symbol '%s' is already defined"), S_GET_NAME (sym));
-	  else
-	    {
-	      /* FIXME: Is it safe to just change the section ?  */
-	      S_SET_SEGMENT (sym, bfd_com_section_ptr);
-	      S_SET_VALUE (sym, 0);
-	      S_SET_EXTERNAL (sym);
-	    }
-	}
-    }
-  else if (strcmp (type_name, "gnu_indirect_function") == 0
-	   || strcmp (type_name, "10") == 0
-	   || strcmp (type_name, "STT_GNU_IFUNC") == 0)
-    {
-      struct elf_backend_data *bed;
-
-      bed = (struct elf_backend_data *) get_elf_backend_data (stdoutput);
-      if (bed->elf_osabi == ELFOSABI_NONE)
-	bed->elf_osabi = ELFOSABI_GNU;
-      else if (bed->elf_osabi != ELFOSABI_GNU
-	       && bed->elf_osabi != ELFOSABI_FREEBSD)
-	as_bad (_("symbol type \"%s\" is supported only by GNU "
-		  "and FreeBSD targets"), type_name);
-      /* MIPS targets do not support IFUNCS.  */
-      else if (bed->target_id == MIPS_ELF_DATA)
-	as_bad (_("symbol type \"%s\" is not supported by "
-                    "MIPS targets"), type_name);
-      elf_tdata (stdoutput)->has_gnu_osabi |= elf_gnu_osabi_ifunc;
-      type = BSF_FUNCTION | BSF_GNU_INDIRECT_FUNCTION;
-    }
-  else if (strcmp (type_name, "gnu_unique_object") == 0)
-    {
-      struct elf_backend_data *bed;
-
-      bed = (struct elf_backend_data *) get_elf_backend_data (stdoutput);
-      if (bed->elf_osabi == ELFOSABI_NONE)
-	bed->elf_osabi = ELFOSABI_GNU;
-      else if (bed->elf_osabi != ELFOSABI_GNU)
-	as_bad (_("symbol type \"%s\" is supported only by GNU targets"),
-		type_name);
-      elf_tdata (stdoutput)->has_gnu_osabi |= elf_gnu_osabi_unique;
-      type = BSF_OBJECT | BSF_GNU_UNIQUE;
-    }
 #ifdef md_elf_symbol_type
-  else if ((type = md_elf_symbol_type (type_name, sym, elfsym)) != -1)
+  else if ((type = md_elf_symbol_type (typename, sym, elfsym)) != -1)
     ;
 #endif
   else
-    as_bad (_("unrecognized symbol type \"%s\""), type_name);
+    as_bad (_("unrecognized symbol type \"%s\""), typename);
 
   *input_line_pointer = c;
 
   if (*input_line_pointer == '"')
     ++input_line_pointer;
 
-#ifdef md_elf_symbol_type_change
-  if (!md_elf_symbol_type_change (sym, elfsym, type))
-#endif
-    {
-      flagword mask = BSF_FUNCTION | BSF_OBJECT;
-
-      if (type != BSF_FUNCTION)
-	mask |= BSF_GNU_INDIRECT_FUNCTION;
-      if (type != BSF_OBJECT)
-	{
-	  mask |= BSF_GNU_UNIQUE | BSF_THREAD_LOCAL;
-
-	  if (S_IS_COMMON (sym))
-	    {
-	      as_bad (_("cannot change type of common symbol '%s'"),
-		      S_GET_NAME (sym));
-	      mask = type = 0;
-	    }
-	}
-
-      /* Don't warn when changing to STT_NOTYPE.  */
-      if (type)
-	{
-	  flagword new = (elfsym->symbol.flags & ~mask) | type;
-
-	  if (new != (elfsym->symbol.flags | type))
-	    as_warn (_("symbol '%s' already has its type set"), S_GET_NAME (sym));
-	  elfsym->symbol.flags = new;
-	}
-      else
-	elfsym->symbol.flags &= ~mask;
-    }
+  elfsym->symbol.flags |= type;
 
   demand_empty_rest_of_line ();
 }
 
 static void
-obj_elf_ident (int ignore ATTRIBUTE_UNUSED)
+obj_elf_ident (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   static segT comment_section;
   segT old_section = now_seg;
@@ -2343,18 +1672,14 @@ obj_elf_ident (int ignore ATTRIBUTE_UNUSED)
     {
       char *p;
       comment_section = subseg_new (".comment", 0);
-      bfd_set_section_flags (comment_section, (SEC_READONLY | SEC_HAS_CONTENTS
-					       | SEC_MERGE | SEC_STRINGS));
-      comment_section->entsize = 1;
-#ifdef md_elf_section_change_hook
-      md_elf_section_change_hook ();
-#endif
+      bfd_set_section_flags (stdoutput, comment_section,
+			     SEC_READONLY | SEC_HAS_CONTENTS);
       p = frag_more (1);
       *p = 0;
     }
   else
     subseg_set (comment_section, 0);
-  stringer (8 + 1);
+  stringer (1);
   subseg_set (old_section, old_subsection);
 }
 
@@ -2363,25 +1688,28 @@ obj_elf_ident (int ignore ATTRIBUTE_UNUSED)
 /* The first entry in a .stabs section is special.  */
 
 void
-obj_elf_init_stab_section (segT seg)
+obj_elf_init_stab_section (seg)
+     segT seg;
 {
-  const char *file;
+  char *file;
   char *p;
   char *stabstr_name;
   unsigned int stroff;
 
   /* Force the section to align to a longword boundary.  Without this,
      UnixWare ar crashes.  */
-  bfd_set_section_alignment (seg, 2);
+  bfd_set_section_alignment (stdoutput, seg, 2);
 
   /* Make space for this first symbol.  */
   p = frag_more (12);
   /* Zero it out.  */
   memset (p, 0, 12);
-  file = as_where (NULL);
-  stabstr_name = concat (segment_name (seg), "str", (char *) NULL);
-  stroff = get_stab_string_offset (file, stabstr_name, TRUE);
-  know (stroff == 1 || (stroff == 0 && file[0] == '\0'));
+  as_where (&file, (unsigned int *) NULL);
+  stabstr_name = (char *) xmalloc (strlen (segment_name (seg)) + 4);
+  strcpy (stabstr_name, segment_name (seg));
+  strcat (stabstr_name, "str");
+  stroff = get_stab_string_offset (file, stabstr_name);
+  know (stroff == 1);
   md_number_to_chars (p, stroff, 4);
   seg_info (seg)->stabu.p = p;
 }
@@ -2391,7 +1719,10 @@ obj_elf_init_stab_section (segT seg)
 /* Fill in the counts in the first entry in a .stabs section.  */
 
 static void
-adjust_stab_sections (bfd *abfd, asection *sec, void *xxx ATTRIBUTE_UNUSED)
+adjust_stab_sections (abfd, sec, xxx)
+     bfd *abfd;
+     asection *sec;
+     PTR xxx ATTRIBUTE_UNUSED;
 {
   char *name;
   asection *strsec;
@@ -2403,20 +1734,21 @@ adjust_stab_sections (bfd *abfd, asection *sec, void *xxx ATTRIBUTE_UNUSED)
   if (!strcmp ("str", sec->name + strlen (sec->name) - 3))
     return;
 
-  name = concat (sec->name, "str", NULL);
+  name = (char *) alloca (strlen (sec->name) + 4);
+  strcpy (name, sec->name);
+  strcat (name, "str");
   strsec = bfd_get_section_by_name (abfd, name);
   if (strsec)
-    strsz = bfd_section_size (strsec);
+    strsz = bfd_section_size (abfd, strsec);
   else
     strsz = 0;
-  nsyms = bfd_section_size (sec) / 12 - 1;
+  nsyms = bfd_section_size (abfd, sec) / 12 - 1;
 
   p = seg_info (sec)->stabu.p;
-  gas_assert (p != 0);
+  assert (p != 0);
 
-  bfd_h_put_16 (abfd, nsyms, p + 6);
-  bfd_h_put_32 (abfd, strsz, p + 8);
-  free (name);
+  bfd_h_put_16 (abfd, (bfd_vma) nsyms, (bfd_byte *) p + 6);
+  bfd_h_put_32 (abfd, (bfd_vma) strsz, (bfd_byte *) p + 8);
 }
 
 #ifdef NEED_ECOFF_DEBUG
@@ -2427,45 +1759,48 @@ adjust_stab_sections (bfd *abfd, asection *sec, void *xxx ATTRIBUTE_UNUSED)
    this at the moment, so we do it ourselves.  We save the information
    in the symbol.  */
 
-#ifdef OBJ_MAYBE_ELF
-static
-#endif
 void
-elf_ecoff_set_ext (symbolS *sym, struct ecoff_extr *ext)
+elf_ecoff_set_ext (sym, ext)
+     symbolS *sym;
+     struct ecoff_extr *ext;
 {
-  symbol_get_bfdsym (sym)->udata.p = ext;
+  symbol_get_bfdsym (sym)->udata.p = (PTR) ext;
 }
 
 /* This function is called by bfd_ecoff_debug_externals.  It is
    supposed to *EXT to the external symbol information, and return
    whether the symbol should be used at all.  */
 
-static bfd_boolean
-elf_get_extr (asymbol *sym, EXTR *ext)
+static boolean
+elf_get_extr (sym, ext)
+     asymbol *sym;
+     EXTR *ext;
 {
   if (sym->udata.p == NULL)
-    return FALSE;
+    return false;
   *ext = *(EXTR *) sym->udata.p;
-  return TRUE;
+  return true;
 }
 
 /* This function is called by bfd_ecoff_debug_externals.  It has
    nothing to do for ELF.  */
 
+/*ARGSUSED*/
 static void
-elf_set_index (asymbol *sym ATTRIBUTE_UNUSED,
-	       bfd_size_type indx ATTRIBUTE_UNUSED)
+elf_set_index (sym, indx)
+     asymbol *sym ATTRIBUTE_UNUSED;
+     bfd_size_type indx ATTRIBUTE_UNUSED;
 {
 }
 
 #endif /* NEED_ECOFF_DEBUG */
 
 void
-elf_frob_symbol (symbolS *symp, int *puntp)
+elf_frob_symbol (symp, puntp)
+     symbolS *symp;
+     int *puntp;
 {
   struct elf_obj_sy *sy_obj;
-  expressionS *size;
-  struct elf_versioned_name_list *versioned_name;
 
 #ifdef NEED_ECOFF_DEBUG
   if (ECOFF_DEBUGGING)
@@ -2474,66 +1809,86 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 
   sy_obj = symbol_get_obj (symp);
 
-  size = sy_obj->size;
-  if (size != NULL)
+  if (sy_obj->size != NULL)
     {
-      if (resolve_expression (size)
-	  && size->X_op == O_constant)
-	S_SET_SIZE (symp, size->X_add_number);
-      else
+      switch (sy_obj->size->X_op)
 	{
-	  if (!flag_allow_nonconst_size)
-	    as_bad (_(".size expression for %s "
-		      "does not evaluate to a constant"), S_GET_NAME (symp));
-	  else
-	    as_warn (_(".size expression for %s "
-		       "does not evaluate to a constant"), S_GET_NAME (symp));
+	case O_subtract:
+	  S_SET_SIZE (symp,
+		      (S_GET_VALUE (sy_obj->size->X_add_symbol)
+		       + sy_obj->size->X_add_number
+		       - S_GET_VALUE (sy_obj->size->X_op_symbol)));
+	  break;
+	case O_constant:
+	  S_SET_SIZE (symp,
+		      (S_GET_VALUE (sy_obj->size->X_add_symbol)
+		       + sy_obj->size->X_add_number));
+	  break;
+	default:
+	  as_bad (_(".size expression too complicated to fix up"));
+	  break;
 	}
       free (sy_obj->size);
       sy_obj->size = NULL;
     }
 
-  versioned_name = sy_obj->versioned_name;
-  if (versioned_name)
+  if (sy_obj->versioned_name != NULL)
     {
-      /* This symbol was given a new name with the .symver directive.
-	 If this is an external reference, just rename the symbol to
-	 include the version string.  This will make the relocs be
-	 against the correct versioned symbol.  */
+      char *p;
 
-      /* We will have already reported an version error.  */
-      if (sy_obj->bad_version)
-	*puntp = TRUE;
-      /* elf_frob_file_before_adjust only allows one version symbol for
-	 renamed symbol.  */
-      else if (sy_obj->rename)
-	S_SET_NAME (symp, versioned_name->name);
-      else if (S_IS_COMMON (symp))
+      p = strchr (sy_obj->versioned_name, ELF_VER_CHR);
+      know (p != NULL);
+
+      /* This symbol was given a new name with the .symver directive.
+
+         If this is an external reference, just rename the symbol to
+         include the version string.  This will make the relocs be
+         against the correct versioned symbol.
+
+	 If this is a definition, add an alias.  FIXME: Using an alias
+	 will permit the debugging information to refer to the right
+	 symbol.  However, it's not clear whether it is the best
+	 approach.  */
+
+      if (! S_IS_DEFINED (symp))
 	{
-	  as_bad (_("`%s' can't be versioned to common symbol '%s'"),
-		  versioned_name->name, S_GET_NAME (symp));
-	  *puntp = TRUE;
+	  /* Verify that the name isn't using the @@ syntax--this is
+             reserved for definitions of the default version to link
+             against.  */
+	  if (p[1] == ELF_VER_CHR)
+	    {
+	      as_bad (_("invalid attempt to declare external version name as default in symbol `%s'"),
+		      sy_obj->versioned_name);
+	      *puntp = true;
+	    }
+	  S_SET_NAME (symp, sy_obj->versioned_name);
 	}
       else
 	{
-	  asymbol *bfdsym;
-	  elf_symbol_type *elfsym;
-
-	  /* This is a definition.  Add an alias for each version.
-	     FIXME: Using an alias will permit the debugging information
-	     to refer to the right symbol.  However, it's not clear
-	     whether it is the best approach.  */
-
-	  /* FIXME: Creating a new symbol here is risky.  We're
-	     in the final loop over the symbol table.  We can
-	     get away with it only because the symbol goes to
-	     the end of the list, where the loop will still see
-	     it.  It would probably be better to do this in
-	     obj_frob_file_before_adjust.  */
-	  for (; versioned_name != NULL;
-	       versioned_name = versioned_name->next)
+	  if (p [1] == ELF_VER_CHR && p [2] == ELF_VER_CHR)
 	    {
-	      symbolS *symp2 = symbol_find_or_make (versioned_name->name);
+	      size_t l;
+
+	      /* The @@@ syntax is a special case. It renames the
+		 symbol name to versioned_name with one `@' removed.  */
+	      l = strlen (&p[3]) + 1;
+	      memmove (&p [2], &p[3], l);
+	      S_SET_NAME (symp, sy_obj->versioned_name);
+	    }
+	  else
+	    {
+	      symbolS *symp2;
+
+	      /* FIXME: Creating a new symbol here is risky.  We're
+		 in the final loop over the symbol table.  We can
+		 get away with it only because the symbol goes to
+		 the end of the list, where the loop will still see
+		 it.  It would probably be better to do this in
+		 obj_frob_file_before_adjust.  */
+
+	      symp2 = symbol_find_or_make (sy_obj->versioned_name);
+
+	      /* Now we act as though we saw symp2 = sym.  */
 
 	      S_SET_SEGMENT (symp2, S_GET_SEGMENT (symp));
 
@@ -2556,25 +1911,6 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 	      if (S_IS_EXTERNAL (symp))
 		S_SET_EXTERNAL (symp2);
 	    }
-
-	  switch (symbol_get_obj (symp)->visibility)
-	    {
-	    case visibility_unchanged:
-	      break;
-	    case visibility_hidden:
-	      bfdsym = symbol_get_bfdsym (symp);
-	      elfsym = elf_symbol_from (bfd_asymbol_bfd (bfdsym),
-					bfdsym);
-	      elfsym->internal_elf_sym.st_other &= ~3;
-	      elfsym->internal_elf_sym.st_other |= STV_HIDDEN;
-	      break;
-	    case visibility_remove:
-	      symbol_remove (symp, &symbol_rootP, &symbol_lastP);
-	      break;
-	    case visibility_local:
-	      S_CLEAR_EXTERNAL (symp);
-	      break;
-	    }
 	}
     }
 
@@ -2585,56 +1921,72 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 	as_bad (_("symbol `%s' can not be both weak and common"),
 		S_GET_NAME (symp));
     }
+
+#ifdef TC_MIPS
+  /* The Irix 5 and 6 assemblers set the type of any common symbol and
+     any undefined non-function symbol to STT_OBJECT.  We try to be
+     compatible, since newer Irix 5 and 6 linkers care.  However, we
+     only set undefined symbols to be STT_OBJECT if we are on Irix,
+     because that is the only time gcc will generate the necessary
+     .global directives to mark functions.  */
+
+  if (S_IS_COMMON (symp))
+    symbol_get_bfdsym (symp)->flags |= BSF_OBJECT;
+
+  if (strstr (TARGET_OS, "irix") != NULL
+      && ! S_IS_DEFINED (symp)
+      && (symbol_get_bfdsym (symp)->flags & BSF_FUNCTION) == 0)
+    symbol_get_bfdsym (symp)->flags |= BSF_OBJECT;
+#endif
+
+#if 0 /* TC_PPC */
+  /* If TC_PPC is defined, we used to force the type of a symbol to be
+     BSF_OBJECT if it was otherwise unset.  This was required by some
+     version of VxWorks.  Thomas de Lellis <tdel@windriver.com> says
+     that this is no longer needed, so it is now commented out.  */
+  if ((symbol_get_bfdsym (symp)->flags
+       & (BSF_FUNCTION | BSF_FILE | BSF_SECTION_SYM)) == 0
+      && S_IS_DEFINED (symp))
+    symbol_get_bfdsym (symp)->flags |= BSF_OBJECT;
+#endif
 }
 
 struct group_list
 {
   asection **head;		/* Section lists.  */
+  unsigned int *elt_count;	/* Number of sections in each list.  */
   unsigned int num_group;	/* Number of lists.  */
-  struct hash_control *indexes; /* Maps group name to index in head array.  */
 };
-
-static struct group_list groups;
 
 /* Called via bfd_map_over_sections.  If SEC is a member of a group,
    add it to a list of sections belonging to the group.  INF is a
    pointer to a struct group_list, which is where we store the head of
-   each list.  If its link_to_symbol_name isn't NULL, set up its
-   linked-to section.  */
+   each list.  */
 
 static void
-build_additional_section_info (bfd *abfd ATTRIBUTE_UNUSED,
-				  asection *sec, void *inf)
+build_group_lists (abfd, sec, inf)
+     bfd *abfd ATTRIBUTE_UNUSED;
+     asection *sec;
+     PTR inf;
 {
   struct group_list *list = (struct group_list *) inf;
   const char *group_name = elf_group_name (sec);
   unsigned int i;
-  unsigned int *elem_idx;
-  unsigned int *idx_ptr;
-
-  if (sec->map_head.linked_to_symbol_name)
-    {
-      symbolS *linked_to_sym;
-      linked_to_sym = symbol_find (sec->map_head.linked_to_symbol_name);
-      if (!linked_to_sym || !S_IS_DEFINED (linked_to_sym))
-	as_bad (_("undefined linked-to symbol `%s' on section `%s'"),
-		sec->map_head.linked_to_symbol_name,
-		bfd_section_name (sec));
-      else
-	elf_linked_to_section (sec) = S_GET_SEGMENT (linked_to_sym);
-    }
 
   if (group_name == NULL)
     return;
 
   /* If this group already has a list, add the section to the head of
      the list.  */
-  elem_idx = (unsigned int *) hash_find (list->indexes, group_name);
-  if (elem_idx != NULL)
+  for (i = 0; i < list->num_group; i++)
     {
-      elf_next_in_group (sec) = list->head[*elem_idx];
-      list->head[*elem_idx] = sec;
-      return;
+      if (strcmp (group_name, elf_group_name (list->head[i])) == 0)
+	{
+	  elf_next_in_group (sec) = list->head[i];
+	  list->head[i] = sec;
+	  list->elt_count[i] += 1;
+	  return;
+	}
     }
 
   /* New group.  Make the arrays bigger in chunks to minimize calls to
@@ -2643,54 +1995,48 @@ build_additional_section_info (bfd *abfd ATTRIBUTE_UNUSED,
   if ((i & 127) == 0)
     {
       unsigned int newsize = i + 128;
-      list->head = XRESIZEVEC (asection *, list->head, newsize);
+      list->head = xrealloc (list->head, newsize * sizeof (*list->head));
+      list->elt_count = xrealloc (list->elt_count,
+				  newsize * sizeof (*list->elt_count));
     }
   list->head[i] = sec;
+  list->elt_count[i] = 1;
   list->num_group += 1;
-
-  /* Add index to hash.  */
-  idx_ptr = XNEW (unsigned int);
-  *idx_ptr = i;
-  hash_insert (list->indexes, group_name, idx_ptr);
 }
-
-static void free_section_idx (const char *key ATTRIBUTE_UNUSED, void *val)
-{
-  free ((unsigned int *) val);
-}
-
-/* Create symbols for group signature.  */
 
 void
-elf_adjust_symtab (void)
+elf_frob_file ()
 {
+  struct group_list list;
   unsigned int i;
 
+  bfd_map_over_sections (stdoutput, adjust_stab_sections, (PTR) 0);
+
   /* Go find section groups.  */
-  groups.num_group = 0;
-  groups.head = NULL;
-  groups.indexes = hash_new ();
-  bfd_map_over_sections (stdoutput, build_additional_section_info,
-			 &groups);
+  list.num_group = 0;
+  list.head = NULL;
+  list.elt_count = NULL;
+  bfd_map_over_sections (stdoutput, build_group_lists, (PTR) &list);
 
   /* Make the SHT_GROUP sections that describe each section group.  We
      can't set up the section contents here yet, because elf section
      indices have yet to be calculated.  elf.c:set_group_contents does
      the rest of the work.  */
- for (i = 0; i < groups.num_group; i++)
+  for (i = 0; i < list.num_group; i++)
     {
-      const char *group_name = elf_group_name (groups.head[i]);
+      const char *group_name = elf_group_name (list.head[i]);
       const char *sec_name;
       asection *s;
       flagword flags;
       struct symbol *sy;
+      int has_sym;
 
       flags = SEC_READONLY | SEC_HAS_CONTENTS | SEC_IN_MEMORY | SEC_GROUP;
-      for (s = groups.head[i]; s != NULL; s = elf_next_in_group (s))
-	if ((s->flags ^ flags) & SEC_LINK_ONCE)
+      for (s = list.head[i]; s != NULL; s = elf_next_in_group (s))
+	if (elf_linkonce_p (s) != ((flags & SEC_LINK_ONCE) != 0))
 	  {
 	    flags |= SEC_LINK_ONCE | SEC_LINK_DUPLICATES_DISCARD;
-	    if (s != groups.head[i])
+	    if (s != list.head[i])
 	      {
 		as_warn (_("assuming all members of group `%s' are COMDAT"),
 			 group_name);
@@ -2698,45 +2044,35 @@ elf_adjust_symtab (void)
 	      }
 	  }
 
-      sec_name = ".group";
+      sec_name = group_name;
+      sy = symbol_find_exact (group_name);
+      has_sym = 0;
+      if (sy != NULL
+	  && (sy == symbol_lastP
+	      || (sy->sy_next != NULL
+		  && sy->sy_next->sy_previous == sy)))
+	{
+	  has_sym = 1;
+	  sec_name = ".group";
+	}
       s = subseg_force_new (sec_name, 0);
       if (s == NULL
-	  || !bfd_set_section_flags (s, flags)
-	  || !bfd_set_section_alignment (s, 2))
+	  || !bfd_set_section_flags (stdoutput, s, flags)
+	  || !bfd_set_section_alignment (stdoutput, s, 2))
 	{
 	  as_fatal (_("can't create group: %s"),
 		    bfd_errmsg (bfd_get_error ()));
 	}
-      elf_section_type (s) = SHT_GROUP;
 
       /* Pass a pointer to the first section in this group.  */
-      elf_next_in_group (s) = groups.head[i];
-      elf_sec_group (groups.head[i]) = s;
-      /* Make sure that the signature symbol for the group has the
-	 name of the group.  */
-      sy = symbol_find_exact (group_name);
-      if (!sy || !symbol_on_chain (sy, symbol_rootP, symbol_lastP))
-	{
-	  /* Create the symbol now.  */
-	  sy = symbol_new (group_name, now_seg, (valueT) 0, frag_now);
-#ifdef TE_SOLARIS
-	  /* Before Solaris 11 build 154, Sun ld rejects local group
-	     signature symbols, so make them weak hidden instead.  */
-	  symbol_get_bfdsym (sy)->flags |= BSF_WEAK;
-	  S_SET_OTHER (sy, STV_HIDDEN);
-#else
-	  symbol_get_obj (sy)->local = 1;
-#endif
-	  symbol_table_insert (sy);
-	}
-      elf_group_id (s) = symbol_get_bfdsym (sy);
-    }
-}
+      elf_next_in_group (s) = list.head[i];
+      if (has_sym)
+	elf_group_id (s) = sy->bsym;
 
-void
-elf_frob_file (void)
-{
-  bfd_map_over_sections (stdoutput, adjust_stab_sections, NULL);
+      s->_raw_size = 4 * (list.elt_count[i] + 1);
+      s->contents = frag_more (s->_raw_size);
+      frag_now->fr_fix = frag_now_fix_octets ();
+    }
 
 #ifdef elf_tc_final_processing
   elf_tc_final_processing ();
@@ -2746,68 +2082,44 @@ elf_frob_file (void)
 /* It removes any unneeded versioned symbols from the symbol table.  */
 
 void
-elf_frob_file_before_adjust (void)
+elf_frob_file_before_adjust ()
 {
   if (symbol_rootP)
     {
       symbolS *symp;
 
       for (symp = symbol_rootP; symp; symp = symbol_next (symp))
-	{
-	  struct elf_obj_sy *sy_obj = symbol_get_obj (symp);
-	  int is_defined = !!S_IS_DEFINED (symp);
+	if (!S_IS_DEFINED (symp))
+	  {
+	    if (symbol_get_obj (symp)->versioned_name)
+	      {
+		char *p;
 
-	  if (sy_obj->versioned_name)
-	    {
-	      char *p = strchr (sy_obj->versioned_name->name,
-				ELF_VER_CHR);
+		/* The @@@ syntax is a special case. If the symbol is
+		   not defined, 2 `@'s will be removed from the
+		   versioned_name.  */
 
-	      if (sy_obj->rename)
-		{
-		  /* The @@@ syntax is a special case. If the symbol is
-		     not defined, 2 `@'s will be removed from the
-		     versioned_name. Otherwise, 1 `@' will be removed.   */
-		  size_t l = strlen (&p[3]) + 1;
-		  memmove (&p[1 + is_defined], &p[3], l);
-		}
+		p = strchr (symbol_get_obj (symp)->versioned_name,
+			    ELF_VER_CHR);
+		know (p != NULL);
+		if (p [1] == ELF_VER_CHR && p [2] == ELF_VER_CHR)
+		  {
+		    size_t l = strlen (&p[3]) + 1;
+		    memmove (&p [1], &p[3], l);
+		  }
+		if (symbol_used_p (symp) == 0
+		    && symbol_used_in_reloc_p (symp) == 0)
+		  symbol_remove (symp, &symbol_rootP, &symbol_lastP);
+	      }
 
-	      if (!is_defined)
-		{
-		  /* Verify that the name isn't using the @@ syntax--this
-		     is reserved for definitions of the default version
-		     to link against.  */
-		  if (!sy_obj->rename && p[1] == ELF_VER_CHR)
-		    {
-		      as_bad (_("invalid attempt to declare external "
-				"version name as default in symbol `%s'"),
-			      sy_obj->versioned_name->name);
-		      return;
-		    }
+	    /* If there was .weak foo, but foo was neither defined nor
+	       used anywhere, remove it.  */
 
-		  /* Only one version symbol is allowed for undefined
-		     symbol.  */
-		  if (sy_obj->versioned_name->next)
-		    {
-		      as_bad (_("multiple versions [`%s'|`%s'] for "
-				"symbol `%s'"),
-			      sy_obj->versioned_name->name,
-			      sy_obj->versioned_name->next->name,
-			      S_GET_NAME (symp));
-		      return;
-		    }
-
-		  sy_obj->rename = TRUE;
-		}
-	    }
-
-	  /* If there was .symver or .weak, but symbol was neither
-	     defined nor used anywhere, remove it.  */
-	  if (!is_defined
-	      && (sy_obj->versioned_name || S_IS_WEAK (symp))
-	      && symbol_used_p (symp) == 0
-	      && symbol_used_in_reloc_p (symp) == 0)
-	    symbol_remove (symp, &symbol_rootP, &symbol_lastP);
-	}
+	    else if (S_IS_WEAK (symp)
+		     && symbol_used_p (symp) == 0
+		     && symbol_used_in_reloc_p (symp) == 0)
+	      symbol_remove (symp, &symbol_rootP, &symbol_lastP);
+	  }
     }
 }
 
@@ -2817,33 +2129,8 @@ elf_frob_file_before_adjust (void)
    have generated the relocation section.  */
 
 void
-elf_frob_file_after_relocs (void)
+elf_frob_file_after_relocs ()
 {
-  unsigned int i;
-
-  /* Set SHT_GROUP section size.  */
-  for (i = 0; i < groups.num_group; i++)
-    {
-      asection *s, *head, *group;
-      bfd_size_type size;
-
-      head = groups.head[i];
-      size = 4;
-      for (s = head; s != NULL; s = elf_next_in_group (s))
-	size += (s->flags & SEC_RELOC) != 0 ? 8 : 4;
-
-      group = elf_sec_group (head);
-      subseg_set (group, 0);
-      bfd_set_section_size (group, size);
-      group->contents = (unsigned char *) frag_more (size);
-      frag_now->fr_fix = frag_now_fix_octets ();
-      frag_wane (frag_now);
-    }
-
-  /* Cleanup hash.  */
-  hash_traverse (groups.indexes, free_section_idx);
-  hash_die (groups.indexes);
-
 #ifdef NEED_ECOFF_DEBUG
   if (ECOFF_DEBUGGING)
     /* Generate the ECOFF debugging information.  */
@@ -2855,7 +2142,7 @@ elf_frob_file_after_relocs (void)
 
       debug_swap
 	= get_elf_backend_data (stdoutput)->elf_backend_ecoff_debug_swap;
-      know (debug_swap != NULL);
+      know (debug_swap != (const struct ecoff_debug_swap *) NULL);
       ecoff_build_debug (&debug.symbolic_header, &buf, debug_swap);
 
       /* Set up the pointers in debug.  */
@@ -2863,14 +2150,14 @@ elf_frob_file_after_relocs (void)
     debug.ptr = (type) (buf + debug.symbolic_header.offset)
 
       SET (line, cbLineOffset, unsigned char *);
-      SET (external_dnr, cbDnOffset, void *);
-      SET (external_pdr, cbPdOffset, void *);
-      SET (external_sym, cbSymOffset, void *);
-      SET (external_opt, cbOptOffset, void *);
+      SET (external_dnr, cbDnOffset, PTR);
+      SET (external_pdr, cbPdOffset, PTR);
+      SET (external_sym, cbSymOffset, PTR);
+      SET (external_opt, cbOptOffset, PTR);
       SET (external_aux, cbAuxOffset, union aux_ext *);
       SET (ss, cbSsOffset, char *);
-      SET (external_fdr, cbFdOffset, void *);
-      SET (external_rfd, cbRfdOffset, void *);
+      SET (external_fdr, cbFdOffset, PTR);
+      SET (external_rfd, cbRfdOffset, PTR);
       /* ssext and external_ext are set up just below.  */
 
 #undef SET
@@ -2878,32 +2165,32 @@ elf_frob_file_after_relocs (void)
       /* Set up the external symbols.  */
       debug.ssext = debug.ssext_end = NULL;
       debug.external_ext = debug.external_ext_end = NULL;
-      if (! bfd_ecoff_debug_externals (stdoutput, &debug, debug_swap, TRUE,
+      if (! bfd_ecoff_debug_externals (stdoutput, &debug, debug_swap, true,
 				       elf_get_extr, elf_set_index))
 	as_fatal (_("failed to set up debugging information: %s"),
 		  bfd_errmsg (bfd_get_error ()));
 
       sec = bfd_get_section_by_name (stdoutput, ".mdebug");
-      gas_assert (sec != NULL);
+      assert (sec != NULL);
 
-      know (!stdoutput->output_has_begun);
+      know (stdoutput->output_has_begun == false);
 
       /* We set the size of the section, call bfd_set_section_contents
 	 to force the ELF backend to allocate a file position, and then
 	 write out the data.  FIXME: Is this really the best way to do
 	 this?  */
-      bfd_set_section_size (sec, bfd_ecoff_debug_size (stdoutput, &debug,
-						       debug_swap));
+      sec->_raw_size = bfd_ecoff_debug_size (stdoutput, &debug, debug_swap);
 
       /* Pass BUF to bfd_set_section_contents because this will
-	 eventually become a call to fwrite, and ISO C prohibits
-	 passing a NULL pointer to a stdio function even if the
-	 pointer will not be used.  */
-      if (! bfd_set_section_contents (stdoutput, sec, buf, 0, 0))
+         eventually become a call to fwrite, and ISO C prohibits
+         passing a NULL pointer to a stdio function even if the
+         pointer will not be used.  */
+      if (! bfd_set_section_contents (stdoutput, sec, (PTR) buf,
+				      (file_ptr) 0, (bfd_size_type) 0))
 	as_fatal (_("can't start writing .mdebug section: %s"),
 		  bfd_errmsg (bfd_get_error ()));
 
-      know (stdoutput->output_has_begun);
+      know (stdoutput->output_has_begun == true);
       know (sec->filepos != 0);
 
       if (! bfd_ecoff_write_debug (stdoutput, &debug, debug_swap,
@@ -2914,31 +2201,105 @@ elf_frob_file_after_relocs (void)
 #endif /* NEED_ECOFF_DEBUG */
 }
 
-static void
-elf_generate_asm_lineno (void)
+#ifdef SCO_ELF
+
+/* Heavily plagarized from obj_elf_version.  The idea is to emit the
+   SCO specific identifier in the .notes section to satisfy the SCO
+   linker.
+
+   This looks more complicated than it really is.  As opposed to the
+   "obvious" solution, this should handle the cross dev cases
+   correctly.  (i.e, hosting on a 64 bit big endian processor, but
+   generating SCO Elf code) Efficiency isn't a concern, as there
+   should be exactly one of these sections per object module.
+
+   SCO OpenServer 5 identifies it's ELF modules with a standard ELF
+   .note section.
+
+   int_32 namesz  = 4 ;  Name size
+   int_32 descsz  = 12 ; Descriptive information
+   int_32 type    = 1 ;
+   char   name[4] = "SCO" ; Originator name ALWAYS SCO + NULL
+   int_32 version = (major ver # << 16)  | version of tools ;
+   int_32 source  = (tool_id << 16 ) | 1 ;
+   int_32 info    = 0 ;    These are set by the SCO tools, but we
+                           don't know enough about the source
+			   environment to set them.  SCO ld currently
+			   ignores them, and recommends we set them
+			   to zero.  */
+
+#define SCO_MAJOR_VERSION 0x1
+#define SCO_MINOR_VERSION 0x1
+
+void
+sco_id ()
 {
-#ifdef NEED_ECOFF_DEBUG
-  if (ECOFF_DEBUGGING)
-    ecoff_generate_asm_lineno ();
-#endif
+
+  char *name;
+  unsigned int c;
+  char ch;
+  char *p;
+  asection *seg = now_seg;
+  subsegT subseg = now_subseg;
+  Elf_Internal_Note i_note;
+  Elf_External_Note e_note;
+  asection *note_secp = (asection *) NULL;
+  int i, len;
+
+  /* create the .note section */
+
+  note_secp = subseg_new (".note", 0);
+  bfd_set_section_flags (stdoutput,
+			 note_secp,
+			 SEC_HAS_CONTENTS | SEC_READONLY);
+
+  /* process the version string */
+
+  i_note.namesz = 4;
+  i_note.descsz = 12;		/* 12 descriptive bytes */
+  i_note.type = NT_VERSION;	/* Contains a version string */
+
+  p = frag_more (sizeof (i_note.namesz));
+  md_number_to_chars (p, (valueT) i_note.namesz, 4);
+
+  p = frag_more (sizeof (i_note.descsz));
+  md_number_to_chars (p, (valueT) i_note.descsz, 4);
+
+  p = frag_more (sizeof (i_note.type));
+  md_number_to_chars (p, (valueT) i_note.type, 4);
+
+  p = frag_more (4);
+  strcpy (p, "SCO");
+
+  /* Note: this is the version number of the ELF we're representing */
+  p = frag_more (4);
+  md_number_to_chars (p, (SCO_MAJOR_VERSION << 16) | (SCO_MINOR_VERSION), 4);
+
+  /* Here, we pick a magic number for ourselves (yes, I "registered"
+     it with SCO.  The bottom bit shows that we are compat with the
+     SCO ABI.  */
+  p = frag_more (4);
+  md_number_to_chars (p, 0x4c520000 | 0x0001, 4);
+
+  /* If we knew (or cared) what the source language options were, we'd
+     fill them in here.  SCO has given us permission to ignore these
+     and just set them to zero.  */
+  p = frag_more (4);
+  md_number_to_chars (p, 0x0000, 4);
+
+  frag_align (2, 0, 0);
+
+  /* We probably can't restore the current segment, for there likely
+     isn't one yet...  */
+  if (seg && subseg)
+    subseg_set (seg, subseg);
+
 }
 
-static void
-elf_process_stab (segT sec ATTRIBUTE_UNUSED,
-		  int what ATTRIBUTE_UNUSED,
-		  const char *string ATTRIBUTE_UNUSED,
-		  int type ATTRIBUTE_UNUSED,
-		  int other ATTRIBUTE_UNUSED,
-		  int desc ATTRIBUTE_UNUSED)
-{
-#ifdef NEED_ECOFF_DEBUG
-  if (ECOFF_DEBUGGING)
-    ecoff_stab (sec, what, string, type, other, desc);
-#endif
-}
+#endif /* SCO_ELF */
 
 static int
-elf_separate_stab_sections (void)
+elf_separate_stab_sections ()
 {
 #ifdef NEED_ECOFF_DEBUG
   return (!ECOFF_DEBUGGING);
@@ -2948,7 +2309,8 @@ elf_separate_stab_sections (void)
 }
 
 static void
-elf_init_stab_section (segT seg)
+elf_init_stab_section (seg)
+     segT seg;
 {
 #ifdef NEED_ECOFF_DEBUG
   if (!ECOFF_DEBUGGING)
@@ -2966,7 +2328,6 @@ const struct format_ops elf_format_ops =
   elf_frob_symbol,
   elf_frob_file,
   elf_frob_file_before_adjust,
-  0,	/* obj_frob_file_before_fix */
   elf_frob_file_after_relocs,
   elf_s_get_size, elf_s_set_size,
   elf_s_get_align, elf_s_set_align,
@@ -2977,8 +2338,13 @@ const struct format_ops elf_format_ops =
   0,	/* s_get_type */
   0,	/* s_set_type */
   elf_copy_symbol_attributes,
-  elf_generate_asm_lineno,
-  elf_process_stab,
+#ifdef NEED_ECOFF_DEBUG
+  ecoff_generate_asm_lineno,
+  ecoff_stab,
+#else
+  0,	/* generate_asm_lineno */
+  0,	/* process_stab */
+#endif
   elf_separate_stab_sections,
   elf_init_stab_section,
   elf_sec_sym_ok_for_reloc,
@@ -2989,7 +2355,5 @@ const struct format_ops elf_format_ops =
   0,	/* ecoff_set_ext */
 #endif
   elf_obj_read_begin_hook,
-  elf_obj_symbol_new_hook,
-  0,
-  elf_adjust_symtab
+  elf_obj_symbol_new_hook
 };

@@ -1,24 +1,22 @@
 /*  arminit.c -- ARMulator initialization:  ARM6 Instruction Emulator.
     Copyright (C) 1994 Advanced RISC Machines Ltd.
-
+ 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+ 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+ 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>. */
-
-#include <string.h>
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 
 #include "armdefs.h"
 #include "armemu.h"
-#include "dbg_rdi.h"
 
 /***************************************************************************\
 *                 Definitions for the emulator architecture                 *
@@ -39,10 +37,6 @@ unsigned ARMul_MultTable[32] =
 };
 ARMword ARMul_ImmedTable[4096];	/* immediate DP LHS values */
 char ARMul_BitList[256];	/* number of bits in a byte table */
-
-/* The PC pipeline value depends on whether ARM
-   or Thumb instructions are being executed.  */
-ARMword isize;
 
 /***************************************************************************\
 *         Call this routine once to set up the emulator's tables.           *
@@ -133,8 +127,6 @@ ARMul_NewState (void)
   state->is_v5 = LOW;
   state->is_v5e = LOW;
   state->is_XScale = LOW;
-  state->is_iWMMXt = LOW;
-  state->is_v6 = LOW;
 
   ARMul_Reset (state);
 
@@ -165,13 +157,6 @@ ARMul_SelectProcessor (ARMul_State * state, unsigned properties)
   state->is_v5 = (properties & ARM_v5_Prop) ? HIGH : LOW;
   state->is_v5e = (properties & ARM_v5e_Prop) ? HIGH : LOW;
   state->is_XScale = (properties & ARM_XScale_Prop) ? HIGH : LOW;
-  state->is_iWMMXt = (properties & ARM_iWMMXt_Prop) ? HIGH : LOW;
-  state->is_ep9312 = (properties & ARM_ep9312_Prop) ? HIGH : LOW;
-  state->is_v6 = (properties & ARM_v6_Prop) ? HIGH : LOW;
-
-  /* Only initialse the coprocessor support once we
-     know what kind of chip we are dealing with.  */
-  ARMul_CoProInit (state);
 }
 
 /***************************************************************************\
@@ -202,6 +187,7 @@ ARMul_Reset (ARMul_State * state)
   FLUSHPIPE;
 
   state->EndCondition = 0;
+  state->ErrorCode = 0;
 
   state->Exception = FALSE;
   state->NresetSig = HIGH;
@@ -283,6 +269,9 @@ ARMul_Abort (ARMul_State * state, ARMword vector)
 
   state->Aborted = FALSE;
 
+  if (ARMul_OSException (state, vector, ARMul_GetPC (state)))
+    return;
+
   if (state->prog32Sig)
     if (ARMul_MODE26BIT)
       temp = R15PC;
@@ -329,24 +318,4 @@ ARMul_Abort (ARMul_State * state, ARMword vector)
     ARMul_SetR15 (state, vector);
   else
     ARMul_SetR15 (state, R15CCINTMODE | vector);
-
-  if (ARMul_ReadWord (state, ARMul_GetPC (state)) == 0)
-    {
-      /* No vector has been installed.  Rather than simulating whatever
-	 random bits might happen to be at address 0x20 onwards we elect
-	 to stop.  */
-      switch (vector)
-	{
-	case ARMul_ResetV: state->EndCondition = RDIError_Reset; break;
-	case ARMul_UndefinedInstrV: state->EndCondition = RDIError_UndefinedInstruction; break;
-	case ARMul_SWIV: state->EndCondition = RDIError_SoftwareInterrupt; break;
-	case ARMul_PrefetchAbortV: state->EndCondition = RDIError_PrefetchAbort; break;
-	case ARMul_DataAbortV: state->EndCondition = RDIError_DataAbort; break;
-	case ARMul_AddrExceptnV: state->EndCondition = RDIError_AddressException; break;
-	case ARMul_IRQV: state->EndCondition = RDIError_IRQ; break;
-	case ARMul_FIQV: state->EndCondition = RDIError_FIQ; break;
-	default: break;
-	}
-      state->Emulate = FALSE;
-    }
 }

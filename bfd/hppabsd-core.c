@@ -1,11 +1,12 @@
 /* BFD back-end for HPPA BSD core files.
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright 1993, 1994, 1995, 1998, 1999, 2001, 2002
+   Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,8 +16,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
    Written by the Center for Software Science at the University of Utah
    and by Cygnus Support.
@@ -33,8 +33,8 @@
    I would not expect this to be of use to any other host/target, but
    you never know.  */
 
-#include "sysdep.h"
 #include "bfd.h"
+#include "sysdep.h"
 #include "libbfd.h"
 
 #if defined (HOST_HPPABSD)
@@ -48,50 +48,60 @@
 #include <sys/user.h>		/* After a.out.h  */
 #include <sys/file.h>
 
-#define hppabsd_core_core_file_matches_executable_p generic_core_file_matches_executable_p
-#define hppabsd_core_core_file_pid _bfd_nocore_core_file_pid
+static asection *make_bfd_asection PARAMS ((bfd *, const char *,
+					    flagword, bfd_size_type,
+					    file_ptr, unsigned int));
+static const bfd_target *hppabsd_core_core_file_p PARAMS ((bfd *));
+static char *hppabsd_core_core_file_failing_command PARAMS ((bfd *));
+static int hppabsd_core_core_file_failing_signal PARAMS ((bfd *));
+static boolean hppabsd_core_core_file_matches_executable_p
+  PARAMS ((bfd *, bfd *));
+static void swap_abort PARAMS ((void));
 
 /* These are stored in the bfd's tdata.  */
 
 struct hppabsd_core_struct
-{
-  int sig;
-  char cmd[MAXCOMLEN + 1];
-  asection *data_section;
-  asection *stack_section;
-  asection *reg_section;
-};
+  {
+    int sig;
+    char cmd[MAXCOMLEN + 1];
+    asection *data_section;
+    asection *stack_section;
+    asection *reg_section;
+  };
 
 #define core_hdr(bfd) ((bfd)->tdata.hppabsd_core_data)
-#define core_signal(bfd)   (core_hdr(bfd)->sig)
-#define core_command(bfd)  (core_hdr(bfd)->cmd)
-#define core_datasec(bfd)  (core_hdr(bfd)->data_section)
+#define core_signal(bfd) (core_hdr(bfd)->sig)
+#define core_command(bfd) (core_hdr(bfd)->cmd)
+#define core_datasec(bfd) (core_hdr(bfd)->data_section)
 #define core_stacksec(bfd) (core_hdr(bfd)->stack_section)
-#define core_regsec(bfd)   (core_hdr(bfd)->reg_section)
+#define core_regsec(bfd) (core_hdr(bfd)->reg_section)
 
 static asection *
-make_bfd_asection (bfd *abfd,
-		   const char *name,
-		   flagword flags,
-		   bfd_size_type size,
-		   file_ptr offset,
-		   unsigned int alignment_power)
+make_bfd_asection (abfd, name, flags, _raw_size, offset, alignment_power)
+     bfd *abfd;
+     const char *name;
+     flagword flags;
+     bfd_size_type _raw_size;
+     file_ptr offset;
+     unsigned int alignment_power;
 {
   asection *asect;
 
-  asect = bfd_make_section_with_flags (abfd, name, flags);
+  asect = bfd_make_section (abfd, name);
   if (!asect)
     return NULL;
 
-  asect->size = size;
+  asect->flags = flags;
+  asect->_raw_size = _raw_size;
   asect->filepos = offset;
   asect->alignment_power = alignment_power;
 
   return asect;
 }
 
-static bfd_cleanup
-hppabsd_core_core_file_p (bfd *abfd)
+static const bfd_target *
+hppabsd_core_core_file_p (abfd)
+     bfd *abfd;
 {
   int val;
   struct user u;
@@ -123,11 +133,13 @@ hppabsd_core_core_file_p (bfd *abfd)
   /* Sanity checks.  Make sure the size of the core file matches the
      the size computed from information within the core itself.  */
   {
+    FILE *stream = bfd_cache_lookup (abfd);
     struct stat statbuf;
-
-    if (bfd_stat (abfd, &statbuf) < 0)
-      return NULL;
-
+    if (stream == NULL || fstat (fileno (stream), &statbuf) < 0)
+      {
+	bfd_set_error (bfd_error_system_call);
+	return NULL;
+      }
     if (NBPG * (UPAGES + u.u_dsize + u.u_ssize) > statbuf.st_size)
       {
 	bfd_set_error (bfd_error_file_truncated);
@@ -181,7 +193,7 @@ hppabsd_core_core_file_p (bfd *abfd)
 
   strncpy (core_command (abfd), u.u_comm, MAXCOMLEN + 1);
   core_signal (abfd) = u.u_code;
-  return _bfd_no_cleanup;
+  return abfd->xvec;
 
  fail:
   bfd_release (abfd, abfd->tdata.any);
@@ -191,33 +203,43 @@ hppabsd_core_core_file_p (bfd *abfd)
 }
 
 static char *
-hppabsd_core_core_file_failing_command (bfd *abfd)
+hppabsd_core_core_file_failing_command (abfd)
+     bfd *abfd;
 {
   return core_command (abfd);
 }
 
+/* ARGSUSED */
 static int
-hppabsd_core_core_file_failing_signal (bfd *abfd)
+hppabsd_core_core_file_failing_signal (abfd)
+     bfd *abfd;
 {
   return core_signal (abfd);
+}
+
+/* ARGSUSED */
+static boolean
+hppabsd_core_core_file_matches_executable_p (core_bfd, exec_bfd)
+     bfd *core_bfd, *exec_bfd;
+{
+  /* There's no way to know this...  */
+  return true;
 }
 
 /* If somebody calls any byte-swapping routines, shoot them.  */
 static void
-swap_abort (void)
+swap_abort ()
 {
   /* This way doesn't require any declaration for ANSI to fuck up.  */
   abort ();
 }
 
-#define	NO_GET ((bfd_vma (*) (const void *)) swap_abort)
-#define	NO_PUT ((void (*) (bfd_vma, void *)) swap_abort)
-#define	NO_GETS ((bfd_signed_vma (*) (const void *)) swap_abort)
-#define	NO_GET64 ((bfd_uint64_t (*) (const void *)) swap_abort)
-#define	NO_PUT64 ((void (*) (bfd_uint64_t, void *)) swap_abort)
-#define	NO_GETS64 ((bfd_int64_t (*) (const void *)) swap_abort)
+#define	NO_GET	((bfd_vma (*) PARAMS ((   const bfd_byte *))) swap_abort )
+#define	NO_PUT	((void    (*) PARAMS ((bfd_vma, bfd_byte *))) swap_abort )
+#define	NO_SIGNED_GET \
+  ((bfd_signed_vma (*) PARAMS ((const bfd_byte *))) swap_abort )
 
-const bfd_target core_hppabsd_vec =
+const bfd_target hppabsd_core_vec =
   {
     "hppabsd-core",
     bfd_target_unknown_flavour,
@@ -227,33 +249,29 @@ const bfd_target core_hppabsd_vec =
      HAS_LINENO | HAS_DEBUG |
      HAS_SYMS | HAS_LOCALS | WP_TEXT | D_PAGED),
     (SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD | SEC_RELOC), /* section flags */
-    0,							   /* symbol prefix */
+    0,			                                   /* symbol prefix */
     ' ',						   /* ar_pad_char */
     16,							   /* ar_max_namelen */
-    NO_GET64, NO_GETS64, NO_PUT64,	/* 64 bit data */
-    NO_GET, NO_GETS, NO_PUT,		/* 32 bit data */
-    NO_GET, NO_GETS, NO_PUT,		/* 16 bit data */
-    NO_GET64, NO_GETS64, NO_PUT64,	/* 64 bit hdrs */
-    NO_GET, NO_GETS, NO_PUT,		/* 32 bit hdrs */
-    NO_GET, NO_GETS, NO_PUT,		/* 16 bit hdrs */
+    NO_GET, NO_SIGNED_GET, NO_PUT,	/* 64 bit data */
+    NO_GET, NO_SIGNED_GET, NO_PUT,	/* 32 bit data */
+    NO_GET, NO_SIGNED_GET, NO_PUT,	/* 16 bit data */
+    NO_GET, NO_SIGNED_GET, NO_PUT,	/* 64 bit hdrs */
+    NO_GET, NO_SIGNED_GET, NO_PUT,	/* 32 bit hdrs */
+    NO_GET, NO_SIGNED_GET, NO_PUT,	/* 16 bit hdrs */
 
     {				/* bfd_check_format */
-      _bfd_dummy_target,		/* unknown format */
-      _bfd_dummy_target,		/* object file */
-      _bfd_dummy_target,		/* archive */
-      hppabsd_core_core_file_p		/* a core file */
+     _bfd_dummy_target,		/* unknown format */
+     _bfd_dummy_target,		/* object file */
+     _bfd_dummy_target,		/* archive */
+     hppabsd_core_core_file_p	/* a core file */
     },
     {				/* bfd_set_format */
-      _bfd_bool_bfd_false_error,
-      _bfd_bool_bfd_false_error,
-      _bfd_bool_bfd_false_error,
-      _bfd_bool_bfd_false_error
+     bfd_false, bfd_false,
+     bfd_false, bfd_false
     },
     {				/* bfd_write_contents */
-      _bfd_bool_bfd_false_error,
-      _bfd_bool_bfd_false_error,
-      _bfd_bool_bfd_false_error,
-      _bfd_bool_bfd_false_error
+     bfd_false, bfd_false,
+     bfd_false, bfd_false
     },
 
     BFD_JUMP_TABLE_GENERIC (_bfd_generic),
@@ -268,6 +286,6 @@ const bfd_target core_hppabsd_vec =
 
     NULL,
 
-    NULL			/* backend_data */
-  };
+    (PTR) 0			/* backend_data */
+};
 #endif

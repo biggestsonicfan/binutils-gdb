@@ -1,28 +1,39 @@
 /* collection of junk waiting time to sort out
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright (C) 2000 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
 This file is part of the GNU Simulators.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef SH64_SIM_H
 #define SH64_SIM_H
 
+#define GETTWI GETTSI
+#define SETTWI SETTSI
+
+
 enum {
   ISM_COMPACT, ISM_MEDIA
 };
+
+/* Hardware/device support.  */
+extern device sh5_devices;
+
+/* FIXME: Temporary, until device support ready.  */
+struct _device { int foo; };
 
 extern IDESC * sh64_idesc_media;
 extern IDESC * sh64_idesc_compact;
@@ -31,7 +42,6 @@ extern IDESC * sh64_idesc_compact;
 
 BI sh64_endian (SIM_CPU *);
 VOID sh64_break (SIM_CPU *, PCADDR);
-SI sh64_movua (SIM_CPU *, PCADDR, SI);
 VOID sh64_trapa (SIM_CPU *, DI, PCADDR);
 VOID sh64_compact_trapa (SIM_CPU *, UQI, PCADDR);
 
@@ -64,12 +74,7 @@ DF sh64_ftrcdq (SIM_CPU *, DF);
 SF sh64_ftrcsl (SIM_CPU *, SF);
 DF sh64_ftrcsq (SIM_CPU *, SF);
 VOID sh64_ftrvs (SIM_CPU *, unsigned, unsigned, unsigned);
-VOID sh64_fipr (SIM_CPU *cpu, unsigned m, unsigned n);
-SF sh64_fiprs (SIM_CPU *cpu, unsigned g, unsigned h);
-VOID sh64_fldp (SIM_CPU *cpu, PCADDR pc, DI rm, DI rn, unsigned f);
-VOID sh64_fstp (SIM_CPU *cpu, PCADDR pc, DI rm, DI rn, unsigned f);
-VOID sh64_ftrv (SIM_CPU *cpu, UINT ignored);
-VOID sh64_pref (SIM_CPU *cpu, SI addr);
+
 BI sh64_fcmpeqs (SIM_CPU *, SF, SF);
 BI sh64_fcmpeqd (SIM_CPU *, DF, DF);
 BI sh64_fcmpges (SIM_CPU *, SF, SF);

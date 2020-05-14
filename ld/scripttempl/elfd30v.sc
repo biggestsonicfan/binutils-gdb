@@ -1,10 +1,5 @@
-# Copyright (C) 2014-2020 Free Software Foundation, Inc.
-#
-# Copying and distribution of this file, with or without modification,
-# are permitted in any medium without royalty provided the copyright
-# notice and this notice are preserved.
 
-CTOR=".ctors ${CONSTRUCTING-0} :
+CTOR=".ctors ${CONSTRUCTING-0} : 
   {
     ${CONSTRUCTING+ __CTOR_LIST__ = .; }
     /* gcc uses crtbegin.o to find the start of
@@ -18,14 +13,13 @@ CTOR=".ctors ${CONSTRUCTING-0} :
        is in.  */
 
     KEEP (*crtbegin.o(.ctors))
-    KEEP (*crtbegin?.o(.ctors))
 
     /* We don't want to include the .ctor section from
-       the crtend.o file until after the sorted ctors.
+       from the crtend.o file until after the sorted ctors.
        The .ctor section from the crtend file contains the
        end of ctors marker and it must be last */
 
-    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))
     KEEP (*(SORT(.ctors.*)))
     KEEP (*(.ctors))
     ${CONSTRUCTING+ __CTOR_END__ = .; }
@@ -35,26 +29,16 @@ DTOR="  .dtors	${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+ __DTOR_LIST__ = .; }
     KEEP (*crtbegin.o(.dtors))
-    KEEP (*crtbegin?.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
     ${CONSTRUCTING+ __DTOR_END__ = .; }
   } ${RELOCATING+ > ${DATA_MEMORY}}"
 
 cat <<EOF
-/* Copyright (C) 2014-2020 Free Software Foundation, Inc.
-
-   Copying and distribution of this script, with or without modification,
-   are permitted in any medium without royalty provided the copyright
-   notice and this notice are preserved.  */
-
 OUTPUT_FORMAT("${OUTPUT_FORMAT}")
 OUTPUT_ARCH(${ARCH})
 
-EOF
-
-test -n "${RELOCATING}" && cat <<EOF
 MEMORY
 {
   text ${TEXT_DEF_SECTION} : ORIGIN = ${TEXT_START_ADDR}, LENGTH = ${TEXT_SIZE}
@@ -63,9 +47,6 @@ MEMORY
   eit			   : ORIGIN = ${EIT_START_ADDR},  LENGTH = ${EIT_SIZE}
 }
 
-EOF
-
-cat <<EOF
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */
@@ -77,46 +58,46 @@ SECTIONS
   .gnu.version_d	${RELOCATING-0} : { *(.gnu.version_d) }
   .gnu.version_r	${RELOCATING-0} : { *(.gnu.version_r) }
 
-  .rel.text		${RELOCATING-0} : { *(.rel.text${RELOCATING+ .rel.gnu.linkonce.t*}) }
-  .rela.text		${RELOCATING-0} : { *(.rela.text${RELOCATING+ .rela.gnu.linkonce.t*}) }
-  .rel.data		${RELOCATING-0} : { *(.rel.data${RELOCATING+ .rel.gnu.linkonce.d*}) }
-  .rela.data		${RELOCATING-0} : { *(.rela.data${RELOCATING+ .rela.gnu.linkonce.d*}) }
-  .rel.rodata		${RELOCATING-0} : { *(.rel.rodata${RELOCATING+ .rel.gnu.linkonce.r*}) }
-  .rela.rodata		${RELOCATING-0} : { *(.rela.rodata${RELOCATING+ .rela.gnu.linkonce.r*}) }
-  .rel.stext		${RELOCATING-0} : { *(.rel.stest) }
+  .rela.text		${RELOCATING-0} : { *(.rela.text) *(.rela.gnu.linkonce.t*) }
+  .rela.data		${RELOCATING-0} : { *(.rela.data) *(.rela.gnu.linkonce.d*) }
+  .rela.rodata		${RELOCATING-0} : { *(.rela.rodata) *(.rela.gnu.linkonce.r*) }
   .rela.stext		${RELOCATING-0} : { *(.rela.stest) }
-  .rel.etext		${RELOCATING-0} : { *(.rel.etest) }
   .rela.etext		${RELOCATING-0} : { *(.rela.etest) }
-  .rel.sdata		${RELOCATING-0} : { *(.rel.sdata) }
   .rela.sdata		${RELOCATING-0} : { *(.rela.sdata) }
-  .rel.edata		${RELOCATING-0} : { *(.rel.edata) }
   .rela.edata		${RELOCATING-0} : { *(.rela.edata) }
-  .rel.eit_v		${RELOCATING-0} : { *(.rel.eit_v) }
   .rela.eit_v		${RELOCATING-0} : { *(.rela.eit_v) }
-  .rel.sbss		${RELOCATING-0} : { *(.rel.sbss) }
   .rela.sbss		${RELOCATING-0} : { *(.rela.sbss) }
-  .rel.ebss		${RELOCATING-0} : { *(.rel.ebss) }
   .rela.ebss		${RELOCATING-0} : { *(.rela.ebss) }
-  .rel.srodata		${RELOCATING-0} : { *(.rel.srodata) }
   .rela.srodata		${RELOCATING-0} : { *(.rela.srodata) }
-  .rel.erodata		${RELOCATING-0} : { *(.rel.erodata) }
   .rela.erodata		${RELOCATING-0} : { *(.rela.erodata) }
-  .rel.got		${RELOCATING-0} : { *(.rel.got) }
   .rela.got		${RELOCATING-0} : { *(.rela.got) }
-  .rel.ctors		${RELOCATING-0} : { *(.rel.ctors) }
   .rela.ctors		${RELOCATING-0} : { *(.rela.ctors) }
-  .rel.dtors		${RELOCATING-0} : { *(.rel.dtors) }
   .rela.dtors		${RELOCATING-0} : { *(.rela.dtors) }
-  .rel.init		${RELOCATING-0} : { *(.rel.init) }
   .rela.init		${RELOCATING-0} : { *(.rela.init) }
-  .rel.fini		${RELOCATING-0} : { *(.rel.fini) }
   .rela.fini		${RELOCATING-0} : { *(.rela.fini) }
-  .rel.bss		${RELOCATING-0} : { *(.rel.bss) }
   .rela.bss		${RELOCATING-0} : { *(.rela.bss) }
-  .rel.plt		${RELOCATING-0} : { *(.rel.plt) }
   .rela.plt		${RELOCATING-0} : { *(.rela.plt) }
 
-  .init			${RELOCATING-0} : { KEEP (*(SORT_NONE(.init))) } =${NOP-0}
+  .rel.data		${RELOCATING-0} : { *(.rel.data) *(.rel.gnu.linkonce.d*) }
+  .rel.rodata		${RELOCATING-0} : { *(.rel.rodata) *(.rel.gnu.linkonce.r*) }
+  .rel.stext		${RELOCATING-0} : { *(.rel.stest) }
+  .rel.etext		${RELOCATING-0} : { *(.rel.etest) }
+  .rel.sdata		${RELOCATING-0} : { *(.rel.sdata) }
+  .rel.edata		${RELOCATING-0} : { *(.rel.edata) }
+  .rel.sbss		${RELOCATING-0} : { *(.rel.sbss) }
+  .rel.ebss		${RELOCATING-0} : { *(.rel.ebss) }
+  .rel.eit_v		${RELOCATING-0} : { *(.rel.eit_v) }
+  .rel.srodata		${RELOCATING-0} : { *(.rel.srodata) }
+  .rel.erodata		${RELOCATING-0} : { *(.rel.erodata) }
+  .rel.got		${RELOCATING-0} : { *(.rel.got) }
+  .rel.ctors		${RELOCATING-0} : { *(.rel.ctors) }
+  .rel.dtors		${RELOCATING-0} : { *(.rel.dtors) }
+  .rel.init		${RELOCATING-0} : { *(.rel.init) }
+  .rel.fini		${RELOCATING-0} : { *(.rel.fini) }
+  .rel.bss		${RELOCATING-0} : { *(.rel.bss) }
+  .rel.plt		${RELOCATING-0} : { *(.rel.plt) }
+
+  .init			${RELOCATING-0} : { *(.init) } =${NOP-0}
   ${DATA_PLT-${PLT}}
 
   /* Internal text space */
@@ -126,9 +107,10 @@ SECTIONS
   .text :
   {
     *(.text)
-    ${RELOCATING+*(.gnu.linkonce.t*)
-    KEEP (*(SORT_NONE(.fini)))
-    _etext = . ;}
+    *(.gnu.linkonce.t*)
+    *(.init)
+    *(.fini)
+    ${RELOCATING+ _etext = . ; }
   } ${RELOCATING+ > ${TEXT_MEMORY}}
 
   /* Internal data space */
@@ -151,7 +133,7 @@ SECTIONS
   .data		${RELOCATING-0} :
   {
     *(.data)
-    ${RELOCATING+*(.gnu.linkonce.d*)}
+    *(.gnu.linkonce.d*)
     ${CONSTRUCTING+CONSTRUCTORS}
     ${RELOCATING+ _edata = . ; }
   } ${RELOCATING+ > ${DATA_MEMORY}}
@@ -185,7 +167,7 @@ SECTIONS
   {
     ${RELOCATING+ PROVIDE (__bss_start = .) ; }
     *(.bss)
-    ${RELOCATING+*(COMMON)}
+    *(COMMON)
     ${RELOCATING+ PROVIDE (__bss_end = .) ; }
     ${RELOCATING+ _end = . ;  }
   } ${RELOCATING+ > ${DATA_MEMORY}}
@@ -207,14 +189,35 @@ SECTIONS
 
   .comment	 0 : { *(.comment) }
 
-EOF
+  /* DWARF debug sections.
+     Symbols in the DWARF debugging sections are relative to the beginning
+     of the section so we begin them at 0.  */
 
-. $srcdir/scripttempl/DWARF.sc
+  /* DWARF 1 */
+  .debug	 0 : { *(.debug) }
+  .line		 0 : { *(.line) }
 
-cat <<EOF
-  ${RELOCATING+PROVIDE (__stack = ${STACK_START_ADDR});}
+  /* GNU DWARF 1 extensions */
+  .debug_srcinfo 0 : { *(.debug_srcinfo) }
+  .debug_sfnames 0 : { *(.debug_sfnames) }
+
+  /* DWARF 1.1 and DWARF 2 */
+  .debug_aranges  0 : { *(.debug_aranges) }
+  .debug_pubnames 0 : { *(.debug_pubnames) }
+
+  /* DWARF 2 */
+  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
+  .debug_abbrev   0 : { *(.debug_abbrev) }
+  .debug_line     0 : { *(.debug_line) }
+  .debug_frame    0 : { *(.debug_frame) }
+  .debug_str      0 : { *(.debug_str) }
+  .debug_loc      0 : { *(.debug_loc) }
+  .debug_macinfo  0 : { *(.debug_macinfo) }
+
+  PROVIDE (__stack = ${STACK_START_ADDR});
 }
 EOF
+
 
 
 

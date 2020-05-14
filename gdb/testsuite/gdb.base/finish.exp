@@ -1,25 +1,37 @@
-# Copyright 2000-2020 Free Software Foundation, Inc.
+# Copyright 2000 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Michael Snyder (msnyder@redhat.com)
 
-set skip_float_test [gdb_skip_float_test]
+if $tracelevel then {
+	strace $tracelevel
+}
+
+set prms_id 0
+set bug_id 0
 
 # re-use the program from the "return2" test.
-if { [prepare_for_testing "failed to prepare" finish return2.c] } {
-    return -1
+set testfile "return2"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
 }
 
 proc finish_1 { type } {
@@ -29,7 +41,8 @@ proc finish_1 { type } {
 	    "set break on ${type}_func"
     gdb_test "continue" "Breakpoint.* ${type}_func.*" \
 	    "continue to ${type}_func"
-    gdb_test_multiple "finish" "finish from ${type}_func" {
+    send_gdb "finish\n"
+    gdb_expect {
 	-re ".*Value returned is .* = 49 '1'\r\n$gdb_prompt $" {
 	    if { $type == "char" } {
 		pass "finish from char_func"
@@ -47,6 +60,12 @@ proc finish_1 { type } {
 	-re ".*Value returned is .* = 1\r\n$gdb_prompt $" {
 	    pass "finish from ${type}_func"
 	}
+	-re ".*$gdb_prompt $" {
+	    fail "finish from ${type}_func"
+	}
+	timeout {
+	    fail "finish from ${type}_func (timeout)"
+	}
     }
 }
 
@@ -57,56 +76,32 @@ proc finish_void { } {
 	    "set break on void_func"
     gdb_test "continue" "Breakpoint.* void_func.*" \
 	    "continue to void_func"
+    send_gdb "finish\n"
     # Some architectures will have one or more instructions after the
     # call instruction which still is part of the call sequence, so we
     # must be prepared for a "finish" to show us the void_func call
     # again as well as the statement after.
-    gdb_test_multiple "finish" "finish from void_func" {
+    gdb_expect {
 	-re ".*void_checkpoint.*$gdb_prompt $" {
 	    pass "finish from void_func"
 	}
 	-re "0x\[0-9a-fA-F\]+ in main.*call to void_func.*$gdb_prompt $" {
 	    pass "finish from void_func"
 	}
+	-re ".*$gdb_prompt $" {
+	    fail "finish from void_func"
+	}
+	timeout {
+	    fail "finish from void_func (timeout)"
+	}
     }
-}
-
-# A function that tests that the given ABBREV is a working abbreviation
-# of the "finish" command.
-
-proc finish_abbreviation { abbrev } {
-
-    if { ! [ runto "int_func" ] } then {
-        fail "running to int_func"
-        return -1
-    }
-
-    gdb_test "$abbrev" \
-             "Value returned is .* = 1" \
-             "Testing the \"$abbrev\" abbreviation for \"finish\""
-}
-
-# Test "set print finish off".
-proc finish_no_print {} {
-    global decimal
-
-    if {![runto "int_func"]} {
-	untested "couldn't run to main"
-	return
-    }
-    gdb_test_no_output "set print finish off"
-    gdb_test "finish" \
-	"Value returned is \\\$$decimal = <not displayed>"
-    gdb_test "print \$" " = 1" \
-	"Ensure return value was properly saved"
 }
 
 proc finish_tests { } {
-    global gdb_prompt skip_float_test
+    global gdb_prompt
 
-    if { ! [ runto_main ] } then {
-	untested "couldn't run to main"
-	return -1
+    if { ! [ runto main ] } then {
+	gdb_suppress_entire_file "Run to main failed, so all tests in this file will automatically fail."
     }
 
     finish_void
@@ -115,15 +110,16 @@ proc finish_tests { } {
     finish_1 "int"
     finish_1 "long"
     finish_1 "long_long"
-    if {!$skip_float_test} {
-	finish_1 "float"
-	finish_1 "double"
-    }
-    finish_abbreviation "fin"
-    finish_no_print
+    finish_1 "float"
+    finish_1 "double"
 }
 
-set prev_timeout $timeout
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
 set timeout 30
 finish_tests
-set timeout $prev_timeout

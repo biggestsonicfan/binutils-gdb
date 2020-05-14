@@ -1,10 +1,10 @@
 /*  This file is part of the program psim.
 
-    Copyright 1994, 1995, 1996, 2003 Andrew Cagney
+    Copyright (C) 1994,1995,1996, Andrew Cagney <cagney@highland.com.au>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -331,8 +332,7 @@ insn_table *
 load_insn_table(const char *file_name,
 		decode_table *decode_rules,
 		filter *filters,
-		table_include *includes,
-		cache_table **cache_rules)
+		table_include *includes)
 {
   table *file = table_open(file_name, nr_insn_table_fields, nr_insn_model_table_fields);
   insn_table *table = ZALLOC(insn_table);
@@ -344,33 +344,6 @@ load_insn_table(const char *file_name,
 	|| it_is("internal", file_entry->fields[insn_flags])) {
       insn_table_insert_function(table, file_entry);
     }
-    else if ((it_is("function", file_entry->fields[insn_form])
-	      || it_is("internal", file_entry->fields[insn_form]))
-	     && !is_filtered_out(file_entry->fields[insn_flags], filters)) {
-      /* Ok, this is evil.  Need to convert a new style function into
-         an old style function.  Construct an old style table and then
-         copy it back.  */
-      char *fields[nr_insn_table_fields];
-      memset (fields, 0, sizeof fields);
-      fields[insn_flags] = file_entry->fields[insn_form];
-      fields[function_type] = file_entry->fields[insn_name];
-      fields[function_name] = file_entry->fields[insn_comment];
-      fields[function_param] = file_entry->fields[insn_field_6];
-      memcpy (file_entry->fields, fields,
-	      sizeof (fields[0]) * file_entry->nr_fields);
-      insn_table_insert_function(table, file_entry);
-#if 0
-      ":" "..."
-       ":" <filter-flags>
-       ":" <filter-models>
-       ":" <typedef>
-       ":" <name>
-       [ ":" <parameter-list> ]
-       <nl>
-       [ <function-model> ]
-       <code-block>
-#endif
-    }	     
     else if (it_is("model", file_entry->fields[insn_flags])) {
       model_table_insert(table, file_entry);
     }
@@ -392,18 +365,6 @@ load_insn_table(const char *file_name,
     else if (it_is("include", file_entry->fields[insn_form])
              && !is_filtered_out(file_entry->fields[insn_flags], filters)) {
       parse_include_entry (file, file_entry, filters, includes);
-    }
-    else if ((it_is("cache", file_entry->fields[insn_form])
-	      || it_is("compute", file_entry->fields[insn_form])
-	      || it_is("scratch", file_entry->fields[insn_form]))
-	     && !is_filtered_out(file_entry->fields[insn_flags], filters)) {
-      append_cache_rule (cache_rules,
-			 file_entry->fields[insn_form], /* type */
-			 file_entry->fields[cache_name],
-			 file_entry->fields[cache_derived_name],
-			 file_entry->fields[cache_type_def],
-			 file_entry->fields[cache_expression],
-			 file_entry);
     }
     else {
       insn_fields *fields;
@@ -969,7 +930,6 @@ main(int argc, char **argv)
   filter *filters = NULL;
   decode_table *decode_rules = NULL;
   insn_table *instructions = NULL;
-  cache_table *cache_rules = NULL;
 
   if (argc != 5)
     error("Usage: insn <filter> <hi-bit-nr> <decode-table> <insn-table>\n");
@@ -978,8 +938,7 @@ main(int argc, char **argv)
   hi_bit_nr = a2i(argv[2]);
   ASSERT(hi_bit_nr < insn_bit_size);
   decode_rules = load_decode_table(argv[3], hi_bit_nr);
-  instructions = load_insn_table(argv[4], decode_rules, filters, NULL,
-				 &cache_rules);
+  instructions = load_insn_table(argv[4], decode_rules, filters, NULL);
   insn_table_expand_insns(instructions);
 
   dump_insn_table(instructions, 0, -1);

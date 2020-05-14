@@ -1,27 +1,27 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1996, Andrew Cagney <cagney@highland.com.au>
+    Copyright (C) 1997, Free Software Foundation, Inc.
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
-#ifndef SIM_ALU_H
-#define SIM_ALU_H
+#ifndef _SIM_ALU_H_
+#define _SIM_ALU_H_
 
 #include "symcat.h"
 
@@ -82,7 +82,7 @@
 		if (ALU16_HAD_OVERFLOW) \
 		  sim_engine_halt (...); \
 		(RES) = ALU16_OVERFLOW_RESULT
-
+   
    	ALU*_HAD_CARRY_BORROW: Returns a nonzero value if unsigned
    	overflow or underflow (also referred to as carry and borrow)
    	occurred.
@@ -93,8 +93,8 @@
 		#define ALU64_END(RES) \
 		State.carry = ALU64_HAD_CARRY_BORROW; \
 		(RES) = ALU64_CARRY_BORROW_RESULT
-
-
+   
+   
    Addition:
 
 	ALU*_ADD(VAL): Add VAL to the ALU accumulator.  Record any
@@ -135,7 +135,7 @@
 /* Twos complement arithmetic - addition/subtraction - carry/borrow
    (or you thought you knew the answer to 0-0)
 
-
+   
 
    Notation and Properties:
 
@@ -154,7 +154,7 @@
    UMAXn: The upper bound of an unsigned N bit value (the lower
    bound is always zero).
 
-   Un: UMAXn + 1.  Unsigned arithmetic is computed `modulo (Un)'.
+   Un: UMAXn + 1.  Unsigned arithmetic is computed `modulo (Un)'.  
 
    X[p]: Is bit P of X.  X[0] denotes the least significant bit.
 
@@ -193,7 +193,7 @@
    The two N bit operands are sign extended to M>N bits and then
    added.  Overflow occurs when SIGN_BIT<n> and SIGN_BIT<m> do not
    match.
-
+  
    		Rm = (SEXTn (Xn) + SEXTn (Yn))
 		V = MSBn ((Rm >> (M - N)) ^ Rm)
 
@@ -241,7 +241,7 @@
 
    The following table lists the output for all given inputs into a
    full-adder.
-
+  
          I  X  Y  R | C
         ------------+---
          0  0  0  0 | 0
@@ -264,7 +264,7 @@
 
        XY\R  0  1
           +-------
-       00 |  0  0
+       00 |  0  0 
        01 |  1  0
        11 |  1  1
        10 |  1  0
@@ -275,7 +275,7 @@
 
    Verifying:
 
-         I  X  Y  R | C | X&Y  X&~R Y&~R
+         I  X  Y  R | C | X&Y  X&~R Y&~R 
         ------------+---+---------------
          0  0  0  0 | 0 |  0    0    0
          0  0  1  1 | 0 |  0    0    0
@@ -1007,14 +1007,14 @@ do {									\
 #define ALU32_AND(VAL)							\
 do {									\
   alu32_r &= (VAL);							\
-  alu32_c = 0;								\
+  alu32_r = 0;								\
   alu32_v = 0;								\
 } while (0)
 
 #define ALU64_AND(VAL)							\
 do {									\
   alu64_r &= (VAL);							\
-  alu64_c = 0;								\
+  alu64_r = 0;								\
   alu64_v = 0;								\
 } while (0)
 

@@ -1,5 +1,5 @@
 /* objalloc.c -- routines to allocate memory for objects
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright 1997 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Solutions.
 
 This program is free software; you can redistribute it and/or modify it
@@ -14,11 +14,11 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
-#include "config.h"
 #include "ansidecl.h"
+#include "config.h"
 
 #include "objalloc.h"
 
@@ -30,15 +30,17 @@ Boston, MA 02110-1301, USA.  */
 #include <unixlib.h>
 #else
 
+#ifdef ANSI_PROTOTYPES
 /* Get a definition for size_t.  */
 #include <stddef.h>
+#endif
 
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
 #else
 /* For systems with larger pointers than ints, this must be declared.  */
-extern PTR malloc (size_t);
-extern void free (PTR);
+extern PTR malloc PARAMS ((size_t));
+extern void free PARAMS ((PTR));
 #endif
 
 #endif
@@ -83,7 +85,7 @@ struct objalloc_chunk
 /* Create an objalloc structure.  */
 
 struct objalloc *
-objalloc_create (void)
+objalloc_create ()
 {
   struct objalloc *ret;
   struct objalloc_chunk *chunk;
@@ -112,21 +114,16 @@ objalloc_create (void)
 /* Allocate space from an objalloc structure.  */
 
 PTR
-_objalloc_alloc (struct objalloc *o, unsigned long original_len)
+_objalloc_alloc (o, len)
+     struct objalloc *o;
+     unsigned long len;
 {
-  unsigned long len = original_len;
-
   /* We avoid confusion from zero sized objects by always allocating
      at least 1 byte.  */
   if (len == 0)
     len = 1;
 
   len = (len + OBJALLOC_ALIGN - 1) &~ (OBJALLOC_ALIGN - 1);
-
-  /* Check for overflow in the alignment operation above and the
-     malloc argument below. */
-  if (len + CHUNK_HEADER_SIZE < original_len)
-    return NULL;
 
   if (len <= o->current_space)
     {
@@ -174,7 +171,8 @@ _objalloc_alloc (struct objalloc *o, unsigned long original_len)
 /* Free an entire objalloc structure.  */
 
 void
-objalloc_free (struct objalloc *o)
+objalloc_free (o)
+     struct objalloc *o;
 {
   struct objalloc_chunk *l;
 
@@ -195,7 +193,9 @@ objalloc_free (struct objalloc *o)
    recently allocated blocks.  */
 
 void
-objalloc_free_block (struct objalloc *o, PTR block)
+objalloc_free_block (o, block)
+     struct objalloc *o;
+     PTR block;
 {
   struct objalloc_chunk *p, *small;
   char *b = (char *) block;

@@ -1,12 +1,12 @@
 /* Support for complaint handling during symbol reading in GDB.
-
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1992, 1993, 1995, 1998, 1999, 2000
+   Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,73 +15,154 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
 #include "complaints.h"
-#include "command.h"
 #include "gdbcmd.h"
-#include <unordered_map>
 
-/* Map format strings to counters.  */
+extern void _initialize_complaints (void);
 
-static std::unordered_map<const char *, int> counters;
+/* Structure to manage complaints about symbol file contents.  */
 
-/* How many complaints about a particular thing should be printed
-   before we stop whining about it?  Default is no whining at all,
-   since so many systems have ill-constructed symbol files.  */
+struct complaint complaint_root[1] =
+{
+  {
+    (char *) NULL,		/* Complaint message */
+    0,				/* Complaint counter */
+    complaint_root		/* Next complaint. */
+  }
+};
 
-int stop_whining = 0;
+/* How many complaints about a particular thing should be printed before
+   we stop whining about it?  Default is no whining at all, since so many
+   systems have ill-constructed symbol files.  */
 
-/* See complaints.h.  */
+static unsigned int stop_whining = 0;
+
+/* Should each complaint be self explanatory, or should we assume that
+   a series of complaints is being produced? 
+   case 0:  self explanatory message.
+   case 1:  First message of a series that must start off with explanation.
+   case 2:  Subsequent message, when user already knows we are reading
+   symbols and we can just state our piece.  */
+
+static int complaint_series = 0;
+
+
+
+/* Functions to handle complaints during symbol reading.  */
+
+/* Print a complaint about the input symbols, and link the complaint block
+   into a chain for later handling.  */
 
 void
-complaint_internal (const char *fmt, ...)
+complain (struct complaint *complaint,...)
 {
   va_list args;
+  va_start (args, complaint);
 
-  if (++counters[fmt] > stop_whining)
-    return;
-
-  va_start (args, fmt);
-
-  if (deprecated_warning_hook)
-    (*deprecated_warning_hook) (fmt, args);
-  else
+  complaint->counter++;
+  if (complaint->next == NULL)
     {
-      fputs_filtered (_("During symbol reading: "), gdb_stderr);
-      vfprintf_filtered (gdb_stderr, fmt, args);
-      fputs_filtered ("\n", gdb_stderr);
+      complaint->next = complaint_root->next;
+      complaint_root->next = complaint;
     }
+  if (complaint->counter > stop_whining)
+    {
+      return;
+    }
+  wrap_here ("");
 
+  switch (complaint_series + (info_verbose << 1))
+    {
+
+      /* Isolated messages, must be self-explanatory.  */
+    case 0:
+      if (warning_hook)
+        (*warning_hook) (complaint->message, args);
+      else
+        {
+          begin_line ();
+          fputs_filtered ("During symbol reading, ", gdb_stderr);
+          wrap_here ("");
+          vfprintf_filtered (gdb_stderr, complaint->message, args);
+          fputs_filtered (".\n", gdb_stderr);
+        }
+      break;
+
+      /* First of a series, without `set verbose'.  */
+    case 1:
+      if (warning_hook)
+        (*warning_hook) (complaint->message, args);
+      else
+        {
+          begin_line ();
+          fputs_filtered ("During symbol reading...", gdb_stderr);
+          vfprintf_filtered (gdb_stderr, complaint->message, args);
+          fputs_filtered ("...", gdb_stderr);
+          wrap_here ("");
+          complaint_series++;
+        }
+      break;
+
+      /* Subsequent messages of a series, or messages under `set verbose'.
+         (We'll already have produced a "Reading in symbols for XXX..."
+         message and will clean up at the end with a newline.)  */
+    default:
+      if (warning_hook)
+        (*warning_hook) (complaint->message, args);
+      else
+        {
+          vfprintf_filtered (gdb_stderr, complaint->message, args);
+          fputs_filtered ("...", gdb_stderr);
+          wrap_here ("");
+        }
+    }
+  /* If GDB dumps core, we'd like to see the complaints first.  Presumably
+     GDB will not be sending so many complaints that this becomes a
+     performance hog.  */
+  gdb_flush (gdb_stderr);
   va_end (args);
 }
 
-/* See complaints.h.  */
+/* Clear out all complaint counters that have ever been incremented.
+   If sym_reading is 1, be less verbose about successive complaints,
+   since the messages are appearing all together during a command that
+   reads symbols (rather than scattered around as psymtabs get fleshed
+   out into symtabs at random times).  If noisy is 1, we are in a
+   noisy symbol reading command, and our caller will print enough
+   context for the user to figure it out.  */
 
 void
-clear_complaints ()
+clear_complaints (int sym_reading, int noisy)
 {
-  counters.clear ();
+  struct complaint *p;
+
+  for (p = complaint_root->next; p != complaint_root; p = p->next)
+    {
+      p->counter = 0;
+    }
+
+  if (!sym_reading && !noisy && complaint_series > 1 && !warning_hook)
+    {
+      /* Terminate previous series, since caller won't.  */
+      puts_filtered ("\n");
+    }
+
+  complaint_series = sym_reading ? 1 + noisy : 0;
 }
 
-static void
-complaints_show_value (struct ui_file *file, int from_tty,
-		       struct cmd_list_element *cmd, const char *value)
-{
-  fprintf_filtered (file, _("Max number of complaints about incorrect"
-			    " symbols is %s.\n"),
-		    value);
-}
-
-void _initialize_complaints ();
 void
-_initialize_complaints ()
+_initialize_complaints (void)
 {
-  add_setshow_zinteger_cmd ("complaints", class_support, 
-			    &stop_whining, _("\
-Set max number of complaints about incorrect symbols."), _("\
-Show max number of complaints about incorrect symbols."), NULL,
-			    NULL, complaints_show_value,
-			    &setlist, &showlist);
+  add_show_from_set
+    (add_set_cmd ("complaints", class_support, var_zinteger,
+		  (char *) &stop_whining,
+		  "Set max number of complaints about incorrect symbols.",
+		  &setlist),
+     &showlist);
+
 }

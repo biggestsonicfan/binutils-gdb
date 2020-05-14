@@ -1,20 +1,25 @@
 # Test Framework Driver for GDB driving an external simulator
-#   Copyright 1999-2020 Free Software Foundation, Inc.
+#   Copyright 1999, 2001 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+load_lib gdb.exp
 
 proc sid_start {} {
+    global verbose
+
     set port [lindex [split [target_info netport] ":"] 1]
 
     # Set a default endianness
@@ -92,7 +97,7 @@ proc sid_start {} {
     sleep 4
 
     if ![target_info exists gdb,no_push_conn] {
-        remote_push_conn host
+        remote_push_conn host;
     }
 }
 
@@ -107,8 +112,8 @@ proc gdb_start {} {
 
 proc sid_exit {} {
     if ![target_info exists gdb,no_push_conn] {
-	remote_close host
-	remote_pop_conn host
+	remote_close host;
+	remote_pop_conn host;
     }
 }
 
@@ -142,6 +147,7 @@ proc gdb_target_sid { } {
     gdb_expect {
 	-re ".*\[Ee\]rror.*$gdb_prompt $" {
 	    perror "Couldn't set target for remote simulator."
+	    cleanup
 	    gdb_exit
 	}
 	-re "Remote debugging using.*$gdb_prompt"	{
@@ -149,6 +155,7 @@ proc gdb_target_sid { } {
 	}
 	timeout { 
 	    perror "Couldn't set target for remote simulator."
+	    cleanup
 	    gdb_exit
 	}
     }
@@ -168,10 +175,8 @@ proc gdb_load { arg } {
     global gdb_prompt
     global retval
 
-    if { $arg != "" } {
-	if [gdb_file_cmd $arg] then { return -1 }
-    }
-
+    gdb_unload
+    if [gdb_file_cmd $arg] then { return -1 }
     gdb_target_sid
 
     send_gdb "load\n"
@@ -184,28 +189,28 @@ proc gdb_load { arg } {
 	    if $verbose>1 then {
 		perror "Error during download."
 	    }
-	    set retval -1
+	    set retval -1;
 	}
 	-re ".*$gdb_prompt $" {
 	    if $verbose>1 then {
 		send_user "Loaded $arg into $GDB\n"
 	    }
-	    set retval 0
+	    set retval 1;
 	}
 	-re "$gdb_prompt $"     {
 	    if $verbose>1 then {
 		perror "GDB couldn't load."
 	    }
-	    set retval -1
+	    set retval -1;
 	}
 	timeout {
 	    if $verbose>1 then {
 		perror "Timed out trying to load $arg."
 	    }
-	    set retval -1
+	    set retval -1;
 	}
     }
     set timeout $prev_timeout
     verbose "Timeout is now $timeout seconds" 2
-    return $retval
+    return $retval;
 }

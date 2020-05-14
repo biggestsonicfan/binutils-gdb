@@ -1,20 +1,19 @@
-/* Special version of <a.out.h> for use under HP-UX.
-   Copyright (C) 1988-2020 Free Software Foundation, Inc.
+/* Special version of <a.out.h> for use under hp-ux.
+   Copyright 1988, 1991 Free Software Foundation, Inc.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* THIS FILE IS OBSOLETE.  It needs to be revised as a variant "external"
    a.out format for use with BFD.  */
@@ -60,10 +59,10 @@ struct exec
 #undef N_SET_MACHTYPE
 #undef N_SET_FLAGS
 
-#define N_MAGIC(execp) ((execp)->a_magic)
-#define N_MACHTYPE(execp) ((execp)->a_machtype)
-#define N_SET_MAGIC(execp, magic) (((execp)->a_magic) = (magic))
-#define N_SET_MACHTYPE(execp, machtype) (((execp)->a_machtype) = (machtype))
+#define N_MAGIC(exec) ((exec) . a_magic)
+#define N_MACHTYPE(exec) ((exec) . a_machtype)
+#define N_SET_MAGIC(exec, magic) (((exec) . a_magic) = (magic))
+#define N_SET_MACHTYPE(exec, machtype) (((exec) . a_machtype) = (machtype))
 
 #undef N_BADMAG
 #define N_BADMAG(x) ((_N_BADMAG (x)) || (_N_BADMACH (x)))

@@ -1,12 +1,12 @@
 /* MI Command Set - MI Command Parser.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions (a Red Hat company).
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,24 +15,14 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
-#ifndef MI_MI_PARSE_H
-#define MI_MI_PARSE_H
-
-#include "gdbsupport/run-time-clock.h"
-#include <chrono>
-#include "mi-cmds.h"  /* For enum print_values.  */
+#ifndef MI_PARSE_H
+#define MI_PARSE_H
 
 /* MI parser */
-
-/* Timestamps for current command and last asynchronous command.  */
-struct mi_timestamp
-{
-  std::chrono::steady_clock::time_point wallclock;
-  user_cpu_time_clock::time_point utime;
-  system_cpu_time_clock::time_point stime;
-};
 
 enum mi_command_type
   {
@@ -41,42 +31,25 @@ enum mi_command_type
 
 struct mi_parse
   {
-    mi_parse ();
-    ~mi_parse ();
-
-    DISABLE_COPY_AND_ASSIGN (mi_parse);
-
     enum mi_command_type op;
     char *command;
     char *token;
     const struct mi_cmd *cmd;
-    struct mi_timestamp *cmd_start;
     char *args;
     char **argv;
     int argc;
-    int all;
-    int thread_group; /* At present, the same as inferior number.  */
-    int thread;
-    int frame;
-
-    /* The language that should be used to evaluate the MI command.
-       Ignored if set to language_unknown.  */
-    enum language language;
   };
 
-/* Attempts to parse CMD returning a ``struct mi_parse''.  If CMD is
-   invalid, an exception is thrown.  For an MI_COMMAND COMMAND, ARGS
-   and OP are initialized.  Un-initialized fields are zero.  *TOKEN is
-   set to the token, even if an exception is thrown.  It is allocated
-   with xmalloc; it must either be freed with xfree, or assigned to
-   the TOKEN field of the resultant mi_parse object, to be freed by
-   mi_parse_free.  */
+/* Attempts to parse CMD returning a ``struct mi_command''.  If CMD is
+   invalid, an error mesage is reported (MI format) and NULL is
+   returned. For a CLI_COMMAND, COMMAND, TOKEN and OP are initialized.
+   For an MI_COMMAND COMMAND, TOKEN, ARGS and OP are
+   initialized. Un-initialized fields are zero. */
 
-extern std::unique_ptr<struct mi_parse> mi_parse (const char *cmd,
-						  char **token);
+extern struct mi_parse *mi_parse (char *cmd);
 
-/* Parse a string argument into a print_values value.  */
+/* Free a command returned by mi_parse_command. */
 
-enum print_values mi_parse_print_values (const char *name);
+extern void mi_parse_free (struct mi_parse *cmd);
 
-#endif /* MI_MI_PARSE_H */
+#endif

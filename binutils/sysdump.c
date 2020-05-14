@@ -1,11 +1,12 @@
 /* Sysroff object format dumper.
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright 1994, 1995, 1998, 1999, 2000, 2001, 2002
+   Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 
 /* Written by Steve Chamberlain <sac@cygnus.com>.
@@ -24,12 +25,13 @@
  This program reads a SYSROFF object file and prints it in an
  almost human readable form to stdout.  */
 
-#include "sysdep.h"
 #include "bfd.h"
+#include "bucomm.h"
 #include "safe-ctype.h"
+
+#include <stdio.h>
 #include "libiberty.h"
 #include "getopt.h"
-#include "bucomm.h"
 #include "sysroff.h"
 
 static int dump = 1;
@@ -38,23 +40,45 @@ static int code;
 static int addrsize = 4;
 static FILE *file;
 
-static void derived_type (void);
+static void dh PARAMS ((unsigned char *, int));
+static void itheader PARAMS ((char *, int));
+static void p PARAMS ((void));
+static void tabout PARAMS ((void));
+static void pbarray PARAMS ((barray *));
+static int getone PARAMS ((int));
+static int opt PARAMS ((int));
+static void must PARAMS ((int));
+static void tab PARAMS ((int, char *));
+static void dump_symbol_info PARAMS ((void));
+static void derived_type PARAMS ((void));
+static void module PARAMS ((void));
+static void show_usage PARAMS ((FILE *, int));
 
-static char *
-getCHARS (unsigned char *ptr, int *idx, int size, int max)
+extern char *getCHARS PARAMS ((unsigned char *, int *, int, int));
+extern int fillup PARAMS ((char *));
+extern barray getBARRAY PARAMS ((unsigned char *, int *, int, int));
+extern int getINT PARAMS ((unsigned char *, int *, int, int));
+extern int getBITS PARAMS ((char *, int *, int, int));
+extern void sysroff_swap_tr_in PARAMS ((void));
+extern void sysroff_print_tr_out PARAMS ((void));
+extern int main PARAMS ((int, char **));
+
+char *
+getCHARS (ptr, idx, size, max)
+     unsigned char *ptr;
+     int *idx;
+     int size;
+     int max;
 {
   int oc = *idx / 8;
   char *r;
   int b = size;
 
   if (b >= max)
-    return _("*undefined*");
+    return "*undefined*";
 
   if (b == 0)
     {
-      /* PR 17512: file: 13caced2.  */
-      if (oc >= max)
-	return _("*corrupt*");
       /* Got to work out the length of the string from self.  */
       b = ptr[oc++];
       (*idx) += 8;
@@ -69,7 +93,9 @@ getCHARS (unsigned char *ptr, int *idx, int size, int max)
 }
 
 static void
-dh (unsigned char *ptr, int size)
+dh (ptr, size)
+     unsigned char *ptr;
+     int size;
 {
   int i;
   int j;
@@ -100,39 +126,36 @@ dh (unsigned char *ptr, int size)
     }
 }
 
-static int
-fillup (unsigned char *ptr)
+int
+fillup (ptr)
+     char *ptr;
 {
   int size;
   int sum;
   int i;
 
-  size = getc (file);
-  if (size == EOF
-      || size <= 2)
-    return 0;
-
-  size -= 2;
-  if (fread (ptr, size, 1, file) != 1)
-    return 0;
-
+  size = getc (file) - 2;
+  fread (ptr, 1, size, file);
   sum = code + size + 2;
 
   for (i = 0; i < size; i++)
     sum += ptr[i];
 
   if ((sum & 0xff) != 0xff)
-    printf (_("SUM IS %x\n"), sum);
+    printf ("SUM IS %x\n", sum);
 
   if (dump)
     dh (ptr, size);
 
-  return size;
+  return size - 1;
 }
 
-static barray
-getBARRAY (unsigned char *ptr, int *idx, int dsize ATTRIBUTE_UNUSED,
-	   int max ATTRIBUTE_UNUSED)
+barray
+getBARRAY (ptr, idx, dsize, max)
+     unsigned char *ptr;
+     int *idx;
+     int dsize ATTRIBUTE_UNUSED;
+     int max ATTRIBUTE_UNUSED;
 {
   barray res;
   int i;
@@ -148,19 +171,18 @@ getBARRAY (unsigned char *ptr, int *idx, int dsize ATTRIBUTE_UNUSED,
   return res;
 }
 
-static int
-getINT (unsigned char *ptr, int *idx, int size, int max)
+int
+getINT (ptr, idx, size, max)
+     unsigned char *ptr;
+     int *idx;
+     int size;
+     int max;
 {
   int n = 0;
   int byte = *idx / 8;
 
   if (byte >= max)
-    {
-      /* PR 17512: file: id:000001,src:000002,op:flip1,pos:45.  */
-      /* Prevent infinite loops re-reading beyond the end of the buffer.  */
-      fatal (_("ICE: getINT: Out of buffer space"));
-      return 0;
-    }
+    return 0;
 
   if (size == -2)
     size = addrsize;
@@ -182,15 +204,18 @@ getINT (unsigned char *ptr, int *idx, int size, int max)
       n = (ptr[byte + 0] << 24) + (ptr[byte + 1] << 16) + (ptr[byte + 2] << 8) + (ptr[byte + 3]);
       break;
     default:
-      fatal (_("Unsupported read size: %d"), size);
+      abort ();
     }
 
   *idx += size * 8;
   return n;
 }
 
-static int
-getBITS (unsigned char *ptr, int *idx, int size, int max)
+int
+getBITS (ptr, idx, size, max)
+     char *ptr;
+     int *idx;
+     int size, max;
 {
   int byte = *idx / 8;
   int bit = *idx % 8;
@@ -204,15 +229,17 @@ getBITS (unsigned char *ptr, int *idx, int size, int max)
 }
 
 static void
-itheader (char *name, int icode)
+itheader (name, code)
+     char *name;
+     int code;
 {
-  printf ("\n%s 0x%02x\n", name, icode);
+  printf ("\n%s 0x%02x\n", name, code);
 }
 
 static int indent;
 
 static void
-p (void)
+p ()
 {
   int i;
 
@@ -223,13 +250,14 @@ p (void)
 }
 
 static void
-tabout (void)
+tabout ()
 {
   p ();
 }
 
 static void
-pbarray (barray *y)
+pbarray (y)
+     barray *y;
 {
   int x;
 
@@ -254,23 +282,24 @@ pbarray (barray *y)
 
 #define IT_tr_CODE	0x7f
 
-static void
-sysroff_swap_tr_in (void)
+void
+sysroff_swap_tr_in()
 {
-  unsigned char raw[255];
+  char raw[255];
 
   memset (raw, 0, 255);
   fillup (raw);
 }
 
-static void
-sysroff_print_tr_out (void)
+void
+sysroff_print_tr_out()
 {
   itheader ("tr", IT_tr_CODE);
 }
 
 static int
-getone (int type)
+getone (type)
+     int type;
 {
   int c = getc (file);
 
@@ -493,7 +522,7 @@ getone (int type)
       break;
 
     default:
-      printf (_("GOT A %x\n"), c);
+      printf ("GOT A %x\n", c);
       return 0;
       break;
     }
@@ -502,34 +531,81 @@ getone (int type)
 }
 
 static int
-opt (int x)
+opt (x)
+     int x;
 {
   return getone (x);
 }
 
+#if 0
+
+/* This is no longer used.  */
+
 static void
-must (int x)
+unit_info_list ()
+{
+  while (opt (IT_un_CODE))
+    {
+      getone (IT_us_CODE);
+
+      while (getone (IT_sc_CODE))
+	getone (IT_ss_CODE);
+
+      while (getone (IT_er_CODE))
+	;
+
+      while (getone (IT_ed_CODE))
+	;
+    }
+}
+
+#endif
+
+#if 0
+
+/* This is no longer used.  */
+
+static void
+object_body_list ()
+{
+  while (getone (IT_sh_CODE))
+    {
+      while (getone (IT_ob_CODE))
+	;
+      while (getone (IT_rl_CODE))
+	;
+    }
+}
+
+#endif
+
+static void
+must (x)
+     int x;
 {
   if (!getone (x))
-    printf (_("WANTED %x!!\n"), x);
+    printf ("WANTED %x!!\n", x);
 }
 
 static void
-tab (int i, char *s)
+tab (i, s)
+     int i;
+     char *s;
 {
   indent += i;
 
   if (s)
     {
       p ();
-      puts (s);
+      printf (s);
+      printf ("\n");
     }
 }
 
 static void
-dump_symbol_info (void)
+dump_symbol_info ()
 {
-  tab (1, _("SYMBOL INFO"));
+  tab (1, "SYMBOL INFO");
 
   while (opt (IT_dsy_CODE))
     {
@@ -545,9 +621,9 @@ dump_symbol_info (void)
 }
 
 static void
-derived_type (void)
+derived_type ()
 {
-  tab (1, _("DERIVED TYPE"));
+  tab (1, "DERIVED TYPE");
 
   while (1)
     {
@@ -598,25 +674,73 @@ derived_type (void)
   tab (-1, "");
 }
 
+#if 0
+
+/* This is no longer used.  */
+
 static void
-module (void)
+program_structure ()
+{
+  tab (1, "PROGRAM STRUCTURE");
+  while (opt (IT_dps_CODE))
+    {
+      must (IT_dso_CODE);
+      opt (IT_dss_CODE);
+      dump_symbol_info ();
+      must (IT_dps_CODE);
+    }
+  tab (-1, "");
+}
+
+#endif
+
+#if 0
+
+/* This is no longer used.  */
+
+static void
+debug_list ()
+{
+  tab (1, "DEBUG LIST");
+
+  must (IT_du_CODE);
+  opt (IT_dus_CODE);
+  program_structure ();
+  must (IT_dln_CODE);
+
+  tab (-1, "");
+}
+
+#endif
+
+static void
+module ()
 {
   int c = 0;
   int l = 0;
 
-  tab (1, _("MODULE***\n"));
+  tab (1, "MODULE***\n");
 
   do
     {
       c = getc (file);
-      if (c == EOF)
-	break;
       ungetc (c, file);
 
       c &= 0x7f;
     }
   while (getone (c) && c != IT_tr_CODE);
 
+#if 0
+  must (IT_cs_CODE);
+  must (IT_hd_CODE);
+  opt (IT_hs_CODE);
+
+  unit_info_list ();
+  object_body_list ();
+  debug_list ();
+
+  must (IT_tr_CODE);
+#endif
   tab (-1, "");
 
   c = getc (file);
@@ -633,25 +757,31 @@ module (void)
     }
 }
 
-ATTRIBUTE_NORETURN static void
-show_usage (FILE *ffile, int status)
+char *program_name;
+
+static void
+show_usage (file, status)
+     FILE *file;
+     int status;
 {
-  fprintf (ffile, _("Usage: %s [option(s)] in-file\n"), program_name);
-  fprintf (ffile, _("Print a human readable interpretation of a SYSROFF object file\n"));
-  fprintf (ffile, _(" The options are:\n\
+  fprintf (file, _("Usage: %s [option(s)] in-file\n"), program_name);
+  fprintf (file, _("Print a human readable interpretation of a SYSROFF object file\n"));
+  fprintf (file, _(" The options are:\n\
   -h --help        Display this information\n\
   -v --version     Print the program's version number\n"));
 
-  if (REPORT_BUGS_TO[0] && status == 0)
-    fprintf (ffile, _("Report bugs to %s\n"), REPORT_BUGS_TO);
+  if (status == 0)
+    fprintf (file, _("Report bugs to %s\n"), REPORT_BUGS_TO);
   exit (status);
 }
 
 int
-main (int ac, char **av)
+main (ac, av)
+     int ac;
+     char **av;
 {
   char *input_file = NULL;
-  int option;
+  int opt;
   static struct option long_options[] =
   {
     {"help", no_argument, 0, 'h'},
@@ -670,13 +800,10 @@ main (int ac, char **av)
 
   program_name = av[0];
   xmalloc_set_program_name (program_name);
-  bfd_set_error_program_name (program_name);
 
-  expandargv (&ac, &av);
-
-  while ((option = getopt_long (ac, av, "HhVv", long_options, (int *) NULL)) != EOF)
+  while ((opt = getopt_long (ac, av, "HhVv", long_options, (int *) NULL)) != EOF)
     {
-      switch (option)
+      switch (opt)
 	{
 	case 'H':
 	case 'h':

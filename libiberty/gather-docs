@@ -1,7 +1,8 @@
 #!/usr/bin/perl
 # -*- perl -*-
 
-#   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+#   Copyright (C) 2001
+#   Free Software Foundation
 #
 # This file is part of the libiberty library.
 # Libiberty is free software; you can redistribute it and/or
@@ -16,8 +17,8 @@
 #
 # You should have received a copy of the GNU Library General Public
 # License along with libiberty; see the file COPYING.LIB.  If not,
-# write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-# Boston, MA 02110-1301, USA.
+# write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
 #
 # Originally written by DJ Delorie <dj@redhat.com>
 
@@ -72,8 +73,8 @@ for $in (@ARGV) {
 
 	    if (/^\@def[a-z]*[a-wyz] /) {
 		
-		($name) = m/[^\(]* ([^\( \t\r\n\@]+) *(\(|\@?$)/;
-		$name =~ s/[	 ]*\@?$//;
+		($name) = m/[^\(]* ([^\( \t\r\n]+) *\(/;
+		$name =~ s/[ 	]*$//;
 		$key = $name;
 		$key =~ tr/A-Z/a-z/;
 		$key =~ s/[^a-z0-9]+/ /g;
@@ -109,7 +110,7 @@ print "Writing $outfile\n" if $verbose;
 print OUT "\@c Automatically generated from *.c and others (the comments before\n";
 print OUT "\@c each entry tell you which file and where in that file).  DO NOT EDIT!\n";
 print OUT "\@c Edit the *.c files, configure with --enable-maintainer-mode,\n";
-print OUT "\@c run 'make stamp-functions' and gather-docs will build a new copy.\n\n";
+print OUT "\@c and let gather-docs build you a new copy.\n\n";
 
 for $key (sort keys %name) {
     print OUT "\@c $src_file{$key}:$src_line{$key}\n";

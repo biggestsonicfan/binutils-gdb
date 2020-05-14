@@ -1,4 +1,3 @@
-void
 foo (void)
 {
  int i, x, y, z;
@@ -8,21 +7,20 @@ foo (void)
  i = 0;
 
  while (i < 2)
-   i++;				/* in-loop */
+   i++;
 
- x = i;				/* after-loop */
+ x = i;
  y = 2 * x;
  z = x + y;
- y = x + z;			/* until-here */
+ y = x + z;
  x = 9;
- y = 10;			/* until-there */
+ y = 10;
 }
 
-int
 main ()
 {
   int a = 1;
   foo ();
   a += 2;
-  return 0;			/* at-return */
+  return 0;
 }

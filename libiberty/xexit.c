@@ -1,5 +1,5 @@
 /* xexit.c -- Run any exit handlers, then exit.
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright (C) 1994, 95, 1997 Free Software Foundation, Inc.
 
 This file is part of the libiberty library.
 Libiberty is free software; you can redistribute it and/or
@@ -14,8 +14,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If not, write
-to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /*
 
@@ -41,10 +41,11 @@ Termination is handled via the system's normal @code{exit} call.
 
 /* This variable is set by xatexit if it is called.  This way, xmalloc
    doesn't drag xatexit into the link.  */
-void (*_xexit_cleanup) (void);
+void (*_xexit_cleanup) PARAMS ((void));
 
 void
-xexit (int code)
+xexit (code)
+     int code;
 {
   if (_xexit_cleanup != NULL)
     (*_xexit_cleanup) ();

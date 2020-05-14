@@ -1,21 +1,23 @@
 /* CGEN generic disassembler support code.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
 
-   This file is part of libopcodes.
+   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002
+   Free Software Foundation, Inc.
 
-   This library is free software; you can redistribute it and/or modify
+   This file is part of the GNU Binutils and GDB, the GNU debugger.
+
+   This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License along
    with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "sysdep.h"
 #include <stdio.h>
@@ -25,23 +27,23 @@
 #include "symcat.h"
 #include "opcode/cgen.h"
 
-static CGEN_INSN_LIST *  hash_insn_array        (CGEN_CPU_DESC, const CGEN_INSN *, int, int, CGEN_INSN_LIST **, CGEN_INSN_LIST *);
-static CGEN_INSN_LIST *  hash_insn_list         (CGEN_CPU_DESC, const CGEN_INSN_LIST *, CGEN_INSN_LIST **, CGEN_INSN_LIST *);
-static void              build_dis_hash_table   (CGEN_CPU_DESC);
-static int		 count_decodable_bits   (const CGEN_INSN *);
-static void		 add_insn_to_hash_chain (CGEN_INSN_LIST *,
-						 const CGEN_INSN *,
-						 CGEN_INSN_LIST **,
-						 unsigned int);
+static CGEN_INSN_LIST *  hash_insn_array      PARAMS ((CGEN_CPU_DESC, const CGEN_INSN *, int, int, CGEN_INSN_LIST **, CGEN_INSN_LIST *));
+static CGEN_INSN_LIST *  hash_insn_list       PARAMS ((CGEN_CPU_DESC, const CGEN_INSN_LIST *, CGEN_INSN_LIST **, CGEN_INSN_LIST *));
+static void              build_dis_hash_table PARAMS ((CGEN_CPU_DESC));
+static int		 count_decodable_bits PARAMS ((const CGEN_INSN *));
+static void		 add_insn_to_hash_chain PARAMS ((CGEN_INSN_LIST *,
+							 const CGEN_INSN *,
+							 CGEN_INSN_LIST **,
+							 unsigned int));
 
 /* Return the number of decodable bits in this insn.  */
 static int
-count_decodable_bits (const CGEN_INSN *insn)
+count_decodable_bits (insn)
+  const CGEN_INSN *insn;
 {
   unsigned mask = CGEN_INSN_BASE_MASK (insn);
   int bits = 0;
-  unsigned m;
-
+  int m;
   for (m = 1; m != 0; m <<= 1)
     {
       if (mask & m)
@@ -50,12 +52,13 @@ count_decodable_bits (const CGEN_INSN *insn)
   return bits;
 }
 
-/* Add an instruction to the hash chain.  */
+/* Add an instruction to the hash chain.  */     
 static void
-add_insn_to_hash_chain (CGEN_INSN_LIST *hentbuf,
-			const CGEN_INSN *insn,
-			CGEN_INSN_LIST **htable,
-			unsigned int hash)
+add_insn_to_hash_chain (hentbuf, insn, htable, hash)
+     CGEN_INSN_LIST *hentbuf;
+     const CGEN_INSN *insn;
+     CGEN_INSN_LIST **htable;
+     unsigned int hash;
 {
   CGEN_INSN_LIST *current_buf;
   CGEN_INSN_LIST *previous_buf;
@@ -97,14 +100,15 @@ add_insn_to_hash_chain (CGEN_INSN_LIST *hentbuf,
    list and we want earlier ones to be prefered.  */
 
 static CGEN_INSN_LIST *
-hash_insn_array (CGEN_CPU_DESC cd,
-		 const CGEN_INSN * insns,
-		 int count,
-		 int entsize ATTRIBUTE_UNUSED,
-		 CGEN_INSN_LIST ** htable,
-		 CGEN_INSN_LIST * hentbuf)
+hash_insn_array (cd, insns, count, entsize, htable, hentbuf)
+     CGEN_CPU_DESC cd;
+     const CGEN_INSN * insns;
+     int count;
+     int entsize ATTRIBUTE_UNUSED;
+     CGEN_INSN_LIST ** htable;
+     CGEN_INSN_LIST * hentbuf;
 {
-  int big_p = CGEN_CPU_INSN_ENDIAN (cd) == CGEN_ENDIAN_BIG;
+  int big_p = CGEN_CPU_ENDIAN (cd) == CGEN_ENDIAN_BIG;
   int i;
 
   for (i = count - 1; i >= 0; --i, ++hentbuf)
@@ -137,12 +141,13 @@ hash_insn_array (CGEN_CPU_DESC cd,
    in a list.  */
 
 static CGEN_INSN_LIST *
-hash_insn_list (CGEN_CPU_DESC cd,
-		const CGEN_INSN_LIST *insns,
-		CGEN_INSN_LIST **htable,
-		CGEN_INSN_LIST *hentbuf)
+hash_insn_list (cd, insns, htable, hentbuf)
+     CGEN_CPU_DESC cd;
+     const CGEN_INSN_LIST *insns;
+     CGEN_INSN_LIST **htable;
+     CGEN_INSN_LIST *hentbuf;
 {
-  int big_p = CGEN_CPU_INSN_ENDIAN (cd) == CGEN_ENDIAN_BIG;
+  int big_p = CGEN_CPU_ENDIAN (cd) == CGEN_ENDIAN_BIG;
   const CGEN_INSN_LIST *ilist;
 
   for (ilist = insns; ilist != NULL; ilist = ilist->next, ++ hentbuf)
@@ -172,7 +177,8 @@ hash_insn_list (CGEN_CPU_DESC cd,
 /* Build the disassembler instruction hash table.  */
 
 static void
-build_dis_hash_table (CGEN_CPU_DESC cd)
+build_dis_hash_table (cd)
+     CGEN_CPU_DESC cd;
 {
   int count = cgen_insn_count (cd) + cgen_macro_insn_count (cd);
   CGEN_INSN_TABLE *insn_table = & cd->insn_table;
@@ -227,7 +233,10 @@ build_dis_hash_table (CGEN_CPU_DESC cd)
 /* Return the first entry in the hash list for INSN.  */
 
 CGEN_INSN_LIST *
-cgen_dis_lookup_insn (CGEN_CPU_DESC cd, const char * buf, CGEN_INSN_INT value)
+cgen_dis_lookup_insn (cd, buf, value)
+     CGEN_CPU_DESC cd;
+     const char * buf;
+     CGEN_INSN_INT value;
 {
   unsigned int hash;
 

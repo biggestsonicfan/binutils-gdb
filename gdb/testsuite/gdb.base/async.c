@@ -1,25 +1,28 @@
 
 
+#ifdef PROTOTYPES
 int
 foo (void)
+#else
+int
+foo ()
+#endif
 {
- int y;
- volatile int x;
+ int x, y;
 
- x = 5; x = 5; x = 5;
+ x = 5;
  y = 3;
 
  return x + y;
 }
 
-int
-baz (void)
-{
-  return 5;
-}
-
+#ifdef PROTOTYPES
 int
 main (void)
+#else
+int
+main ()
+#endif
 {
  int y, z;
  
@@ -27,7 +30,19 @@ main (void)
  z = 9;
  y = foo ();
  z = y;
- y = y + 2; /* jump here */
+ y = y + 2;
  y = baz ();
- return 0; /* until here */
+ return 0;
+}
+
+
+#ifdef PROTOTYPES
+int
+baz (void)
+#else
+int
+baz ()
+#endif
+{ 
+  return 5;
 }

@@ -1,39 +1,57 @@
-#   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+#   Copyright (C) 2001 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # Written by Michael Snyder, Red Hat, Inc., 9/20/2001
 
 # This file is part of the gdb testsuite
 # Tests for type expressions using the new "@code" and "@data" modifiers.
 
+if $tracelevel then {
+        strace $tracelevel
+        }
+
 #
 # test running programs
 #
+set prms_id 0
+set bug_id 0
 
-standard_testfile cvexpr.c
+set testfile "cvexpr"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
 
 if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
-     untested "failed to compile"
-     return -1
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
 }
 
-clean_restart ${binfile}
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
 
-gdb_test_no_output "set print sevenbit-strings"
-gdb_test_no_output "set print address off"
-gdb_test_no_output "set width 0"
+if [target_info exists gdb_stub] {
+    gdb_step_for_stub;
+}
+
+gdb_test "set print sevenbit-strings" "" ""
+gdb_test "set print address off" "" ""
+gdb_test "set width 0" "" ""
 
 set ws  "\[ \t\]*"
 

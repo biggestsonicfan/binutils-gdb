@@ -1,4 +1,4 @@
-@c Copyright (C) 2001-2020 Free Software Foundation, Inc.
+@c Copyright 2001 Free Software Foundation, Inc.
 @c This is part of the GAS manual.
 @c For copying conditions, see the file as.texinfo.
 @ifset GENERIC
@@ -40,7 +40,7 @@ Generate position-independent (or position-dependent) code.
 The default is to generate position-independent code.
 @end table
 
-@subsection Instruction Set Extension Options
+@subsection Instruction Set Extention Options
 
 These options enables or disables the use of extensions over the base
 line instruction set as introduced by the first PDP-11 CPU: the KA11.
@@ -63,7 +63,7 @@ Disable all instruction set extensions.
 @cindex -mcis
 @cindex -mno-cis
 @item -mcis | -mno-cis
-Enable (or disable) the use of the commercial instruction set, which
+Enable (or disable) the use of the commersial instruction set, which
 consists of these instructions: @code{ADDNI}, @code{ADDN}, @code{ADDPI},
 @code{ADDP}, @code{ASHNI}, @code{ASHN}, @code{ASHPI}, @code{ASHP},
 @code{CMPCI}, @code{CMPC}, @code{CMPNI}, @code{CMPN}, @code{CMPPI},
@@ -96,7 +96,7 @@ consists of these instructions: @code{ASHC}, @code{ASH}, @code{DIV},
 @cindex -mno-kev11
 @item -mfis | -mkev11
 @itemx -mno-fis | -mno-kev11
-Enable (or disable) the use of the KEV11 floating-point instructions:
+Enable (or diasble) the use of the KEV11 floating-point instructions:
 @code{FADD}, @code{FDIV}, @code{FMUL}, and @code{FSUB}.
 
 @cindex -mfpp
@@ -311,7 +311,7 @@ an immediate constants, while in BSD syntax the character for this
 purpose is @code{$}.
 
 @cindex PDP-11 general-purpose register syntax
-general-purpose registers are named @code{r0} through @code{r7}.
+eneral-purpose registers are named @code{r0} through @code{r7}.
 Mnemonic alternatives for @code{r6} and @code{r7} are @code{sp} and
 @code{pc}, respectively.
 
@@ -322,9 +322,6 @@ alternatively @code{fr0} through @code{fr3}.
 @cindex PDP-11 comments
 Comments are started with a @code{#} or a @code{/} character, and extend
 to the end of the line.  (FIXME: clash with immediates?)
-
-@cindex PDP-11 line separator
-Multiple statements on the same line can be separated by the @samp{;} character.
 
 @node PDP-11-Mnemonics
 @section Instruction Naming

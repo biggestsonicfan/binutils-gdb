@@ -1,6 +1,4 @@
 #include <stdlib.h>
-#include <stdint.h>
-
 /* Test that things still (sort of) work when compiled without -g.  */
 
 int dataglobal = 3;			/* Should go in global data */
@@ -8,40 +6,69 @@ static int datalocal = 4;		/* Should go in local data */
 int bssglobal;				/* Should go in global bss */
 static int bsslocal;			/* Should go in local bss */
 
-/* Non-int-sized global data variables.  */
-uint8_t dataglobal8 = 0xff;
-uint32_t dataglobal32_1 = 0x7fffffff;
-uint32_t dataglobal32_2 = 0x000000ff;
-uint64_t dataglobal64_1 = 0x7fffffffffffffff;
-uint64_t dataglobal64_2 = 0x00000000000000ff;
-
+#ifdef PROTOTYPES
 int
 inner (int x)
+#else
+int
+inner (x)
+     int x;
+#endif
 {
   return x + dataglobal + datalocal + bssglobal + bsslocal;
 }
 
+#ifdef PROTOTYPES
 static short
 middle (int x)
+#else
+static short
+middle (x)
+     int x;
+#endif
 {
   return 2 * inner (x);
 }
 
+#ifdef PROTOTYPES
 short
 top (int x)
+#else
+short
+top (x)
+     int x;
+#endif
 {
   return 2 * middle (x);
 }
 
+#ifdef PROTOTYPES
 int
 main (int argc, char **argv)
+#else
+int 
+main (argc, argv)
+     int argc;
+     char **argv;
+#endif
 {
+#ifdef usestubs
+  set_debug_traps();
+  breakpoint();
+#endif
   return top (argc);
 }
 
 int *x;
 
+#ifdef PROTOTYPES
 int array_index (char *arr, int i)
+#else
+int
+array_index (arr, i)
+     char *arr;
+     int i;
+#endif
 {
   /* The basic concept is just "return arr[i];".  But call malloc so that gdb
      will be able to call functions.  */
@@ -51,43 +78,4 @@ int array_index (char *arr, int i)
   retval = arr[*x];
   free (x);
   return retval;
-}
-
-float
-multf (float v1, float v2)
-{
-  return v1 * v2;
-}
-
-float
-multf_noproto (v1, v2)
-  float v1, v2;
-{
-  return v1 * v2;
-}
-
-double
-mult (double v1, double v2)
-{
-  return v1 * v2;
-}
-
-double
-mult_noproto (v1, v2)
-  double v1, v2;
-{
-  return v1 * v2;
-}
-
-uint8_t
-add8 (uint8_t v1, uint8_t v2)
-{
-  return v1 + v2;
-}
-
-uint8_t
-add8_noproto (v1, v2)
-  uint8_t v1, v2;
-{
-  return v1 + v2;
 }

@@ -1,21 +1,22 @@
 /* Miscellaneous simulator utilities.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef SIM_UTILS_H
 #define SIM_UTILS_H
@@ -26,6 +27,8 @@ void *zalloc (unsigned long size);
 
 #define ZALLOC(TYPE) (TYPE*)zalloc(sizeof (TYPE))
 #define NZALLOC(TYPE,N) (TYPE*)zalloc(sizeof (TYPE) * (N))
+
+void zfree(void*);
 
 /* Turn VALUE into a string with commas.  */
 char *sim_add_commas (char *, int, unsigned long);
@@ -45,8 +48,8 @@ unsigned long sim_elapsed_time_since (SIM_ELAPSED_TIME start);
 
 /* Utilities for manipulating the load image.  */
 
-SIM_RC sim_analyze_program (SIM_DESC sd, const char *prog_name,
-			    struct bfd *prog_bfd);
+SIM_RC sim_analyze_program (SIM_DESC sd, char *prog_name,
+			    struct _bfd *prog_bfd);
 
 /* Load program PROG into the simulator using the function DO_LOAD.
    If PROG_BFD is non-NULL, the file has already been opened.
@@ -60,12 +63,12 @@ SIM_RC sim_analyze_program (SIM_DESC sd, const char *prog_name,
    write the program sections at LMA interpreted as a virtual address.
    This is still accommodated for backward compatibility reasons. */
 
-typedef int sim_write_fn (SIM_DESC sd, SIM_ADDR mem,
-			  const unsigned char *buf, int length);
-struct bfd *sim_load_file (SIM_DESC sd, const char *myname,
-			   host_callback *callback, const char *prog,
-			   struct bfd *prog_bfd, int verbose_p,
-			   int lma_p, sim_write_fn do_load);
+typedef int sim_write_fn PARAMS ((SIM_DESC sd, SIM_ADDR mem,
+				      unsigned char *buf, int length));
+struct _bfd *sim_load_file (SIM_DESC sd, const char *myname,
+			    host_callback *callback, char *prog,
+			    struct _bfd *prog_bfd, int verbose_p,
+			    int lma_p, sim_write_fn do_load);
 
 /* Internal version of sim_do_command, include formatting */
 void sim_do_commandf (SIM_DESC sd, const char *fmt, ...);

@@ -1,32 +1,32 @@
 /* Disassemble z8000 code.
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright 1992, 1993, 1998, 2000, 2001, 2002
+   Free Software Foundation, Inc.
 
-   This file is part of the GNU opcodes library.
+   This file is part of GNU Binutils.
 
-   This library is free software; you can redistribute it and/or modify
+   This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+   USA.  */
 
 #include "sysdep.h"
-#include "disassemble.h"
-#include "libiberty.h"
+#include "dis-asm.h"
 
 #define DEFINE_TABLE
 #include "z8k-opc.h"
-
+
 #include <setjmp.h>
-
+
 typedef struct
 {
   /* These are all indexed by nibble number (i.e only every other entry
@@ -36,11 +36,11 @@ typedef struct
   unsigned short words[24];
 
   /* Nibble number of first word not yet fetched.  */
-  unsigned int max_fetched;
+  int max_fetched;
   bfd_vma insn_start;
-  OPCODES_SIGJMP_BUF bailout;
+  jmp_buf bailout;
 
-  int tabl_index;
+  long tabl_index;
   char instr_asmsrc[80];
   unsigned long arg_reg[0x0f];
   unsigned long immediate;
@@ -53,6 +53,9 @@ typedef struct
 }
 instr_data_s;
 
+static int fetch_data PARAMS ((struct disassemble_info *, int));
+
+
 /* Make sure that bytes from INFO->PRIVATE_DATA->BUFFER (inclusive)
    to ADDR (exclusive) are valid.  Returns 1 for success, longjmps
    on error.  */
@@ -61,7 +64,9 @@ instr_data_s;
    ? 1 : fetch_data ((info), (nibble)))
 
 static int
-fetch_data (struct disassemble_info *info, int nibble)
+fetch_data (info, nibble)
+     struct disassemble_info *info;
+     int nibble;
 {
   unsigned char mybuf[20];
   int status;
@@ -77,7 +82,7 @@ fetch_data (struct disassemble_info *info, int nibble)
   if (status != 0)
     {
       (*info->memory_error_func) (status, priv->insn_start, info);
-      OPCODES_SIGLONGJMP (priv->bailout, 1);
+      longjmp (priv->bailout, 1);
     }
 
   {
@@ -137,20 +142,25 @@ static char *ctrl_names[8] =
   };
 
 static int seg_length;
-int z8k_lookup_instr (unsigned char *, disassemble_info *);
-static void output_instr (instr_data_s *, unsigned long, disassemble_info *);
-static void unpack_instr (instr_data_s *, int, disassemble_info *);
-static void unparse_instr (instr_data_s *, int);
+static int print_insn_z8k PARAMS ((bfd_vma, disassemble_info *, int));
+int z8k_lookup_instr PARAMS ((unsigned char *, disassemble_info *));
+static void output_instr
+  PARAMS ((instr_data_s *, unsigned long, disassemble_info *));
+static void unpack_instr PARAMS ((instr_data_s *, int, disassemble_info *));
+static void unparse_instr PARAMS ((instr_data_s *, int));
 
 static int
-print_insn_z8k (bfd_vma addr, disassemble_info *info, int is_segmented)
+print_insn_z8k (addr, info, is_segmented)
+     bfd_vma addr;
+     disassemble_info *info;
+     int is_segmented;
 {
   instr_data_s instr_data;
 
   info->private_data = (PTR) &instr_data;
   instr_data.max_fetched = 0;
   instr_data.insn_start = addr;
-  if (OPCODES_SIGSETJMP (instr_data.bailout) != 0)
+  if (setjmp (instr_data.bailout) != 0)
     /* Error return.  */
     return -1;
 
@@ -159,7 +169,7 @@ print_insn_z8k (bfd_vma addr, disassemble_info *info, int is_segmented)
   info->display_endian = BFD_ENDIAN_BIG;
 
   instr_data.tabl_index = z8k_lookup_instr (instr_data.nibbles, info);
-  if (instr_data.tabl_index >= 0)
+  if (instr_data.tabl_index > 0)
     {
       unpack_instr (&instr_data, is_segmented, info);
       unparse_instr (&instr_data, is_segmented);
@@ -176,48 +186,44 @@ print_insn_z8k (bfd_vma addr, disassemble_info *info, int is_segmented)
 }
 
 int
-print_insn_z8001 (bfd_vma addr, disassemble_info *info)
+print_insn_z8001 (addr, info)
+     bfd_vma addr;
+     disassemble_info *info;
 {
   return print_insn_z8k (addr, info, 1);
 }
 
 int
-print_insn_z8002 (bfd_vma addr, disassemble_info *info)
+print_insn_z8002 (addr, info)
+     bfd_vma addr;
+     disassemble_info *info;
 {
   return print_insn_z8k (addr, info, 0);
 }
 
 int
-z8k_lookup_instr (unsigned char *nibbles, disassemble_info *info)
+z8k_lookup_instr (nibbles, info)
+     unsigned char *nibbles;
+     disassemble_info *info;
 {
-  unsigned int nibl_index, tabl_index;
+
+  int nibl_index, tabl_index;
   int nibl_matched;
-  int need_fetch = 0;
   unsigned short instr_nibl;
   unsigned short tabl_datum, datum_class, datum_value;
 
   nibl_matched = 0;
   tabl_index = 0;
-  FETCH_DATA (info, 4);
   while (!nibl_matched && z8k_table[tabl_index].name)
     {
       nibl_matched = 1;
       for (nibl_index = 0;
-	   nibl_matched
-	     && nibl_index < ARRAY_SIZE (z8k_table[0].byte_info)
-	     && nibl_index < z8k_table[tabl_index].length * 2;
+	   nibl_index < z8k_table[tabl_index].length * 2 && nibl_matched;
 	   nibl_index++)
 	{
 	  if ((nibl_index % 4) == 0)
-            {
-              /* Fetch data only if it isn't already there.  */
-              if (nibl_index >= 4 || (nibl_index < 4 && need_fetch))
-                FETCH_DATA (info, nibl_index + 4);   /* Fetch one word at a time.  */
-              if (nibl_index < 4)
-                need_fetch = 0;
-              else
-                need_fetch = 1;
-            }
+	    /* Fetch one word at a time.  */
+	    FETCH_DATA (info, nibl_index + 4);
 	  instr_nibl = nibbles[nibl_index];
 
 	  tabl_datum = z8k_table[tabl_index].byte_info[nibl_index];
@@ -280,11 +286,12 @@ z8k_lookup_instr (unsigned char *nibbles, disassemble_info *info)
 }
 
 static void
-output_instr (instr_data_s *instr_data,
-              unsigned long addr ATTRIBUTE_UNUSED,
-              disassemble_info *info)
+output_instr (instr_data, addr, info)
+     instr_data_s *instr_data;
+     unsigned long addr ATTRIBUTE_UNUSED;
+     disassemble_info *info;
 {
-  unsigned int num_bytes;
+  int num_bytes;
   char out_str[100];
 
   out_str[0] = 0;
@@ -298,9 +305,12 @@ output_instr (instr_data_s *instr_data,
 }
 
 static void
-unpack_instr (instr_data_s *instr_data, int is_segmented, disassemble_info *info)
+unpack_instr (instr_data, is_segmented, info)
+     instr_data_s *instr_data;
+     int is_segmented;
+     disassemble_info *info;
 {
-  unsigned int nibl_count, loop;
+  int nibl_count, loop;
   unsigned short instr_nibl, instr_byte, instr_word;
   long instr_long;
   unsigned int tabl_datum, datum_class;
@@ -369,8 +379,8 @@ unpack_instr (instr_data_s *instr_data, int is_segmented, disassemble_info *info
 	      break;
 	    case ARG_IMM32:
 	      FETCH_DATA (info, nibl_count + 8);
-	      instr_long = ((unsigned) instr_data->words[nibl_count] << 16
-			    | instr_data->words[nibl_count + 4]);
+	      instr_long = (instr_data->words[nibl_count] << 16)
+		| (instr_data->words[nibl_count + 4]);
 	      instr_data->immediate = instr_long;
 	      nibl_count += 7;
 	      break;
@@ -402,17 +412,17 @@ unpack_instr (instr_data_s *instr_data, int is_segmented, disassemble_info *info
 	      if (instr_nibl & 0x8)
 		{
 		  FETCH_DATA (info, nibl_count + 8);
-		  instr_long = ((unsigned) instr_data->words[nibl_count] << 16
-				| instr_data->words[nibl_count + 4]);
-		  instr_data->address = ((instr_word & 0x7f00) << 16
-					 | (instr_long & 0xffff));
+		  instr_long = (instr_data->words[nibl_count] << 16)
+		    | (instr_data->words[nibl_count + 4]);
+		  instr_data->address = ((instr_word & 0x7f00) << 8)
+		    + (instr_long & 0xffff);
 		  nibl_count += 7;
 		  seg_length = 2;
 		}
 	      else
 		{
-		  instr_data->address = ((instr_word & 0x7f00) << 16
-					 | (instr_word & 0x00ff));
+		  instr_data->address = ((instr_word & 0x7f00) << 8)
+		    + (instr_word & 0x00ff);
 		  nibl_count += 3;
 		}
 	    }
@@ -475,55 +485,9 @@ unpack_instr (instr_data_s *instr_data, int is_segmented, disassemble_info *info
 }
 
 static void
-print_intr(char *tmp_str, unsigned long interrupts)
-{
-  int comma = 0;
-
-  *tmp_str = 0;
-  if (! (interrupts & 2))
-    {
-      strcat (tmp_str, "vi");
-      comma = 1;
-    }
-  if (! (interrupts & 1))
-    {
-      if (comma) strcat (tmp_str, ",");
-      strcat (tmp_str, "nvi");
-    }
-}
-
-static void
-print_flags(char *tmp_str, unsigned long flags)
-{
-  int comma = 0;
-
-  *tmp_str = 0;
-  if (flags & 8)
-    {
-      strcat (tmp_str, "c");
-      comma = 1;
-    }
-  if (flags & 4)
-    {
-      if (comma) strcat (tmp_str, ",");
-      strcat (tmp_str, "z");
-      comma = 1;
-    }
-  if (flags & 2)
-    {
-      if (comma) strcat (tmp_str, ",");
-      strcat (tmp_str, "s");
-      comma = 1;
-    }
-  if (flags & 1)
-    {
-      if (comma) strcat (tmp_str, ",");
-      strcat (tmp_str, "p");
-    }
-}
-
-static void
-unparse_instr (instr_data_s *instr_data, int is_segmented)
+unparse_instr (instr_data, is_segmented)
+     instr_data_s *instr_data;
+     int is_segmented;
 {
   unsigned short datum_value;
   unsigned int tabl_datum, datum_class;
@@ -551,10 +515,10 @@ unparse_instr (instr_data_s *instr_data, int is_segmented)
 	  break;
 	case CLASS_BA:
           if (is_segmented)
-            sprintf (tmp_str, "rr%ld(#0x%lx)", instr_data->arg_reg[datum_value],
+            sprintf (tmp_str, "rr%ld(#%lx)", instr_data->arg_reg[datum_value],
                      instr_data->immediate);
           else
-            sprintf (tmp_str, "r%ld(#0x%lx)", instr_data->arg_reg[datum_value],
+            sprintf (tmp_str, "r%ld(#%lx)", instr_data->arg_reg[datum_value],
                      instr_data->immediate);
 	  strcat (out_str, tmp_str);
 	  break;
@@ -572,12 +536,6 @@ unparse_instr (instr_data_s *instr_data, int is_segmented)
 	  strcat (out_str, tmp_str);
 	  break;
 	case CLASS_IMM:
-	  if (datum_value == ARG_IMM2)	/* True with EI/DI instructions only.  */
-	    {
-	      print_intr (tmp_str, instr_data->interrupts);
-	      strcat (out_str, tmp_str);
-	      break;
-	    }
 	  sprintf (tmp_str, "#0x%0lx", instr_data->immediate);
 	  strcat (out_str, tmp_str);
 	  break;
@@ -601,12 +559,8 @@ unparse_instr (instr_data_s *instr_data, int is_segmented)
 	    sprintf (tmp_str, "@r%ld", instr_data->arg_reg[datum_value]);
 	  strcat (out_str, tmp_str);
 	  break;
-	case CLASS_IRO:
-          sprintf (tmp_str, "@r%ld", instr_data->arg_reg[datum_value]);
-	  strcat (out_str, tmp_str);
-	  break;
 	case CLASS_FLAGS:
-	  print_flags(tmp_str, instr_data->flags);
+	  sprintf (tmp_str, "0x%0lx", instr_data->flags);
 	  strcat (out_str, tmp_str);
 	  break;
 	case CLASS_REG_BYTE:

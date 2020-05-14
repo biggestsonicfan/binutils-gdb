@@ -1,42 +1,43 @@
 /* ia64-opc.c -- Functions to access the compacted opcode table
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000 Free Software Foundation, Inc.
    Written by Bob Manson of Cygnus Solutions, <manson@cygnus.com>
 
-   This file is part of the GNU opcodes library.
+   This file is part of GDB, GAS, and the GNU binutils.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+   GDB, GAS, and the GNU binutils are free software; you can redistribute
+   them and/or modify them under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either version
+   2, or (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   GDB, GAS, and the GNU binutils are distributed in the hope that they
+   will be useful, but WITHOUT ANY WARRANTY; without even the implied
+   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+   the GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "sysdep.h"
+#include "ansidecl.h"
 #include "libiberty.h"
+#include "sysdep.h"
 #include "ia64-asmtab.h"
 #include "ia64-asmtab.c"
 
-static void get_opc_prefix (const char **, char *);
-static short int find_string_ent (const char *);
-static short int find_main_ent (short int);
-static short int find_completer (short int, short int, const char *);
-static ia64_insn apply_completer (ia64_insn, int);
-static int extract_op_bits (int, int, int);
-static int extract_op (int, int *, unsigned int *);
-static int opcode_verify (ia64_insn, int, enum ia64_insn_type);
-static int locate_opcode_ent (ia64_insn, enum ia64_insn_type);
+static void get_opc_prefix PARAMS ((const char **, char *));
+static short int find_string_ent PARAMS ((const char *));
+static short int find_main_ent PARAMS ((short int));
+static short int find_completer PARAMS ((short int, short int, const char *));
+static ia64_insn apply_completer PARAMS ((ia64_insn, int));
+static int extract_op_bits PARAMS ((int, int, int));
+static int extract_op PARAMS ((int, int *, unsigned int *));
+static int opcode_verify PARAMS ((ia64_insn, int, enum ia64_insn_type));
+static int locate_opcode_ent PARAMS ((ia64_insn, enum ia64_insn_type));
 static struct ia64_opcode *make_ia64_opcode
-  (ia64_insn, const char *, int, int);
+  PARAMS ((ia64_insn, const char *, int, int));
 static struct ia64_opcode *ia64_find_matching_opcode
-  (const char *, short int);
+  PARAMS ((const char *, short int));
 
 const struct ia64_templ_desc ia64_templ_desc[16] =
   {
@@ -64,7 +65,9 @@ const struct ia64_templ_desc ia64_templ_desc[16] =
    of the opcode, or at the NUL character. */
 
 static void
-get_opc_prefix (const char **ptr, char *dest)
+get_opc_prefix (ptr, dest)
+     const char **ptr;
+     char *dest;
 {
   char *c = strchr (*ptr, '.');
   if (c != NULL)
@@ -86,7 +89,8 @@ get_opc_prefix (const char **ptr, char *dest)
    STR; return -1 if one does not exist. */
 
 static short
-find_string_ent (const char *str)
+find_string_ent (str)
+     const char *str;
 {
   short start = 0;
   short end = sizeof (ia64_strings) / sizeof (const char *);
@@ -120,10 +124,11 @@ find_string_ent (const char *str)
    return -1 if one does not exist. */
 
 static short
-find_main_ent (short nameindex)
+find_main_ent (nameindex)
+     short nameindex;
 {
   short start = 0;
-  short end = ARRAY_SIZE (main_table);
+  short end = sizeof (main_table) / sizeof (struct ia64_main_table);
   short i = (start + end) / 2;
 
   if (nameindex < main_table[0].name_index
@@ -159,7 +164,10 @@ find_main_ent (short nameindex)
    return -1 if one does not exist. */
 
 static short
-find_completer (short main_ent, short prev_completer, const char *name)
+find_completer (main_ent, prev_completer, name)
+     short main_ent;
+     short prev_completer;
+     const char *name;
 {
   short name_index = find_string_ent (name);
 
@@ -192,7 +200,9 @@ find_completer (short main_ent, short prev_completer, const char *name)
    return the result. */
 
 static ia64_insn
-apply_completer (ia64_insn opcode, int completer_index)
+apply_completer (opcode, completer_index)
+     ia64_insn opcode;
+     int completer_index;
 {
   ia64_insn mask = completer_table[completer_index].mask;
   ia64_insn bits = completer_table[completer_index].bits;
@@ -210,7 +220,10 @@ apply_completer (ia64_insn opcode, int completer_index)
    first byte in OP_POINTER.) */
 
 static int
-extract_op_bits (int op_pointer, int bitoffset, int bits)
+extract_op_bits (op_pointer, bitoffset, bits)
+     int op_pointer;
+     int bitoffset;
+     int bits;
 {
   int res = 0;
 
@@ -246,7 +259,10 @@ extract_op_bits (int op_pointer, int bitoffset, int bits)
    state entry in bits is returned. */
 
 static int
-extract_op (int op_pointer, int *opval, unsigned int *op)
+extract_op (op_pointer, opval, op)
+     int op_pointer;
+     int *opval;
+     unsigned int *op;
 {
   int oplen = 5;
 
@@ -301,7 +317,10 @@ extract_op (int op_pointer, int *opval, unsigned int *op)
    PLACE matches OPCODE and is of type TYPE. */
 
 static int
-opcode_verify (ia64_insn opcode, int place, enum ia64_insn_type type)
+opcode_verify (opcode, place, type)
+     ia64_insn opcode;
+     int place;
+     enum ia64_insn_type type;
 {
   if (main_table[place].opcode_type != type)
     {
@@ -345,7 +364,9 @@ opcode_verify (ia64_insn opcode, int place, enum ia64_insn_type type)
    priority. */
 
 static int
-locate_opcode_ent (ia64_insn opcode, enum ia64_insn_type type)
+locate_opcode_ent (opcode, type)
+     ia64_insn opcode;
+     enum ia64_insn_type type;
 {
   int currtest[41];
   int bitpos[41];
@@ -364,7 +385,7 @@ locate_opcode_ent (ia64_insn opcode, enum ia64_insn_type type)
       unsigned int op;
       int currbitnum = bitpos[currstatenum];
       int oplen;
-      int opval[3] = {0};
+      int opval[3];
       int next_op;
       int currbit;
 
@@ -372,16 +393,13 @@ locate_opcode_ent (ia64_insn opcode, enum ia64_insn_type type)
 
       bitpos[currstatenum] = currbitnum;
 
-      /* Skip opval[0] bits in the instruction.  */
+      /* Skip opval[0] bits in the instruction. */
       if (op & 0x40)
 	{
 	  currbitnum -= opval[0];
 	}
 
-      if (currbitnum < 0)
-	currbitnum = 0;
-
-      /* The value of the current bit being tested.  */
+      /* The value of the current bit being tested. */
       currbit = opcode & (((ia64_insn) 1) << currbitnum) ? 1 : 0;
       next_op = -1;
 
@@ -466,7 +484,7 @@ locate_opcode_ent (ia64_insn opcode, enum ia64_insn_type type)
 
 	  if (next_op > 65535)
 	    {
-	      return -1;
+	      abort ();
 	    }
 
 	  /* Run through the list of opcodes to check, trying to find
@@ -527,7 +545,11 @@ locate_opcode_ent (ia64_insn opcode, enum ia64_insn_type type)
 /* Construct an ia64_opcode entry based on OPCODE, NAME and PLACE. */
 
 static struct ia64_opcode *
-make_ia64_opcode (ia64_insn opcode, const char *name, int place, int depind)
+make_ia64_opcode (opcode, name, place, depind)
+     ia64_insn opcode;
+     const char *name;
+     int place;
+     int depind;
 {
   struct ia64_opcode *res =
     (struct ia64_opcode *) xmalloc (sizeof (struct ia64_opcode));
@@ -550,7 +572,9 @@ make_ia64_opcode (ia64_insn opcode, const char *name, int place, int depind)
 /* Determine the ia64_opcode entry for the opcode specified by INSN
    and TYPE.  If a valid entry is not found, return NULL. */
 struct ia64_opcode *
-ia64_dis_opcode (ia64_insn insn, enum ia64_insn_type type)
+ia64_dis_opcode (insn, type)
+     ia64_insn insn;
+     enum ia64_insn_type type;
 {
   int disent = locate_opcode_ent (insn, type);
 
@@ -609,14 +633,13 @@ ia64_dis_opcode (ia64_insn insn, enum ia64_insn_type type)
    matches NAME.  Return NULL if one is not found. */
 
 static struct ia64_opcode *
-ia64_find_matching_opcode (const char *name, short place)
+ia64_find_matching_opcode (name, place)
+     const char *name;
+     short place;
 {
   char op[129];
   const char *suffix;
   short name_index;
-
-  if ((unsigned) place >= ARRAY_SIZE (main_table))
-    return NULL;
 
   if (strlen (name) > 128)
     {
@@ -673,7 +696,8 @@ ia64_find_matching_opcode (const char *name, short place)
    release any resources used by the returned entry. */
 
 struct ia64_opcode *
-ia64_find_next_opcode (struct ia64_opcode *prev_ent)
+ia64_find_next_opcode (prev_ent)
+     struct ia64_opcode *prev_ent;
 {
   return ia64_find_matching_opcode (prev_ent->name,
 				    prev_ent->ent_index + 1);
@@ -686,7 +710,8 @@ ia64_find_next_opcode (struct ia64_opcode *prev_ent)
    release any resources used by the returned entry. */
 
 struct ia64_opcode *
-ia64_find_opcode (const char *name)
+ia64_find_opcode (name)
+     const char *name;
 {
   char op[129];
   const char *suffix;
@@ -716,20 +741,22 @@ ia64_find_opcode (const char *name)
 
 /* Free any resources used by ENT. */
 void
-ia64_free_opcode (struct ia64_opcode *ent)
+ia64_free_opcode (ent)
+     struct ia64_opcode *ent;
 {
   free ((void *)ent->name);
   free (ent);
 }
 
 const struct ia64_dependency *
-ia64_find_dependency (int dep_index)
+ia64_find_dependency (index)
+  int index;
 {
-  dep_index = DEP(dep_index);
+  index = DEP(index);
 
-  if (dep_index < 0
-      || dep_index >= (int) ARRAY_SIZE (dependencies))
+  if (index < 0
+      || index >= (int)(sizeof(dependencies) / sizeof(dependencies[0])))
     return NULL;
 
-  return &dependencies[dep_index];
+  return &dependencies[index];
 }

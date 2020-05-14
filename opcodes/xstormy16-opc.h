@@ -1,34 +1,29 @@
-/* DO NOT EDIT!  -*- buffer-read-only: t -*- vi:set ro:  */
 /* Instruction opcode header for xstormy16.
 
 THIS FILE IS MACHINE GENERATED WITH CGEN.
 
-Copyright (C) 1996-2020 Free Software Foundation, Inc.
+Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of the GNU Binutils and/or GDB, the GNU debugger.
 
-   This file is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 */
 
 #ifndef XSTORMY16_OPC_H
 #define XSTORMY16_OPC_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* -- opc.h */
 
@@ -71,8 +66,7 @@ typedef enum cgen_insn_type {
  , XSTORMY16_INSN_BGR, XSTORMY16_INSN_BR, XSTORMY16_INSN_JMP, XSTORMY16_INSN_JMPF
  , XSTORMY16_INSN_CALLRGR, XSTORMY16_INSN_CALLRIMM, XSTORMY16_INSN_CALLGR, XSTORMY16_INSN_CALLFIMM
  , XSTORMY16_INSN_ICALLRGR, XSTORMY16_INSN_ICALLGR, XSTORMY16_INSN_ICALLFIMM, XSTORMY16_INSN_IRET
- , XSTORMY16_INSN_RET, XSTORMY16_INSN_MUL, XSTORMY16_INSN_DIV, XSTORMY16_INSN_SDIV
- , XSTORMY16_INSN_SDIVLH, XSTORMY16_INSN_DIVLH, XSTORMY16_INSN_RESET, XSTORMY16_INSN_NOP
+ , XSTORMY16_INSN_RET, XSTORMY16_INSN_MUL, XSTORMY16_INSN_DIV, XSTORMY16_INSN_NOP
  , XSTORMY16_INSN_HALT, XSTORMY16_INSN_HOLD, XSTORMY16_INSN_HOLDX, XSTORMY16_INSN_BRK
  , XSTORMY16_INSN_SYSCALL
 } CGEN_INSN_TYPE;
@@ -139,9 +133,5 @@ struct cgen_fields
 {\
 }
 
-
-   #ifdef __cplusplus
-   }
-   #endif
 
 #endif /* XSTORMY16_OPC_H */

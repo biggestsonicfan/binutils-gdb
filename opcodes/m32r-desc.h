@@ -1,45 +1,43 @@
-/* DO NOT EDIT!  -*- buffer-read-only: t -*- vi:set ro:  */
 /* CPU data header for m32r.
 
 THIS FILE IS MACHINE GENERATED WITH CGEN.
 
-Copyright (C) 1996-2020 Free Software Foundation, Inc.
+Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of the GNU Binutils and/or GDB, the GNU debugger.
 
-   This file is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 */
 
 #ifndef M32R_CPU_H
 #define M32R_CPU_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define CGEN_ARCH m32r
 
 /* Given symbol S, return m32r_cgen_<S>.  */
+#if defined (__STDC__) || defined (ALMOST_STDC) || defined (HAVE_STRINGIZE)
 #define CGEN_SYM(s) m32r##_cgen_##s
+#else
+#define CGEN_SYM(s) m32r/**/_cgen_/**/s
+#endif
 
 
 /* Selected cpu families.  */
 #define HAVE_CPU_M32RBF
 #define HAVE_CPU_M32RXF
-#define HAVE_CPU_M32R2F
 
 #define CGEN_INSN_LSB0_P 0
 
@@ -92,19 +90,18 @@ typedef enum gr_names {
 /* Enum declaration for .  */
 typedef enum cr_names {
   H_CR_PSW = 0, H_CR_CBR = 1, H_CR_SPI = 2, H_CR_SPU = 3
- , H_CR_BPC = 6, H_CR_BBPSW = 8, H_CR_BBPC = 14, H_CR_EVB = 5
- , H_CR_CR0 = 0, H_CR_CR1 = 1, H_CR_CR2 = 2, H_CR_CR3 = 3
- , H_CR_CR4 = 4, H_CR_CR5 = 5, H_CR_CR6 = 6, H_CR_CR7 = 7
- , H_CR_CR8 = 8, H_CR_CR9 = 9, H_CR_CR10 = 10, H_CR_CR11 = 11
- , H_CR_CR12 = 12, H_CR_CR13 = 13, H_CR_CR14 = 14, H_CR_CR15 = 15
+ , H_CR_BPC = 6, H_CR_BBPSW = 8, H_CR_BBPC = 14, H_CR_CR0 = 0
+ , H_CR_CR1 = 1, H_CR_CR2 = 2, H_CR_CR3 = 3, H_CR_CR4 = 4
+ , H_CR_CR5 = 5, H_CR_CR6 = 6, H_CR_CR7 = 7, H_CR_CR8 = 8
+ , H_CR_CR9 = 9, H_CR_CR10 = 10, H_CR_CR11 = 11, H_CR_CR12 = 12
+ , H_CR_CR13 = 13, H_CR_CR14 = 14, H_CR_CR15 = 15
 } CR_NAMES;
 
 /* Attributes.  */
 
 /* Enum declaration for machine type selection.  */
 typedef enum mach_attr {
-  MACH_BASE, MACH_M32R, MACH_M32RX, MACH_M32R2
- , MACH_MAX
+  MACH_BASE, MACH_M32R, MACH_M32RX, MACH_MAX
 } MACH_ATTR;
 
 /* Enum declaration for instruction set selection.  */
@@ -115,7 +112,6 @@ typedef enum isa_attr {
 /* Enum declaration for parallel execution pipeline selection.  */
 typedef enum pipe_attr {
   PIPE_NONE, PIPE_O, PIPE_S, PIPE_OS
- , PIPE_O_OS
 } PIPE_ATTR;
 
 /* Number of architecture variants.  */
@@ -123,6 +119,8 @@ typedef enum pipe_attr {
 #define MAX_MACHS ((int) MACH_MAX)
 
 /* Ifield support.  */
+
+extern const struct cgen_ifld m32r_cgen_ifld_table[];
 
 /* Ifield attribute indices.  */
 
@@ -136,26 +134,15 @@ typedef enum cgen_ifld_attr {
 /* Number of non-boolean elements in cgen_ifld_attr.  */
 #define CGEN_IFLD_NBOOL_ATTRS (CGEN_IFLD_END_NBOOLS - CGEN_IFLD_START_NBOOLS - 1)
 
-/* cgen_ifld attribute accessor macros.  */
-#define CGEN_ATTR_CGEN_IFLD_MACH_VALUE(attrs) ((attrs)->nonbool[CGEN_IFLD_MACH-CGEN_IFLD_START_NBOOLS-1].nonbitset)
-#define CGEN_ATTR_CGEN_IFLD_VIRTUAL_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_IFLD_VIRTUAL)) != 0)
-#define CGEN_ATTR_CGEN_IFLD_PCREL_ADDR_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_IFLD_PCREL_ADDR)) != 0)
-#define CGEN_ATTR_CGEN_IFLD_ABS_ADDR_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_IFLD_ABS_ADDR)) != 0)
-#define CGEN_ATTR_CGEN_IFLD_RESERVED_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_IFLD_RESERVED)) != 0)
-#define CGEN_ATTR_CGEN_IFLD_SIGN_OPT_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_IFLD_SIGN_OPT)) != 0)
-#define CGEN_ATTR_CGEN_IFLD_SIGNED_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_IFLD_SIGNED)) != 0)
-#define CGEN_ATTR_CGEN_IFLD_RELOC_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_IFLD_RELOC)) != 0)
-
 /* Enum declaration for m32r ifield types.  */
 typedef enum ifield_type {
   M32R_F_NIL, M32R_F_ANYOF, M32R_F_OP1, M32R_F_OP2
  , M32R_F_COND, M32R_F_R1, M32R_F_R2, M32R_F_SIMM8
- , M32R_F_SIMM16, M32R_F_SHIFT_OP2, M32R_F_UIMM3, M32R_F_UIMM4
- , M32R_F_UIMM5, M32R_F_UIMM8, M32R_F_UIMM16, M32R_F_UIMM24
- , M32R_F_HI16, M32R_F_DISP8, M32R_F_DISP16, M32R_F_DISP24
- , M32R_F_OP23, M32R_F_OP3, M32R_F_ACC, M32R_F_ACCS
- , M32R_F_ACCD, M32R_F_BITS67, M32R_F_BIT4, M32R_F_BIT14
- , M32R_F_IMM1, M32R_F_MAX
+ , M32R_F_SIMM16, M32R_F_SHIFT_OP2, M32R_F_UIMM4, M32R_F_UIMM5
+ , M32R_F_UIMM16, M32R_F_UIMM24, M32R_F_HI16, M32R_F_DISP8
+ , M32R_F_DISP16, M32R_F_DISP24, M32R_F_OP23, M32R_F_OP3
+ , M32R_F_ACC, M32R_F_ACCS, M32R_F_ACCD, M32R_F_BITS67
+ , M32R_F_BIT14, M32R_F_IMM1, M32R_F_MAX
 } IFIELD_TYPE;
 
 #define MAX_IFLD ((int) M32R_F_MAX)
@@ -170,13 +157,6 @@ typedef enum cgen_hw_attr {
 
 /* Number of non-boolean elements in cgen_hw_attr.  */
 #define CGEN_HW_NBOOL_ATTRS (CGEN_HW_END_NBOOLS - CGEN_HW_START_NBOOLS - 1)
-
-/* cgen_hw attribute accessor macros.  */
-#define CGEN_ATTR_CGEN_HW_MACH_VALUE(attrs) ((attrs)->nonbool[CGEN_HW_MACH-CGEN_HW_START_NBOOLS-1].nonbitset)
-#define CGEN_ATTR_CGEN_HW_VIRTUAL_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_HW_VIRTUAL)) != 0)
-#define CGEN_ATTR_CGEN_HW_CACHE_ADDR_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_HW_CACHE_ADDR)) != 0)
-#define CGEN_ATTR_CGEN_HW_PC_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_HW_PC)) != 0)
-#define CGEN_ATTR_CGEN_HW_PROFILE_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_HW_PROFILE)) != 0)
 
 /* Enum declaration for m32r hardware types.  */
 typedef enum cgen_hw_type {
@@ -195,39 +175,26 @@ typedef enum cgen_hw_type {
 typedef enum cgen_operand_attr {
   CGEN_OPERAND_VIRTUAL, CGEN_OPERAND_PCREL_ADDR, CGEN_OPERAND_ABS_ADDR, CGEN_OPERAND_SIGN_OPT
  , CGEN_OPERAND_SIGNED, CGEN_OPERAND_NEGATIVE, CGEN_OPERAND_RELAX, CGEN_OPERAND_SEM_ONLY
- , CGEN_OPERAND_RELOC, CGEN_OPERAND_END_BOOLS, CGEN_OPERAND_START_NBOOLS = 31, CGEN_OPERAND_MACH
- , CGEN_OPERAND_END_NBOOLS
+ , CGEN_OPERAND_RELOC, CGEN_OPERAND_HASH_PREFIX, CGEN_OPERAND_END_BOOLS, CGEN_OPERAND_START_NBOOLS = 31
+ , CGEN_OPERAND_MACH, CGEN_OPERAND_END_NBOOLS
 } CGEN_OPERAND_ATTR;
 
 /* Number of non-boolean elements in cgen_operand_attr.  */
 #define CGEN_OPERAND_NBOOL_ATTRS (CGEN_OPERAND_END_NBOOLS - CGEN_OPERAND_START_NBOOLS - 1)
 
-/* cgen_operand attribute accessor macros.  */
-#define CGEN_ATTR_CGEN_OPERAND_MACH_VALUE(attrs) ((attrs)->nonbool[CGEN_OPERAND_MACH-CGEN_OPERAND_START_NBOOLS-1].nonbitset)
-#define CGEN_ATTR_CGEN_OPERAND_VIRTUAL_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_VIRTUAL)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_PCREL_ADDR_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_PCREL_ADDR)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_ABS_ADDR_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_ABS_ADDR)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_SIGN_OPT_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_SIGN_OPT)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_SIGNED_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_SIGNED)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_NEGATIVE_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_NEGATIVE)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_RELAX_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_RELAX)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_SEM_ONLY_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_SEM_ONLY)) != 0)
-#define CGEN_ATTR_CGEN_OPERAND_RELOC_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_OPERAND_RELOC)) != 0)
-
 /* Enum declaration for m32r operand types.  */
 typedef enum cgen_operand_type {
   M32R_OPERAND_PC, M32R_OPERAND_SR, M32R_OPERAND_DR, M32R_OPERAND_SRC1
  , M32R_OPERAND_SRC2, M32R_OPERAND_SCR, M32R_OPERAND_DCR, M32R_OPERAND_SIMM8
- , M32R_OPERAND_SIMM16, M32R_OPERAND_UIMM3, M32R_OPERAND_UIMM4, M32R_OPERAND_UIMM5
- , M32R_OPERAND_UIMM8, M32R_OPERAND_UIMM16, M32R_OPERAND_IMM1, M32R_OPERAND_ACCD
- , M32R_OPERAND_ACCS, M32R_OPERAND_ACC, M32R_OPERAND_HASH, M32R_OPERAND_HI16
- , M32R_OPERAND_SLO16, M32R_OPERAND_ULO16, M32R_OPERAND_UIMM24, M32R_OPERAND_DISP8
- , M32R_OPERAND_DISP16, M32R_OPERAND_DISP24, M32R_OPERAND_CONDBIT, M32R_OPERAND_ACCUM
- , M32R_OPERAND_MAX
+ , M32R_OPERAND_SIMM16, M32R_OPERAND_UIMM4, M32R_OPERAND_UIMM5, M32R_OPERAND_UIMM16
+ , M32R_OPERAND_IMM1, M32R_OPERAND_ACCD, M32R_OPERAND_ACCS, M32R_OPERAND_ACC
+ , M32R_OPERAND_HASH, M32R_OPERAND_HI16, M32R_OPERAND_SLO16, M32R_OPERAND_ULO16
+ , M32R_OPERAND_UIMM24, M32R_OPERAND_DISP8, M32R_OPERAND_DISP16, M32R_OPERAND_DISP24
+ , M32R_OPERAND_CONDBIT, M32R_OPERAND_ACCUM, M32R_OPERAND_MAX
 } CGEN_OPERAND_TYPE;
 
 /* Number of operands types.  */
-#define MAX_OPERANDS 28
+#define MAX_OPERANDS 26
 
 /* Maximum number of operands referenced by any insn.  */
 #define MAX_OPERAND_INSTANCES 11
@@ -237,37 +204,17 @@ typedef enum cgen_operand_type {
 /* Enum declaration for cgen_insn attrs.  */
 typedef enum cgen_insn_attr {
   CGEN_INSN_ALIAS, CGEN_INSN_VIRTUAL, CGEN_INSN_UNCOND_CTI, CGEN_INSN_COND_CTI
- , CGEN_INSN_SKIP_CTI, CGEN_INSN_DELAY_SLOT, CGEN_INSN_RELAXABLE, CGEN_INSN_RELAXED
+ , CGEN_INSN_SKIP_CTI, CGEN_INSN_DELAY_SLOT, CGEN_INSN_RELAXABLE, CGEN_INSN_RELAX
  , CGEN_INSN_NO_DIS, CGEN_INSN_PBB, CGEN_INSN_FILL_SLOT, CGEN_INSN_SPECIAL
- , CGEN_INSN_SPECIAL_M32R, CGEN_INSN_SPECIAL_FLOAT, CGEN_INSN_END_BOOLS, CGEN_INSN_START_NBOOLS = 31
- , CGEN_INSN_MACH, CGEN_INSN_PIPE, CGEN_INSN_END_NBOOLS
+ , CGEN_INSN_END_BOOLS, CGEN_INSN_START_NBOOLS = 31, CGEN_INSN_MACH, CGEN_INSN_PIPE
+ , CGEN_INSN_END_NBOOLS
 } CGEN_INSN_ATTR;
 
 /* Number of non-boolean elements in cgen_insn_attr.  */
 #define CGEN_INSN_NBOOL_ATTRS (CGEN_INSN_END_NBOOLS - CGEN_INSN_START_NBOOLS - 1)
 
-/* cgen_insn attribute accessor macros.  */
-#define CGEN_ATTR_CGEN_INSN_MACH_VALUE(attrs) ((attrs)->nonbool[CGEN_INSN_MACH-CGEN_INSN_START_NBOOLS-1].nonbitset)
-#define CGEN_ATTR_CGEN_INSN_PIPE_VALUE(attrs) ((attrs)->nonbool[CGEN_INSN_PIPE-CGEN_INSN_START_NBOOLS-1].nonbitset)
-#define CGEN_ATTR_CGEN_INSN_ALIAS_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_ALIAS)) != 0)
-#define CGEN_ATTR_CGEN_INSN_VIRTUAL_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_VIRTUAL)) != 0)
-#define CGEN_ATTR_CGEN_INSN_UNCOND_CTI_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_UNCOND_CTI)) != 0)
-#define CGEN_ATTR_CGEN_INSN_COND_CTI_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_COND_CTI)) != 0)
-#define CGEN_ATTR_CGEN_INSN_SKIP_CTI_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_SKIP_CTI)) != 0)
-#define CGEN_ATTR_CGEN_INSN_DELAY_SLOT_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_DELAY_SLOT)) != 0)
-#define CGEN_ATTR_CGEN_INSN_RELAXABLE_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_RELAXABLE)) != 0)
-#define CGEN_ATTR_CGEN_INSN_RELAXED_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_RELAXED)) != 0)
-#define CGEN_ATTR_CGEN_INSN_NO_DIS_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_NO_DIS)) != 0)
-#define CGEN_ATTR_CGEN_INSN_PBB_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_PBB)) != 0)
-#define CGEN_ATTR_CGEN_INSN_FILL_SLOT_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_FILL_SLOT)) != 0)
-#define CGEN_ATTR_CGEN_INSN_SPECIAL_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_SPECIAL)) != 0)
-#define CGEN_ATTR_CGEN_INSN_SPECIAL_M32R_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_SPECIAL_M32R)) != 0)
-#define CGEN_ATTR_CGEN_INSN_SPECIAL_FLOAT_VALUE(attrs) (((attrs)->bool_ & (1 << CGEN_INSN_SPECIAL_FLOAT)) != 0)
-
 /* cgen.h uses things we just defined.  */
 #include "opcode/cgen.h"
-
-extern const struct cgen_ifld m32r_cgen_ifld_table[];
 
 /* Attributes.  */
 extern const CGEN_ATTR_TABLE m32r_cgen_hardware_attr_table[];
@@ -281,12 +228,7 @@ extern CGEN_KEYWORD m32r_cgen_opval_gr_names;
 extern CGEN_KEYWORD m32r_cgen_opval_cr_names;
 extern CGEN_KEYWORD m32r_cgen_opval_h_accums;
 
-extern const CGEN_HW_ENTRY m32r_cgen_hw_table[];
 
 
-
-   #ifdef __cplusplus
-   }
-   #endif
 
 #endif /* M32R_CPU_H */

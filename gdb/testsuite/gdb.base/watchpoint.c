@@ -30,7 +30,7 @@ int ival2 = -1;
 int ival3 = -1;
 int ival4 = -1;
 int ival5 = -1;
-char buf[30] = "testtesttesttesttesttesttestte";
+char buf[10];
 struct foo
 {
   int val;
@@ -38,28 +38,6 @@ struct foo
 struct foo struct1, struct2, *ptr1, *ptr2;
 
 int doread = 0;
-
-char *global_ptr;
-char **global_ptr_ptr;
-
-struct foo2
-{
-  int val[2];
-};
-struct foo2 foo2;
-
-struct foo4
-{
-  int val[4];
-};
-struct foo4 foo4;
-
-struct foo5
-{
-  struct { int x; } *p;
-};
-
-struct foo5 *nullptr;
 
 void marker1 ()
 {
@@ -81,9 +59,13 @@ void marker6 ()
 {
 }
 
+#ifdef PROTOTYPES
 void recurser (int  x)
+#else
+void recurser (x) int  x;
+#endif
 {
-  int  local_x = 0;
+  int  local_x;
 
   if (x > 0)
     recurser (x-1);
@@ -93,26 +75,12 @@ void recurser (int  x)
 void
 func2 ()
 {
-  int  local_a = 0;
+  int  local_a;
   static int  static_b;
 
-  /* func2 breakpoint here */
   ival5++;
   local_a = ival5;
   static_b = local_a;
-}
-
-void
-func3 ()
-{
-  int x;
-  int y;
-
-  x = 0;
-  x = 1;				/* second x assignment */
-  y = 1;
-  y = 2;
-  buf[26] = 3;
 }
 
 int
@@ -130,47 +98,12 @@ func1 ()
   return 73;
 }
 
-void
-func4 ()
-{
-  buf[0] = 3;
-  global_ptr = buf;
-  buf[0] = 7;
-  buf[1] = 5;
-  global_ptr_ptr = &global_ptr;
-  buf[0] = 9;
-  global_ptr++;
-}
-
-void
-func5 ()
-{
-  int val = 0, val2 = 23;
-  int *x = &val;
-
-  /* func5 breakpoint here */
-  x = &val2;
-  val = 27;
-}
-
-void
-func6 (void)
-{
-  /* func6 breakpoint here */
-  foo2.val[1] = 0;
-  foo2.val[1] = 11;
-}
-
-void
-func7 (void)
-{
-  /* func7 breakpoint here */
-  foo4.val[3] = 0;
-  foo4.val[3] = 33;
-}
-
 int main ()
 {
+#ifdef usestubs
+  set_debug_traps();
+  breakpoint();
+#endif
   struct1.val = 1;
   struct2.val = 2;
   ptr1 = &struct1;
@@ -236,23 +169,6 @@ int main ()
   marker6 ();
   recurser (2);
 
-  /* This invocation is used for watches of a local variable with explicitly
-     specified scope when recursion happens.
-     */
   marker6 ();
-  recurser (2);
-
-  marker6 ();
-
-  func3 ();
-
-  func4 ();
-
-  func5 ();
-
-  func6 ();
-
-  func7 ();
-
   return 0;
 }

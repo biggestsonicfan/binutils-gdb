@@ -1,25 +1,23 @@
 /* Module support.
-
-   Copyright 1996-2020 Free Software Foundation, Inc.
-
+   Copyright (C) 1996, 1997, 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "config.h"
 #include "sim-main.h"
 #include "sim-io.h"
 #include "sim-options.h"
@@ -29,39 +27,44 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "sim-hw.h"
 #endif
 
-#ifdef HAVE_DV_SOCKSER
-/* TODO: Shouldn't have device models here.  */
-#include "dv-sockser.h"
-#endif
-
 #include "libiberty.h"
-
-#include <stdlib.h>
 
 /* List of all modules.  */
 static MODULE_INSTALL_FN * const modules[] = {
   standard_install,
   sim_events_install,
+#ifdef SIM_HAVE_MODEL
   sim_model_install,
+#endif
+#if WITH_ENGINE
   sim_engine_install,
-#if WITH_TRACE_ANY_P
+#endif
+#if WITH_TRACE
   trace_install,
 #endif
 #if WITH_PROFILE
   profile_install,
 #endif
   sim_core_install,
+#ifndef SIM_HAVE_FLATMEM
+  /* FIXME: should handle flatmem as well FLATMEM */
   sim_memopt_install,
+#endif
+#if WITH_WATCHPOINTS
   sim_watchpoint_install,
+#endif
 #if WITH_SCACHE
   scache_install,
+#endif
+#ifdef SIM_HAVE_BREAKPOINTS
+  sim_break_install,
 #endif
 #if WITH_HW
   sim_hw_install,
 #endif
-#ifdef HAVE_DV_SOCKSER
-  /* TODO: Shouldn't have device models here.  */
-  dv_sockser_install,
+  /* Configured in [simulator specific] additional modules.  */
+#ifdef MODULE_LIST
+  MODULE_LIST
 #endif
   0
 };
@@ -76,7 +79,9 @@ sim_pre_argv_init (SIM_DESC sd, const char *myname)
   SIM_ASSERT (STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
   SIM_ASSERT (STATE_MODULES (sd) == NULL);
 
-  STATE_MY_NAME (sd) = lbasename (myname);
+  STATE_MY_NAME (sd) = myname + strlen (myname);
+  while (STATE_MY_NAME (sd) > myname && STATE_MY_NAME (sd)[-1] != '/')
+    --STATE_MY_NAME (sd);
 
   /* Set the cpu names to default values.  */
   {
@@ -84,8 +89,7 @@ sim_pre_argv_init (SIM_DESC sd, const char *myname)
     for (i = 0; i < MAX_NR_PROCESSORS; ++i)
       {
 	char *name;
-	if (asprintf (&name, "cpu%d", i) < 0)
-	  return SIM_RC_FAIL;
+	asprintf (&name, "cpu%d", i);
 	CPU_NAME (STATE_CPU (sd, i)) = name;
       }
   }
@@ -224,7 +228,7 @@ sim_module_uninstall (SIM_DESC sd)
     for (d = modules->init_list; d != NULL; d = n)
       {
 	n = d->next;
-	free (d);
+	zfree (d);
       }
   }
 
@@ -234,7 +238,7 @@ sim_module_uninstall (SIM_DESC sd)
     for (d = modules->resume_list; d != NULL; d = n)
       {
 	n = d->next;
-	free (d);
+	zfree (d);
       }
   }
 
@@ -244,7 +248,7 @@ sim_module_uninstall (SIM_DESC sd)
     for (d = modules->suspend_list; d != NULL; d = n)
       {
 	n = d->next;
-	free (d);
+	zfree (d);
       }
   }
 
@@ -254,7 +258,7 @@ sim_module_uninstall (SIM_DESC sd)
     for (d = modules->uninstall_list; d != NULL; d = n)
       {
 	n = d->next;
-	free (d);
+	zfree (d);
       }
   }
 
@@ -264,11 +268,11 @@ sim_module_uninstall (SIM_DESC sd)
     for (d = modules->info_list; d != NULL; d = n)
       {
 	n = d->next;
-	free (d);
+	zfree (d);
       }
   }
 
-  free (modules);
+  zfree (modules);
   STATE_MODULES (sd) = NULL;
 }
 

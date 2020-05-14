@@ -1,11 +1,12 @@
 /* Multiple object format emulation.
-   Copyright (C) 1995-2020 Free Software Foundation, Inc.
+   Copyright 1995, 1996, 1997, 1999, 2000
+   Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #ifndef _OBJ_MULTI_H
 #define _OBJ_MULTI_H
@@ -36,9 +37,9 @@
 	 ? (*this_format->begin) ()			\
 	 : (void) 0)
 
-#define obj_app_file(NAME, APPFILE)			\
+#define obj_app_file(NAME)				\
 	(this_format->app_file				\
-	 ? (*this_format->app_file) (NAME, APPFILE)	\
+	 ? (*this_format->app_file) (NAME)		\
 	 : (void) 0)
 
 #define obj_frob_symbol(S,P)				\
@@ -52,11 +53,6 @@
 #define obj_frob_file_before_adjust()			\
 	(this_format->frob_file_before_adjust		\
 	 ? (*this_format->frob_file_before_adjust) ()	\
-	 : (void) 0)
-
-#define obj_frob_file_before_fix()			\
-	(this_format->frob_file_before_fix		\
-	 ? (*this_format->frob_file_before_fix) ()	\
 	 : (void) 0)
 
 #define obj_frob_file_after_relocs()			\
@@ -80,20 +76,10 @@
 	 ? (*this_format->symbol_new_hook) (S)		\
 	 : (void) 0)
 
-#define obj_symbol_clone_hook(N, O)			\
-	(this_format->symbol_clone_hook			\
-	 ? (*this_format->symbol_clone_hook) (N, O)	\
-	 : (void) 0)
-
 #define obj_sec_sym_ok_for_reloc(A)			\
 	(this_format->sec_sym_ok_for_reloc		\
 	 ? (*this_format->sec_sym_ok_for_reloc) (A)	\
 	 : 0)
-
-#define obj_adjust_symtab()				\
-	(this_format->adjust_symtab			\
-	 ? (*this_format->adjust_symtab) ()		\
-	 : (void) 0)
 
 #define S_GET_SIZE					\
 	(*this_format->s_get_size)
@@ -154,11 +140,6 @@
 	 : (void) 0)
 
 #define EMIT_SECTION_SYMBOLS (this_format->emit_section_symbols)
-
-#ifndef INITIALIZING_EMULS
-/* We want to use the default FAKE_LABEL_NAME in as.c.  */
-#define FAKE_LABEL_NAME (this_emulation->fake_label_name)
-#endif
 
 #ifdef OBJ_MAYBE_ELF
 /* We need OBJ_SYMFIELD_TYPE so that symbol_get_obj is defined in symbol.c

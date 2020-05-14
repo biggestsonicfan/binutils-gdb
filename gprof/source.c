@@ -1,12 +1,12 @@
 /* source.c - Keep track of source files.
 
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #include "gprof.h"
 #include "libiberty.h"
@@ -28,14 +28,15 @@
 #define EXT_ANNO "-ann"		/* Postfix of annotated files.  */
 
 /* Default option values.  */
-bfd_boolean create_annotation_files = FALSE;
+boolean create_annotation_files = false;
 
 Search_List src_search_list = {0, 0};
 Source_File *first_src_file = 0;
 
 
 Source_File *
-source_file_lookup_path (const char *path)
+source_file_lookup_path (path)
+     const char *path;
 {
   Source_File *sf;
 
@@ -62,7 +63,8 @@ source_file_lookup_path (const char *path)
 
 
 Source_File *
-source_file_lookup_name (const char *filename)
+source_file_lookup_name (filename)
+     const char *filename;
 {
   const char *fname;
   Source_File *sf;
@@ -89,13 +91,15 @@ source_file_lookup_name (const char *filename)
 
 
 FILE *
-annotate_source (Source_File *sf, unsigned int max_width,
-     void (*annote) (char *, unsigned int, int, void *),
-     void *arg)
+annotate_source (sf, max_width, annote, arg)
+     Source_File *sf;
+     unsigned int max_width;
+     void (*annote) PARAMS ((char *, unsigned int, int, void *));
+     void *arg;
 {
-  static bfd_boolean first_file = TRUE;
+  static boolean first_file = true;
   int i, line_num, nread;
-  bfd_boolean new_line;
+  boolean new_line;
   char buf[8192];
   char fname[PATH_MAX];
   char *annotation, *name_only;
@@ -110,7 +114,7 @@ annotate_source (Source_File *sf, unsigned int max_width,
     sle = 0;			/* Don't use search list for absolute paths.  */
 
   name_only = 0;
-  while (TRUE)
+  while (true)
     {
       DBG (SRCDEBUG, printf ("[annotate_source]: looking for %s, trying %s\n",
 			     sf->name, fname));
@@ -225,21 +229,21 @@ annotate_source (Source_File *sf, unsigned int max_width,
   if (ofp == stdout)
     {
       if (first_file)
-	first_file = FALSE;
+	first_file = false;
       else
 	fputc ('\n', ofp);
 
       if (first_output)
-	first_output = FALSE;
+	first_output = false;
       else
 	fprintf (ofp, "\f\n");
 
       fprintf (ofp, _("*** File %s:\n"), sf->name);
     }
 
-  annotation = (char *) xmalloc (max_width + 1);
+  annotation = xmalloc (max_width + 1);
   line_num = 1;
-  new_line = TRUE;
+  new_line = true;
 
   while ((nread = fread (buf, 1, sizeof (buf), ifp)) > 0)
     {
@@ -250,6 +254,7 @@ annotate_source (Source_File *sf, unsigned int max_width,
 	      (*annote) (annotation, max_width, line_num, arg);
 	      fputs (annotation, ofp);
 	      ++line_num;
+	      new_line = false;
 	    }
 
 	  new_line = (buf[i] == '\n');
@@ -258,6 +263,5 @@ annotate_source (Source_File *sf, unsigned int max_width,
     }
 
   free (annotation);
-  fclose (ifp);
   return ofp;
 }

@@ -1,21 +1,22 @@
 /* m6811_cpu.c -- 68HC11&68HC12 CPU Emulation
-   Copyright 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Written by Stephane Carrez (stcarrez@nerim.fr)
 
 This file is part of GDB, GAS, and the GNU binutils.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "sim-main.h"
 #include "sim-assert.h"
@@ -26,7 +27,6 @@ enum {
   OPTION_CPU_RESET = OPTION_START,
   OPTION_EMUL_OS,
   OPTION_CPU_CONFIG,
-  OPTION_CPU_BOOTSTRAP,
   OPTION_CPU_MODE
 };
 
@@ -44,10 +44,6 @@ static const OPTION cpu_options[] =
 
   { {"cpu-config", required_argument, NULL, OPTION_CPU_CONFIG },
       '\0', NULL, "Specify the initial CPU configuration register",
-      cpu_option_handler },
-
-  { {"bootstrap", no_argument, NULL, OPTION_CPU_BOOTSTRAP },
-      '\0', NULL, "Start the processing in bootstrap mode",
       cpu_option_handler },
 
   { {NULL, no_argument, NULL, 0}, '\0', NULL, NULL, NULL }
@@ -81,11 +77,7 @@ cpu_option_handler (SIM_DESC sd, sim_cpu *cpu,
       else
         cpu->cpu_use_local_config = 0;
       break;
-
-    case OPTION_CPU_BOOTSTRAP:
-       cpu->cpu_start_mode = "bootstrap";
-       break;
-
+      
     case OPTION_CPU_MODE:
       break;
     }
@@ -114,7 +106,7 @@ cpu_set_sp (sim_cpu *cpu, uint16 val)
 }
 
 uint16
-cpu_get_reg (sim_cpu *cpu, uint8 reg)
+cpu_get_reg (sim_cpu* cpu, uint8 reg)
 {
   switch (reg)
     {
@@ -136,7 +128,7 @@ cpu_get_reg (sim_cpu *cpu, uint8 reg)
 }
 
 uint16
-cpu_get_src_reg (sim_cpu *cpu, uint8 reg)
+cpu_get_src_reg (sim_cpu* cpu, uint8 reg)
 {
   switch (reg)
     {
@@ -170,7 +162,7 @@ cpu_get_src_reg (sim_cpu *cpu, uint8 reg)
 }
 
 void
-cpu_set_dst_reg (sim_cpu *cpu, uint8 reg, uint16 val)
+cpu_set_dst_reg (sim_cpu* cpu, uint8 reg, uint16 val)
 {
   switch (reg)
     {
@@ -212,7 +204,7 @@ cpu_set_dst_reg (sim_cpu *cpu, uint8 reg, uint16 val)
 }
 
 void
-cpu_set_reg (sim_cpu *cpu, uint8 reg, uint16 val)
+cpu_set_reg (sim_cpu* cpu, uint8 reg, uint16 val)
 {
   switch (reg)
     {
@@ -240,7 +232,7 @@ cpu_set_reg (sim_cpu *cpu, uint8 reg, uint16 val)
 /* Returns the address of a 68HC12 indexed operand.
    Pre and post modifications are handled on the source register.  */
 uint16
-cpu_get_indexed_operand_addr (sim_cpu *cpu, int restricted)
+cpu_get_indexed_operand_addr (sim_cpu* cpu, int restrict)
 {
   uint8 reg;
   uint16 sval;
@@ -285,7 +277,7 @@ cpu_get_indexed_operand_addr (sim_cpu *cpu, int restricted)
   /* [n,r] 16-bits offset indexed indirect.  */
   else if ((code & 0x07) == 3)
     {
-      if (restricted)
+      if (restrict)
 	{
 	  return 0;
 	}
@@ -297,7 +289,7 @@ cpu_get_indexed_operand_addr (sim_cpu *cpu, int restricted)
     }
   else if ((code & 0x4) == 0)
     {
-      if (restricted)
+      if (restrict)
 	{
 	  return 0;
 	}
@@ -345,20 +337,20 @@ cpu_get_indexed_operand_addr (sim_cpu *cpu, int restricted)
 }
 
 uint8
-cpu_get_indexed_operand8 (sim_cpu *cpu, int restricted)
+cpu_get_indexed_operand8 (sim_cpu* cpu, int restrict)
 {
   uint16 addr;
 
-  addr = cpu_get_indexed_operand_addr (cpu, restricted);
+  addr = cpu_get_indexed_operand_addr (cpu, restrict);
   return memory_read8 (cpu, addr);
 }
 
 uint16
-cpu_get_indexed_operand16 (sim_cpu *cpu, int restricted)
+cpu_get_indexed_operand16 (sim_cpu* cpu, int restrict)
 {
   uint16 addr;
 
-  addr = cpu_get_indexed_operand_addr (cpu, restricted);
+  addr = cpu_get_indexed_operand_addr (cpu, restrict);
   return memory_read16 (cpu, addr);
 }
 
@@ -472,9 +464,6 @@ cpu_initialize (SIM_DESC sd, sim_cpu *cpu)
   cpu->cpu_use_elf_start = 0;
   cpu->cpu_elf_start     = 0;
   cpu->cpu_use_local_config = 0;
-  cpu->bank_start = 0;
-  cpu->bank_end   = 0;
-  cpu->bank_shift = 0;
   cpu->cpu_config        = M6811_NOSEC | M6811_NOCOP | M6811_ROMON |
     M6811_EEON;
   interrupts_initialize (sd, cpu);
@@ -593,20 +582,11 @@ print_io_byte (SIM_DESC sd, const char *name, io_reg_desc *desc,
 }
 
 void
-print_io_word (SIM_DESC sd, const char *name, io_reg_desc *desc,
-	       uint16 val, uint16 addr)
+cpu_ccr_update_tst8 (sim_cpu *proc, uint8 val)
 {
-  sim_io_printf (sd, "  %-9.9s @ 0x%04x 0x%04x ", name, addr, val);
-  if (desc)
-    print_io_reg_desc (sd, desc, val, 0);
-}
-
-void
-cpu_ccr_update_tst8 (sim_cpu *cpu, uint8 val)
-{
-  cpu_set_ccr_V (cpu, 0);
-  cpu_set_ccr_N (cpu, val & 0x80 ? 1 : 0);
-  cpu_set_ccr_Z (cpu, val == 0 ? 1 : 0);
+  cpu_set_ccr_V (proc, 0);
+  cpu_set_ccr_N (proc, val & 0x80 ? 1 : 0);
+  cpu_set_ccr_Z (proc, val == 0 ? 1 : 0);
 }
 
 
@@ -656,7 +636,7 @@ cpu_push_all (sim_cpu *cpu)
 
 /* Simulation of the dbcc/ibcc/tbcc 68HC12 conditional branch operations.  */
 void
-cpu_dbcc (sim_cpu *cpu)
+cpu_dbcc (sim_cpu* cpu)
 {
   uint8 code;
   uint16 addr;
@@ -697,7 +677,7 @@ cpu_dbcc (sim_cpu *cpu)
 }
 
 void
-cpu_exg (sim_cpu *cpu, uint8 code)
+cpu_exg (sim_cpu* cpu, uint8 code)
 {
   uint8 r1, r2;
   uint16 src1;
@@ -1057,8 +1037,7 @@ cpu_info (SIM_DESC sd, sim_cpu *cpu)
 {
   sim_io_printf (sd, "CPU info:\n");
   sim_io_printf (sd, "  Absolute cycle: %s\n",
-                 cycle_to_string (cpu, cpu->cpu_absolute_cycle,
-                                  PRINT_TIME | PRINT_CYCLE));
+                 cycle_to_string (cpu, cpu->cpu_absolute_cycle));
   
   sim_io_printf (sd, "  Syscall emulation: %s\n",
                  cpu->cpu_emul_syscall ? "yes, via 0xcd <n>" : "no");

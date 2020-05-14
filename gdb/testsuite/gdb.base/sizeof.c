@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 typedef char padding[16];
 
 struct {
@@ -96,26 +98,25 @@ fill_structs (void)
 int
 main ()
 {
-  int size, value;
-
   fill_structs ();
 
-  size = (int) sizeof (char);
-  size = (int) sizeof (short);
-  size = (int) sizeof (int);
-  size = (int) sizeof (long);
-  size = (int) sizeof (long long);
-  size = (int) sizeof (void*);
-  size = (int) sizeof (void (*)(void));
-  size = (int) sizeof (float);
-  size = (int) sizeof (double);
-  size = (int) sizeof (long double);
+  printf ("sizeof (char) == %d\n", sizeof (char));
+  printf ("sizeof (short) == %d\n", sizeof (short));
+  printf ("sizeof (int) == %d\n", sizeof (int));
+  printf ("sizeof (long) == %d\n", sizeof (long));
+  printf ("sizeof (long long) == %d\n", sizeof (long long));
+
+  printf ("sizeof (void *) == %d\n", sizeof (void*));
+  printf ("sizeof (void (*)(void)) == %d\n", sizeof (void (*)(void)));
+
+  printf ("sizeof (float) == %d\n", sizeof (float));
+  printf ("sizeof (double) == %d\n", sizeof (double));
+  printf ("sizeof (long double) == %d\n", sizeof (long double));
 
   /* Signed char?  */
-  value = '\377';
-  value = (int) (char) -1;
-  value = (int) (signed char) -1;
-  value = (int) (unsigned char) -1;
+  printf ("valueof ((int) (char) -1) == %d\n", (int) (char) -1);
+  printf ("valueof ((int) (signed char) -1) == %d\n", (int) (signed char) -1);
+  printf ("valueof ((int) (unsigned char) -1) == %d\n", (int) (unsigned char) -1);
 
   return 0;
 }

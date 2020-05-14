@@ -132,26 +132,18 @@ foo:
 	cvttps2dq	%xmm0, %xmm1
 	maskmovdqu	%xmm0, %xmm1
 	movdqa		%xmm0, %xmm1
-	movdqa		%xmm0, (%esi)
+	movdqa		%xmm0, %xmm1
 	movdqu		%xmm0, %xmm1
-	movdqu		%xmm0, (%esi)
+	movdqu		%xmm0, %xmm1
 	movdq2q		%xmm0, %mm1
 	movq2dq		%mm0, %xmm1
-	pmuludq		%mm0, %mm1
-	pmuludq		(%eax), %mm1
 	pmuludq		%xmm0, %xmm1
-	pmuludq		(%eax), %xmm1
+	pmuludq		%xmm0, %xmm1
 	pshufd		$1, %xmm0, %xmm1
 	pshufhw		$1, %xmm0, %xmm1
 	pshuflw		$1, %xmm0, %xmm1
 	pslldq		$1, %xmm0
 	psrldq		$1, %xmm0
 	punpckhqdq	%xmm0, %xmm1
-	paddq           %mm1,%mm0
-	paddq           (%eax),%mm0
-	paddq           %xmm1,%xmm0
-	paddq           (%eax),%xmm0
-	psubq           %mm1,%mm0
-	psubq           (%eax),%mm0
-	psubq           %xmm1,%xmm0
-	psubq           (%eax),%xmm0
+
+ .p2align 4

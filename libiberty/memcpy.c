@@ -3,8 +3,7 @@
 
 /*
 
-@deftypefn Supplemental void* memcpy (void *@var{out}, const void *@var{in}, @
-  size_t @var{length})
+@deftypefn Supplemental void* memcpy (void *@var{out}, const void *@var{in}, size_t @var{length})
 
 Copies @var{length} bytes from memory region @var{in} to region
 @var{out}.  Returns a pointer to @var{out}.
@@ -14,12 +13,14 @@ Copies @var{length} bytes from memory region @var{in} to region
 */
 
 #include <ansidecl.h>
+#ifdef __STDC__
 #include <stddef.h>
-
-void bcopy (const void*, void*, size_t);
+#else
+#define size_t unsigned long
+#endif
 
 PTR
-memcpy (PTR out, const PTR in, size_t length)
+DEFUN(memcpy, (out, in, length), PTR out AND const PTR in AND size_t length)
 {
     bcopy(in, out, length);
     return out;

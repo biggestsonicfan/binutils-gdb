@@ -1,26 +1,31 @@
 /*  This file is part of the program psim.
 
     Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
-    Copyright (C) 1997-2020 Free Software Foundation, Inc.
+    Copyright (C) 1997, Free Software Foundation
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+ 
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
 
 #ifndef SIM_MAIN_H
 #define SIM_MAIN_H
+
+#define WITH_CORE
+#define WITH_WATCHPOINTS 1
+#define SIM_HANDLES_LMA 1
 
 #define SIM_ENGINE_HALT_HOOK(SD,LAST_CPU,CIA) 0 /* disable this hook */
 
@@ -37,6 +42,16 @@
 /* These are generated files.  */
 #include "itable.h"
 #include "idecode.h"
+#include "idecode.h"
+
+typedef instruction_address sim_cia;
+static const sim_cia null_cia = {0}; /* Dummy */
+#define NULL_CIA null_cia
+/* FIXME: Perhaps igen should generate access macros for
+   `instruction_address' that we could use.  */
+/*#define CIA_ADDR(cia) ((cia).ip) doesn't work for mn10300*/
+
+#define WITH_WATCHPOINTS 1
 
 #define SIM_CORE_SIGNAL(SD,CPU,CIA,MAP,NR_BYTES,ADDR,TRANSFER,ERROR)  \
 mn10300_core_signal ((SD), (CPU), (CIA), (MAP), (NR_BYTES), (ADDR), (TRANSFER), (ERROR))
@@ -58,6 +73,9 @@ mn10300_core_signal ((SD), (CPU), (CIA), (MAP), (NR_BYTES), (ADDR), (TRANSFER), 
 /* FIXME: For moment, save/restore PC value found in struct State.
    Struct State will one day go away, being placed in the sim_cpu
    state. */
+#define CIA_GET(CPU) ((PC) + 0)
+#define CIA_SET(CPU,VAL) ((CPU)->cia = (VAL), PC = (VAL))
+
 
 struct _sim_cpu {
   sim_event *pending_nmi;
@@ -69,7 +87,8 @@ struct _sim_cpu {
 struct sim_state {
 
   /* the processors proper */
-  sim_cpu *cpu[MAX_NR_PROCESSORS];
+  sim_cpu cpu;
+#define STATE_CPU(sd, n) (&(sd)->cpu)
 
   /* The base class.  */
   sim_state_base base;

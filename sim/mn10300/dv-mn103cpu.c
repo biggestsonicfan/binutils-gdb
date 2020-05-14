@@ -1,20 +1,21 @@
 /*  This file is part of the program GDB, the GNU debugger.
     
-    Copyright (C) 1998-2020 Free Software Foundation, Inc.
+    Copyright (C) 1998 Free Software Foundation, Inc.
     Contributed by Cygnus Solutions.
     
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+    
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+    
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
     
     */
 
@@ -227,31 +228,31 @@ deliver_mn103cpu_interrupt (struct hw *me,
   else if (controller->pending_nmi)
     {
       controller->pending_nmi = 0;
-      store_word (SP - 4, CPU_PC_GET (cpu));
+      store_word (SP - 4, CIA_GET (cpu));
       store_half (SP - 8, PSW);
       PSW &= ~PSW_IE;
       SP = SP - 8;
-      CPU_PC_SET (cpu, 0x40000008);
+      CIA_SET (cpu, 0x40000008);
       HW_TRACE ((me, "nmi pc=0x%08lx psw=0x%04x sp=0x%08lx",
-		 (long) CPU_PC_GET (cpu), (unsigned) PSW, (long) SP));
+		 (long) CIA_GET (cpu), (unsigned) PSW, (long) SP));
     }
   else if ((controller->pending_level < EXTRACT_PSW_LM)
 	   && (PSW & PSW_IE))
     {
       /* Don't clear pending level.  Request continues to be pending
          until the interrupt controller clears/changes it */
-      store_word (SP - 4, CPU_PC_GET (cpu));
+      store_word (SP - 4, CIA_GET (cpu));
       store_half (SP - 8, PSW);
       PSW &= ~PSW_IE;
       PSW &= ~PSW_LM;
       PSW |= INSERT_PSW_LM (controller->pending_level);
       SP = SP - 8;
-      CPU_PC_SET (cpu, 0x40000000 + controller->interrupt_vector[controller->pending_level]);
+      CIA_SET (cpu, 0x40000000 + controller->interrupt_vector[controller->pending_level]);
       HW_TRACE ((me, "port-out ack %d", controller->pending_level));
       hw_port_event (me, ACK_PORT, controller->pending_level);
       HW_TRACE ((me, "int level=%d pc=0x%08lx psw=0x%04x sp=0x%08lx",
 		 controller->pending_level,
-		 (long) CPU_PC_GET (cpu), (unsigned) PSW, (long) SP));
+		 (long) CIA_GET (cpu), (unsigned) PSW, (long) SP));
     }
 
   if (controller->pending_level < 7) /* FIXME */

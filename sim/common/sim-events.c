@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #ifndef _SIM_EVENTS_C_
@@ -25,7 +24,6 @@
 
 #include "sim-main.h"
 #include "sim-assert.h"
-#include "libiberty.h"
 
 #ifdef HAVE_STRING_H
 #include <string.h>
@@ -75,7 +73,7 @@ typedef enum {
   watch_sim_le_2,
   watch_sim_le_4,
   watch_sim_le_8,
-
+  
   /* wallclock */
   watch_clock,
 
@@ -112,7 +110,7 @@ struct _sim_event {
 
 /* The event queue maintains a single absolute time using two
    variables.
-
+   
    TIME_OF_EVENT: this holds the time at which the next event is ment
    to occur.  If no next event it will hold the time of the last
    event.
@@ -141,14 +139,21 @@ struct _sim_event {
 
 #define _ETRACE sd, NULL
 
+#undef ETRACE_P
+#define ETRACE_P (WITH_TRACE && STATE_EVENTS (sd)->trace)
+
 #undef ETRACE
 #define ETRACE(ARGS) \
 do \
   { \
-    if (STRACE_EVENTS_P (sd)) \
+    if (ETRACE_P) \
       { \
         if (STRACE_DEBUG_P (sd)) \
-	  trace_printf (sd, NULL, "%s:%d: ", lbasename (__FILE__), __LINE__); \
+	  { \
+	    const char *file; \
+	    SIM_FILTER_PATH (file, __FILE__); \
+	    trace_printf (sd, NULL, "%s:%d: ", file, __LINE__); \
+	  } \
         trace_printf  ARGS; \
       } \
   } \
@@ -273,7 +278,7 @@ sim_events_zalloc (SIM_DESC sd)
       /*-LOCK-*/
       sigset_t old_mask;
       sigset_t new_mask;
-      sigfillset (&new_mask);
+      sigfillset(&new_mask);
       sigprocmask (SIG_SETMASK, &new_mask, &old_mask);
 #endif
       new = ZALLOC (sim_event);
@@ -381,7 +386,7 @@ sim_events_remain_time (SIM_DESC sd, sim_event *event)
 {
   if (event == 0)
     return 0;
-
+  
   return (event->time_of_event - sim_events_time (sd));
 }
 
@@ -403,7 +408,7 @@ update_time_from_event (SIM_DESC sd)
       events->time_of_event = current_time - 1;
       events->time_from_event = -1;
     }
-  if (STRACE_EVENTS_P (sd))
+  if (ETRACE_P)
     {
       sim_event *event;
       int i;
@@ -441,10 +446,10 @@ insert_sim_event (SIM_DESC sd,
 
   if (delta < 0)
     sim_io_error (sd, "what is past is past!\n");
-
+  
   /* compute when the event should occur */
   time_of_event = sim_events_time (sd) + delta;
-
+  
   /* find the queue insertion point - things are time ordered */
   prev = &events->queue;
   curr = events->queue;
@@ -456,12 +461,12 @@ insert_sim_event (SIM_DESC sd,
       curr = curr->next;
     }
   SIM_ASSERT (curr == NULL || time_of_event < curr->time_of_event);
-
+  
   /* insert it */
   new_event->next = curr;
   *prev = new_event;
   new_event->time_of_event = time_of_event;
-
+  
   /* adjust the time until the first event */
   update_time_from_event (sd);
 }
@@ -515,18 +520,18 @@ sim_events_schedule_vtracef (SIM_DESC sd,
   new_event->data = data;
   new_event->handler = handler;
   new_event->watching = watch_timer;
-  if (fmt == NULL || !STRACE_EVENTS_P (sd) || vasprintf (&new_event->trace, fmt, ap) < 0)
+  if (fmt == NULL || !ETRACE_P || vasprintf (&new_event->trace, fmt, ap) < 0)
     new_event->trace = NULL;
-  insert_sim_event (sd, new_event, delta_time);
-  ETRACE ((_ETRACE,
-	   "event scheduled at %ld - tag 0x%lx - time %ld, handler 0x%lx, data 0x%lx%s%s\n",
-	   (long)sim_events_time (sd),
-	   (long)new_event,
-	   (long)new_event->time_of_event,
-	   (long)new_event->handler,
-	   (long)new_event->data,
-	   (new_event->trace != NULL) ? ", " : "",
-	   (new_event->trace != NULL) ? new_event->trace : ""));
+  insert_sim_event(sd, new_event, delta_time);
+  ETRACE((_ETRACE,
+	  "event scheduled at %ld - tag 0x%lx - time %ld, handler 0x%lx, data 0x%lx%s%s\n",
+	  (long)sim_events_time(sd),
+	  (long)new_event,
+	  (long)new_event->time_of_event,
+	  (long)new_event->handler,
+	  (long)new_event->data,
+	  (new_event->trace != NULL) ? ", " : "",
+	  (new_event->trace != NULL) ? new_event->trace : ""));
   return new_event;
 }
 #endif
@@ -545,19 +550,19 @@ sim_events_schedule_after_signal (SIM_DESC sd,
   /*-LOCK-*/
   sigset_t old_mask;
   sigset_t new_mask;
-  sigfillset (&new_mask);
+  sigfillset(&new_mask);
   sigprocmask (SIG_SETMASK, &new_mask, &old_mask);
 #endif
-
+  
   /* allocate an event entry from the signal buffer */
   new_event = &events->held [events->nr_held];
   events->nr_held ++;
   if (events->nr_held > MAX_NR_SIGNAL_SIM_EVENTS)
     {
       sim_engine_abort (NULL, NULL, NULL_CIA,
-			"sim_events_schedule_after_signal - buffer overflow");
+			"sim_events_schedule_after_signal - buffer oveflow");
     }
-
+  
   new_event->data = data;
   new_event->handler = handler;
   new_event->time_of_event = delta_time; /* work it out later */
@@ -569,10 +574,10 @@ sim_events_schedule_after_signal (SIM_DESC sd,
   /*-UNLOCK-*/
   sigprocmask (SIG_SETMASK, &old_mask, NULL);
 #endif
-
+  
   ETRACE ((_ETRACE,
 	   "signal scheduled at %ld - tag 0x%lx - time %ld, handler 0x%lx, data 0x%lx\n",
-	   (long)sim_events_time (sd),
+	   (long)sim_events_time(sd),
 	   (long)new_event,
 	   (long)new_event->time_of_event,
 	   (long)new_event->handler,
@@ -635,7 +640,7 @@ sim_events_watch_sim (SIM_DESC sd,
   /* type */
   switch (byte_order)
     {
-    case BFD_ENDIAN_UNKNOWN:
+    case 0:
       switch (nr_bytes)
 	{
 	case 1: new_event->watching = watch_sim_host_1; break;
@@ -645,7 +650,7 @@ sim_events_watch_sim (SIM_DESC sd,
 	default: sim_io_error (sd, "sim_events_watch_sim - invalid nr bytes");
 	}
       break;
-    case BFD_ENDIAN_BIG:
+    case BIG_ENDIAN:
       switch (nr_bytes)
 	{
 	case 1: new_event->watching = watch_sim_be_1; break;
@@ -655,7 +660,7 @@ sim_events_watch_sim (SIM_DESC sd,
 	default: sim_io_error (sd, "sim_events_watch_sim - invalid nr bytes");
 	}
       break;
-    case BFD_ENDIAN_LITTLE:
+    case LITTLE_ENDIAN:
       switch (nr_bytes)
 	{
 	case 1: new_event->watching = watch_sim_le_1; break;
@@ -714,7 +719,7 @@ sim_events_watch_core (SIM_DESC sd,
   /* type */
   switch (byte_order)
     {
-    case BFD_ENDIAN_UNKNOWN:
+    case 0:
       switch (nr_bytes)
 	{
 	case 1: new_event->watching = watch_core_targ_1; break;
@@ -724,7 +729,7 @@ sim_events_watch_core (SIM_DESC sd,
 	default: sim_io_error (sd, "sim_events_watch_core - invalid nr bytes");
 	}
       break;
-    case BFD_ENDIAN_BIG:
+    case BIG_ENDIAN:
       switch (nr_bytes)
 	{
 	case 1: new_event->watching = watch_core_be_1; break;
@@ -734,7 +739,7 @@ sim_events_watch_core (SIM_DESC sd,
 	default: sim_io_error (sd, "sim_events_watch_core - invalid nr bytes");
 	}
       break;
-    case BFD_ENDIAN_LITTLE:
+    case LITTLE_ENDIAN:
       switch (nr_bytes)
 	{
 	case 1: new_event->watching = watch_core_le_1; break;
@@ -1063,7 +1068,7 @@ sim_events_preprocess (SIM_DESC sd,
 		       int events_were_last,
 		       int events_were_next)
 {
-  sim_events *events = STATE_EVENTS (sd);
+  sim_events *events = STATE_EVENTS(sd);
   if (events_were_last)
     {
       /* Halted part way through event processing */
@@ -1086,8 +1091,8 @@ INLINE_SIM_EVENTS\
 (void)
 sim_events_process (SIM_DESC sd)
 {
-  sim_events *events = STATE_EVENTS (sd);
-  signed64 event_time = sim_events_time (sd);
+  sim_events *events = STATE_EVENTS(sd);
+  signed64 event_time = sim_events_time(sd);
 
   /* Clear work_pending before checking nr_held.  Clearing
      work_pending after nr_held (with out a lock could loose an
@@ -1099,13 +1104,13 @@ sim_events_process (SIM_DESC sd)
   if (events->nr_held > 0)
     {
       int i;
-
+      
 #if defined(HAVE_SIGPROCMASK) && defined(SIG_SETMASK)
       /*-LOCK-*/
       sigset_t old_mask;
       sigset_t new_mask;
-      sigfillset (&new_mask);
-      sigprocmask (SIG_SETMASK, &new_mask, &old_mask);
+      sigfillset(&new_mask);
+      sigprocmask(SIG_SETMASK, &new_mask, &old_mask);
 #endif
 
       for (i = 0; i < events->nr_held; i++)
@@ -1117,14 +1122,14 @@ sim_events_process (SIM_DESC sd)
 			       entry->data);
 	}
       events->nr_held = 0;
-
+      
 #if defined(HAVE_SIGPROCMASK) && defined(SIG_SETMASK)
       /*-UNLOCK-*/
-      sigprocmask (SIG_SETMASK, &old_mask, NULL);
+      sigprocmask(SIG_SETMASK, &old_mask, NULL);
 #endif
-
+      
     }
-
+  
   /* Process any watchpoints. Be careful to allow a watchpoint to
      appear/disappear under our feet.
      To ensure that watchpoints are processed only once per cycle,
@@ -1139,14 +1144,14 @@ sim_events_process (SIM_DESC sd)
 	{
 	  sim_event_handler *handler = to_do->handler;
 	  void *data = to_do->data;
-	  ETRACE ((_ETRACE,
-		   "event issued at %ld - tag 0x%lx - handler 0x%lx, data 0x%lx%s%s\n",
-		   (long) event_time,
-		   (long) to_do,
-		   (long) handler,
-		   (long) data,
-		   (to_do->trace != NULL) ? ", " : "",
-		   (to_do->trace != NULL) ? to_do->trace : ""));
+	  ETRACE((_ETRACE,
+		  "event issued at %ld - tag 0x%lx - handler 0x%lx, data 0x%lx%s%s\n",
+		  (long) event_time,
+		  (long) to_do,
+		  (long) handler,
+		  (long) data,
+		  (to_do->trace != NULL) ? ", " : "",
+		  (to_do->trace != NULL) ? to_do->trace : ""));
 	  sim_events_free (sd, to_do);
 	  handler (sd, data);
 	}
@@ -1156,7 +1161,7 @@ sim_events_process (SIM_DESC sd)
 	  events->watchedpoints = to_do;
 	}
     }
-
+  
   /* consume all events for this or earlier times.  Be careful to
      allow an event to appear/disappear under our feet */
   while (events->queue->time_of_event <
@@ -1167,24 +1172,24 @@ sim_events_process (SIM_DESC sd)
       void *data = to_do->data;
       events->queue = to_do->next;
       update_time_from_event (sd);
-      ETRACE ((_ETRACE,
-	       "event issued at %ld - tag 0x%lx - handler 0x%lx, data 0x%lx%s%s\n",
-	       (long) event_time,
-	       (long) to_do,
-	       (long) handler,
-	       (long) data,
-	       (to_do->trace != NULL) ? ", " : "",
-	       (to_do->trace != NULL) ? to_do->trace : ""));
+      ETRACE((_ETRACE,
+	      "event issued at %ld - tag 0x%lx - handler 0x%lx, data 0x%lx%s%s\n",
+	      (long) event_time,
+	      (long) to_do,
+	      (long) handler,
+	      (long) data,
+	      (to_do->trace != NULL) ? ", " : "",
+	      (to_do->trace != NULL) ? to_do->trace : ""));
       sim_events_free (sd, to_do);
       handler (sd, data);
     }
-
+  
   /* put things back where they belong ready for the next iteration */
   events->watchpoints = events->watchedpoints;
   events->watchedpoints = NULL;
   if (events->watchpoints != NULL)
     events->work_pending = 1;
-
+  
   /* advance the time */
   SIM_ASSERT (events->time_from_event >= events->nr_ticks_to_process);
   SIM_ASSERT (events->queue != NULL); /* always poll event */

@@ -3,8 +3,7 @@
 
 /*
 
-@deftypefn Supplemental int strncmp (const char *@var{s1}, @
-  const char *@var{s2}, size_t @var{n})
+@deftypefn Supplemental int strncmp (const char *@var{s1}, const char *@var{s2}, size_t @var{n})
 
 Compares the first @var{n} bytes of two strings, returning a value as
 @code{strcmp}.
@@ -14,10 +13,16 @@ Compares the first @var{n} bytes of two strings, returning a value as
 */
 
 #include <ansidecl.h>
+#ifdef __STDC__
 #include <stddef.h>
+#else
+#define size_t unsigned long
+#endif
 
 int
-strncmp(const char *s1, const char *s2, register size_t n)
+strncmp(s1, s2, n)
+     const char *s1, *s2;
+     register size_t n;
 {
   register unsigned char u1, u2;
 

@@ -1,5 +1,6 @@
 /* HP PA-RISC SOM object file format:  definitions internal to BFD.
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1998, 1999, 2000
+   Free Software Foundation, Inc.
 
    Contributed by the Center for Software Science at the
    University of Utah (pa-gdb-bugs@cs.utah.edu).
@@ -8,7 +9,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -18,14 +19,21 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef _LIBHPPA_H
 #define _LIBHPPA_H
 
 #define BYTES_IN_WORD 4
 #define PA_PAGESIZE 0x1000
+
+#ifndef INLINE
+#ifdef __GNUC__
+#define INLINE inline
+#else
+#define INLINE
+#endif /* GNU C? */
+#endif /* INLINE */
 
 /* The PA instruction set variants.  */
 enum pa_arch {pa10 = 10, pa11 = 11, pa20 = 20, pa20w = 25};
@@ -148,27 +156,48 @@ enum hppa_reloc_expr_type_alt
 #define HPPA_R_ARG_RELOC(a)	\
   (((a) >> 22) & 0x3ff)
 #define HPPA_R_CONSTANT(a)	\
-  ((((bfd_signed_vma) (a) & 0x3fffff) ^ 0x200000) - 0x200000)
+  ((((bfd_signed_vma)(a)) << (BFD_ARCH_SIZE-22)) >> (BFD_ARCH_SIZE-22))
 #define HPPA_R_ADDEND(r, c)	\
   (((r) << 22) + ((c) & 0x3fffff))
 
 
 /* Some functions to manipulate PA instructions.  */
 
+/* Declare the functions with the unused attribute to avoid warnings.  */
+static INLINE int sign_extend PARAMS ((int, int)) ATTRIBUTE_UNUSED;
+static INLINE int low_sign_extend PARAMS ((int, int)) ATTRIBUTE_UNUSED;
+static INLINE int sign_unext PARAMS ((int, int)) ATTRIBUTE_UNUSED;
+static INLINE int low_sign_unext PARAMS ((int, int)) ATTRIBUTE_UNUSED;
+static INLINE int re_assemble_3 PARAMS ((int)) ATTRIBUTE_UNUSED;
+static INLINE int re_assemble_12 PARAMS ((int)) ATTRIBUTE_UNUSED;
+static INLINE int re_assemble_14 PARAMS ((int)) ATTRIBUTE_UNUSED;
+static INLINE int re_assemble_16 PARAMS ((int)) ATTRIBUTE_UNUSED;
+static INLINE int re_assemble_17 PARAMS ((int)) ATTRIBUTE_UNUSED;
+static INLINE int re_assemble_21 PARAMS ((int)) ATTRIBUTE_UNUSED;
+static INLINE int re_assemble_22 PARAMS ((int)) ATTRIBUTE_UNUSED;
+static INLINE bfd_signed_vma hppa_field_adjust
+  PARAMS ((bfd_vma, bfd_signed_vma,
+	   enum hppa_reloc_field_selector_type_alt)) ATTRIBUTE_UNUSED;
+static INLINE int bfd_hppa_insn2fmt PARAMS ((bfd *, int)) ATTRIBUTE_UNUSED;
+static INLINE int hppa_rebuild_insn PARAMS ((int, int, int)) ATTRIBUTE_UNUSED;
+
+
 /* The *sign_extend functions are used to assemble various bitfields
    taken from an instruction and return the resulting immediate
    value.  */
 
-static inline unsigned ATTRIBUTE_UNUSED
-sign_extend (unsigned x, unsigned len)
+static INLINE int
+sign_extend (x, len)
+     int x, len;
 {
-  unsigned signbit = (1 << (len - 1));
-  unsigned mask = (signbit << 1) - 1;
+  int signbit = (1 << (len - 1));
+  int mask = (signbit << 1) - 1;
   return ((x & mask) ^ signbit) - signbit;
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-low_sign_extend (unsigned x, unsigned len)
+static INLINE int
+low_sign_extend (x, len)
+     int x, len;
 {
   return (x >> 1) - ((x & 1) << (len - 1));
 }
@@ -178,21 +207,23 @@ low_sign_extend (unsigned x, unsigned len)
    insertion into an opcode. pa-risc uses all sorts of weird bitfields
    in the instruction to hold the value.  */
 
-static inline unsigned ATTRIBUTE_UNUSED
-sign_unext (unsigned x, unsigned len)
+static INLINE int
+sign_unext (x, len)
+     int x, len;
 {
-  unsigned len_ones;
+  int len_ones;
 
   len_ones = (1 << len) - 1;
 
   return x & len_ones;
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-low_sign_unext (unsigned x, unsigned len)
+static INLINE int
+low_sign_unext (x, len)
+     int x, len;
 {
-  unsigned temp;
-  unsigned sign;
+  int temp;
+  int sign;
 
   sign = (x >> (len-1)) & 1;
 
@@ -201,32 +232,36 @@ low_sign_unext (unsigned x, unsigned len)
   return (temp << 1) | sign;
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-re_assemble_3 (unsigned as3)
+static INLINE int
+re_assemble_3 (as3)
+     int as3;
 {
   return ((  (as3 & 4) << (13-2))
 	  | ((as3 & 3) << (13+1)));
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-re_assemble_12 (unsigned as12)
+static INLINE int
+re_assemble_12 (as12)
+     int as12;
 {
   return ((  (as12 & 0x800) >> 11)
 	  | ((as12 & 0x400) >> (10 - 2))
 	  | ((as12 & 0x3ff) << (1 + 2)));
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-re_assemble_14 (unsigned as14)
+static INLINE int
+re_assemble_14 (as14)
+     int as14;
 {
   return ((  (as14 & 0x1fff) << 1)
 	  | ((as14 & 0x2000) >> 13));
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-re_assemble_16 (unsigned as16)
+static INLINE int
+re_assemble_16 (as16)
+     int as16;
 {
-  unsigned s, t;
+  int s, t;
 
   /* Unusual 16-bit encoding, for wide mode only.  */
   t = (as16 << 1) & 0xffff;
@@ -234,8 +269,9 @@ re_assemble_16 (unsigned as16)
   return (t ^ s ^ (s >> 1)) | (s >> 15);
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-re_assemble_17 (unsigned as17)
+static INLINE int
+re_assemble_17 (as17)
+     int as17;
 {
   return ((  (as17 & 0x10000) >> 16)
 	  | ((as17 & 0x0f800) << (16 - 11))
@@ -243,8 +279,9 @@ re_assemble_17 (unsigned as17)
 	  | ((as17 & 0x003ff) << (1 + 2)));
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-re_assemble_21 (unsigned as21)
+static INLINE int
+re_assemble_21 (as21)
+     int as21;
 {
   return ((  (as21 & 0x100000) >> 20)
 	  | ((as21 & 0x0ffe00) >> 8)
@@ -253,8 +290,9 @@ re_assemble_21 (unsigned as21)
 	  | ((as21 & 0x000003) << 12));
 }
 
-static inline unsigned ATTRIBUTE_UNUSED
-re_assemble_22 (unsigned as22)
+static INLINE int
+re_assemble_22 (as22)
+     int as22;
 {
   return ((  (as22 & 0x200000) >> 21)
 	  | ((as22 & 0x1f0000) << (21 - 16))
@@ -274,10 +312,11 @@ re_assemble_22 (unsigned as22)
    This function returns sign extended values in all cases.
 */
 
-static inline bfd_signed_vma ATTRIBUTE_UNUSED
-hppa_field_adjust (bfd_vma sym_val,
-		   bfd_signed_vma addend,
-		   enum hppa_reloc_field_selector_type_alt r_field)
+static INLINE bfd_signed_vma
+hppa_field_adjust (sym_val, addend, r_field)
+     bfd_vma sym_val;
+     bfd_signed_vma addend;
+     enum hppa_reloc_field_selector_type_alt r_field;
 {
   bfd_signed_vma value;
 
@@ -440,10 +479,12 @@ enum hppa_opcode_type
 
 /* Given a machine instruction, return its format.  */
 
-static inline unsigned ATTRIBUTE_UNUSED
-bfd_hppa_insn2fmt (bfd *abfd, unsigned insn)
+static INLINE int
+bfd_hppa_insn2fmt (abfd, insn)
+     bfd *abfd;
+     int insn;
 {
-  enum hppa_opcode_type op = (enum hppa_opcode_type) get_opcode (insn);
+  enum hppa_opcode_type op = get_opcode (insn);
 
   switch (op)
     {
@@ -522,8 +563,11 @@ bfd_hppa_insn2fmt (bfd *abfd, unsigned insn)
 /* Insert VALUE into INSN using R_FORMAT to determine exactly what
    bits to change.  */
 
-static inline unsigned ATTRIBUTE_UNUSED
-hppa_rebuild_insn (unsigned insn, unsigned value, int r_format)
+static INLINE int
+hppa_rebuild_insn (insn, value, r_format)
+     int insn;
+     int value;
+     int r_format;
 {
   switch (r_format)
     {

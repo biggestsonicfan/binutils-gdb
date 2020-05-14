@@ -49,7 +49,4 @@ Disassembly of section .text:
   e0:	e0 00 [ 	]*loopne e2 <test\+0xe2>	e0: (R_386_)?GOTPC	_GLOBAL_OFFSET_TABLE_
   e2:	00 00 [ 	]*add    %al,\(%eax\)
   e4:	00 00 [ 	]*add    %al,\(%eax\)	e4: (R_386_)?GOTOFF	_GLOBAL_OFFSET_TABLE_
-  e6:	00 00 [ 	]*add    %al,\(%eax\)
-  e8:	8b 83 00 00 00 00 [ 	]*mov    0x0\(%ebx\),%eax	ea: (R_386_)?GOTOFF	_GLOBAL_OFFSET_TABLE_
-  ee:	81 c3 02 00 00 00 [ 	]*add    \$0x2,%ebx	f0: (R_386_)GOTPC	_GLOBAL_OFFSET_TABLE_
-#pass
+	...

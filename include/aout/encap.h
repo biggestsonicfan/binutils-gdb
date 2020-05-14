@@ -1,24 +1,23 @@
-/* Yet Another Try at encapsulating bfd object files in coff.
-   Copyright (C) 1988-2020 Free Software Foundation, Inc.
+/* Yet Another Try at encapsulating bsd object files in coff.
+   Copyright 1988, 1989, 1991 Free Software Foundation, Inc.
    Written by Pace Willisson 12/9/88
 
    This file is obsolete.  It needs to be converted to just define a bunch
    of stuff that BFD can use to do coff-encapsulated files.  --gnu@cygnus.com
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /*
  * We only use the coff headers to tell the kernel
@@ -86,6 +85,7 @@ struct coffheader
    
 #define COFF_MAGIC_I386 0514 /* I386MAGIC */
 #define COFF_MAGIC_M68K 0520 /* MC68MAGIC */
+#define	COFF_MAGIC_A29K 0x17A	/* Used by asm29k cross-tools */
 
 #ifdef COFF_MAGIC
 short __header_offset_temp;
@@ -131,5 +131,5 @@ short __header_offset_temp;
 
 #define N_DATADDR(x) \
 	((N_FLAGS(x) & N_FLAGS_COFF_ENCAPSULATE) ? \
-	 (SEGMENT_SIZE + ((N_TXTADDR(x)+(x)->a_text-1) & ~(SEGMENT_SIZE-1))) : \
-	 (N_TXTADDR(x)+(x)->a_text))
+	 (SEGMENT_SIZE + ((N_TXTADDR(x)+(x).a_text-1) & ~(SEGMENT_SIZE-1))) : \
+	 (N_TXTADDR(x)+(x).a_text))

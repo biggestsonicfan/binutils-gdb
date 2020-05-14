@@ -1,11 +1,11 @@
 /* GDB-specific functions for operating on agent expressions
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright 1998, 1999, 2000 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,15 +14,13 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef AX_GDB_H
 #define AX_GDB_H
-
-#include "ax.h"  /* For agent_expr_up.  */
-
-struct expression;
-union exp_element;
+
 
 /* Types and enums */
 
@@ -80,12 +78,8 @@ struct axs_value
 
     /* The type of the subexpression.  Even if lvalue == axs_lvalue_memory,
        this is the type of the value itself; the value on the stack is a
-       "pointer to" an object of this type.  */
+       "pointer to" an object of this type. */
     struct type *type;
-
-    /* If nonzero, this is a variable which does not actually exist in
-       the program.  */
-    char optimized_out;
 
     union
       {
@@ -98,30 +92,21 @@ struct axs_value
 
 /* Translating GDB expressions into agent expressions.  */
 
+/* Given a GDB expression EXPR, translate it into the agent bytecode,
+   and return it.  FLAGS are from enum expr_to_agent_flags.  */
+extern struct agent_expr *expr_to_agent (struct expression *EXPR,
+					 struct axs_value *VALUE);
+
+/* Given a GDB expression EXPR denoting an lvalue in memory, produce a
+   string of agent bytecode which will leave its address and size on
+   the top of stack.  Return the agent expression.  */
+extern struct agent_expr *expr_to_address_and_size (struct expression *EXPR);
+
 /* Given a GDB expression EXPR, return bytecode to trace its value.
    The result will use the `trace' and `trace_quick' bytecodes to
    record the value of all memory touched by the expression, and leave
    no values on the stack.  The caller can then use the ax_reqs
    function to discover which registers the expression uses.  */
-extern agent_expr_up gen_trace_for_expr (CORE_ADDR, struct expression *,
-					 int);
-
-extern agent_expr_up gen_trace_for_var (CORE_ADDR, struct gdbarch *,
-					struct symbol *, int);
-
-extern agent_expr_up gen_trace_for_return_address (CORE_ADDR,
-						   struct gdbarch *,
-						   int);
-
-extern agent_expr_up gen_eval_for_expr (CORE_ADDR, struct expression *);
-
-extern void gen_expr (struct expression *exp, union exp_element **pc,
-		      struct agent_expr *ax, struct axs_value *value);
-
-extern void require_rvalue (struct agent_expr *ax, struct axs_value *value);
-
-extern agent_expr_up gen_printf (CORE_ADDR, struct gdbarch *,
-				 CORE_ADDR, LONGEST, const char *, int,
-				 int, struct expression **);
+extern struct agent_expr *gen_trace_for_expr (CORE_ADDR, struct expression *);
 
 #endif /* AX_GDB_H */

@@ -1,33 +1,29 @@
 # ld: -T overlay-size.t -Map tmpdir/overlay-size.map
 # name: overlay size
 # objdump: --headers
-# map: overlay-size-map.d
-# notarget: rx-*-*
-#   FAILS on the RX because the linker has to set LMA == VMA for the
-#   Renesas loader.
 #
 # The .bss[123] LMAs are deliberately blanked out.  We can't
 # reliably map overlaid sections to segments.
 #...
- .. \.bss1 +0+010 +0+20000 .*
+  0 \.bss1 +0+010 +0+20000 .*
 #...
- .. \.bss2 +0+030 +0+20000 .*
+  1 \.bss2 +0+030 +0+20000 .*
 #...
- .. \.bss3 +0+020 +0+20000 .*
+  2 \.bss3 +0+020 +0+20000 .*
 #...
- .. \.mtext +0+020 +0+10000 +0+30000 .*
+  3 \.mtext +0+020 +0+10000 +0+30000 .*
 #...
- .. \.mbss +0+230 +0+20030 .*
+  4 \.mbss +0+230 +0+20030 +0+20060 .*
 #...
- .. \.text1 +0+080 +0+10020 +0+30020 .*
+  5 \.text1 +0+080 +0+10020 +0+30020 .*
 #...
- .. \.text2 +0+040 +0+10020 +0+300a0 .*
+  6 \.text2 +0+040 +0+10020 +0+300a0 .*
 #...
- .. \.text3 +0+020 +0+10020 +0+300e0 .*
+  7 \.text3 +0+020 +0+10020 +0+300e0 .*
 #...
- .. \.data1 +0+030 +0+20260 +0+30100 .*
+  8 \.data1 +0+030 +0+20260 +0+30100 .*
 #...
- .. \.data2 +0+040 +0+20260 +0+30130 .*
+  9 \.data2 +0+040 +0+20260 +0+30130 .*
 #...
- .. \.data3 +0+050 +0+20260 +0+30170 .*
+ 10 \.data3 +0+050 +0+20260 +0+30170 .*
 #pass

@@ -1,5 +1,5 @@
 /*  dv-m68hc11sio.c -- Simulation of the 68HC11 serial device.
-    Copyright (C) 1999-2020 Free Software Foundation, Inc.
+    Copyright (C) 1999, 2000, 2001 Free Software Foundation, Inc.
     Written by Stephane Carrez (stcarrez@worldnet.fr)
     (From a driver model Contributed by Cygnus Solutions.)
 
@@ -7,16 +7,17 @@
     
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+    
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+    
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
     
     */
 
@@ -240,7 +241,7 @@ m68hc11sio_port_event (struct hw *me,
 }
 
 
-static void
+void
 m68hc11sio_rx_poll (struct hw *me, void *data)
 {
   SIM_DESC sd;
@@ -313,7 +314,7 @@ m68hc11sio_rx_poll (struct hw *me, void *data)
 }
 
 
-static void
+void
 m68hc11sio_tx_poll (struct hw *me, void *data)
 {
   SIM_DESC sd;
@@ -462,8 +463,7 @@ m68hc11sio_info (struct hw *me)
       n = (clock_cycle - t) / controller->baud_cycle;
       n = controller->data_length - n;
       sim_io_printf (sd, "  Transmit finished in %s (%d bit%s)\n",
-		     cycle_to_string (cpu, t, PRINT_TIME | PRINT_CYCLE),
-                     n, (n > 1 ? "s" : ""));
+		     cycle_to_string (cpu, t), n, (n > 1 ? "s" : ""));
     }
   if (controller->rx_poll_event)
     {
@@ -471,7 +471,7 @@ m68hc11sio_info (struct hw *me)
 
       t = hw_event_remain_time (me, controller->rx_poll_event);
       sim_io_printf (sd, "  Receive finished in %s\n",
-		     cycle_to_string (cpu, t, PRINT_TIME | PRINT_CYCLE));
+		     cycle_to_string (cpu, t));
     }
   
 }

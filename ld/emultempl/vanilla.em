@@ -1,31 +1,29 @@
 # This shell script emits a C file. -*- C -*-
 # It does some substitutions.
-fragment <<EOF
+cat >e${EMULATION_NAME}.c <<EOF
 /* A vanilla emulation with no defaults
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright 1991, 1992, 1994, 2000, 2001 Free Software Foundation, Inc.
    Written by Steve Chamberlain steve@cygnus.com
 
-   This file is part of the GNU Binutils.
+This file is part of GLD, the Gnu Linker.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
-#include "bfdlink.h"
-#include "ctf-api.h"
+#include "sysdep.h"
+
 
 #include "ld.h"
 #include "ldmisc.h"
@@ -36,35 +34,38 @@ fragment <<EOF
 #include "ldfile.h"
 #include "ldemul.h"
 
-static void vanilla_before_parse (void)
+static void vanilla_before_parse PARAMS ((void));
+static void vanilla_set_output_arch PARAMS ((void));
+static char *vanilla_get_script PARAMS ((int *));
+
+
+static void vanilla_before_parse()
 {
 }
 
 static void
-vanilla_set_output_arch (void)
+vanilla_set_output_arch()
 {
   /* Set the output architecture and machine if possible */
   unsigned long  machine = 0;
-  bfd_set_arch_mach (link_info.output_bfd,
-		     ldfile_output_architecture, machine);
+  bfd_set_arch_mach(output_bfd, ldfile_output_architecture, machine);
 }
 
 static char *
-vanilla_get_script (int *isfile)
+vanilla_get_script(isfile)
+     int *isfile;
 {
   *isfile = 0;
   return "";
 }
 
-struct ld_emulation_xfer_struct ld_vanilla_emulation =
+struct ld_emulation_xfer_struct ld_vanilla_emulation = 
 {
   vanilla_before_parse,
   syslib_default,
   hll_default,
   after_parse_default,
   after_open_default,
-  after_check_relocs_default,
-  before_place_orphans_default,
   after_allocation_default,
   vanilla_set_output_arch,
   ldemul_default_target,
@@ -72,21 +73,16 @@ struct ld_emulation_xfer_struct ld_vanilla_emulation =
   vanilla_get_script,
   "vanilla",
   "a.out-sunos-big",
-  finish_default,
+  NULL,	/* finish */
   NULL,	/* create output section statements */
   NULL,	/* open dynamic archive */
   NULL,	/* place orphan */
   NULL,	/* set symbols */
   NULL,	/* parse args */
-  NULL,	/* add_options */
-  NULL,	/* handle_option */
   NULL,	/* unrecognized file */
   NULL,	/* list options */
   NULL,	/* recognized file */
   NULL,	/* find_potential_libraries */
-  NULL,	/* new_vers_pattern */
-  NULL,	/* extra_map_file_text */
-  NULL, /* emit_ctf_early */
-  NULL  /* examine_strtab_for_ctf */
+  NULL	/* new_vers_pattern */
 };
 EOF

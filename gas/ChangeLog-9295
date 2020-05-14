@@ -248,7 +248,7 @@ Wed Nov 15 03:52:00 1995  Ken Raeburn  <raeburn@cygnus.com>
 	Mon Jul 31 14:53:19 1995  Alan Modra  <alan@spri.levels.unisa.edu.au>
 
 	* config/tc-i386.h (md_do_align): cast fill and 0x90 to char
-	before comparing
+ 	before comparing
 
 	Mon May  1 10:91:49 1995  Alan Modra  <alan@spri.levels.unisa.edu.au>
 
@@ -491,7 +491,7 @@ Tue Oct 24 14:50:38 1995  Michael Meissner  <meissner@tiktok.cygnus.com>
 	(fixup_segment): Use MD_PCREL_FROM_SECTION instead of
 	md_pcrel_from, and TC_FORCE_RELOCATION_SECTION instead of
 	TC_FORCE_RELOCATION.
-
+	
 Mon Oct 23 16:20:04 1995  Ken Raeburn  <raeburn@cygnus.com>
 
 	* input-scrub.c (as_where): Set name to null pointer if we don't
@@ -506,10 +506,10 @@ Mon Oct 23 16:20:04 1995  Ken Raeburn  <raeburn@cygnus.com>
 Mon Oct 23 11:15:44 1995  James G. Smith  <jsmith@pasanda.cygnus.co.uk>
 
 	* config/tc-mips.c: Added mips_4100 control, and support for
-	accepting the 4100 as a MIPS architecture variant (md_begin,
-	macro_build, mips_ip, md_parse_option). Adding suitable
-	command-line OPTIONs, and updating the help text (md_show_usage).
-
+ 	accepting the 4100 as a MIPS architecture variant (md_begin,
+ 	macro_build, mips_ip, md_parse_option). Adding suitable
+ 	command-line OPTIONs, and updating the help text (md_show_usage).
+	
 Wed Oct 18 13:20:32 1995  Ken Raeburn  <raeburn@cygnus.com>
 
 	* subsegs.c (subseg_begin): Only set absolute_frchain.fix_* when
@@ -774,7 +774,7 @@ Thu Sep 28 19:25:04 1995  Stan Shebs  <shebs@andros.cygnus.com>
 
 Thu Sep 28 15:43:15 1995  Kim Knuttila  <krk@nellie>
 
-	* config/tc-ppc.c (md_apply_fix3): Removed some TE_PE specific
+	* config/tc-ppc.c (md_apply_fix3): Removed some TE_PE specific 
 	manipulations, since I can't prove they're needed.
 	(md_begin): Removed init_regtable, insert_reg, and the call points.
 	(register_name): New function. Parses a register name, if appropriate.
@@ -840,11 +840,11 @@ Wed Sep 27 10:29:13 1995  Kim Knuttila  <krk@nellie>
 	(md_assemble): Initial [toc]x(rtoc) support
 	(ppc_frob_label): Removed some xcoff specific processing from TE_PE
 	(ppc_frob_symbol): Removed some xcoff specific processing from TE_PE
-	Added support for more predefined sections
-	(ppc_frob_section): Removed some xcoff specific processing from TE_PE
+                           Added support for more predefined sections
+        (ppc_frob_section): Removed some xcoff specific processing from TE_PE
 	(ppc_fix_adjustable): Removed from TE_PE mainline
-	(md_apply_fix3): For TE_PE toc entries, we don't need to mess
-	with fx_addnumber. Removed for the time being.
+	(md_apply_fix3): For TE_PE toc entries, we don't need to mess 
+        with fx_addnumber. Removed for the time being.
 	(lots): Put back missing assignments to ppc_current_csect.
 
 Tue Sep 26 14:57:59 1995  Michael Meissner  <meissner@tiktok.cygnus.com>
@@ -871,7 +871,7 @@ Mon Sep 25 16:08:43 1995  Michael Meissner  <meissner@tiktok.cygnus.com>
 	(md_assemble): Be more robust in terms of relocations.
 	(md_apply_fix3): Allow 14 bit relocs to be emitted for external
 	symbols in addition to 26 bit relocs.  Properly insert 26/14 bit
-	reloc value fields into the instruction stream.
+	reloc value fields into the instruction stream.	
 
 Mon Sep 25 00:23:16 1995  Ian Lance Taylor  <ian@cygnus.com>
 
@@ -1066,7 +1066,7 @@ Thu Sep  7 12:33:58 1995  Ian Lance Taylor  <ian@cygnus.com>
 
 	* expr.c (operand): Handle 08 and 09 in MRI mode.
 	* macro.c (ISSEP): Remove duplicated `"' character.
-	(get_any_string): Copy some characters for which ISSEP is true:
+ 	(get_any_string): Copy some characters for which ISSEP is true:
 	';', '>', '(', ')'.  Otherwise we can get in an infinite loop.
 	* read.c (s_space): In MRI mode, the expressions stop at the first
 	unquoted space.
@@ -1146,7 +1146,7 @@ Fri Sep  1 17:02:15 1995  steve chamberlain  <sac@slash.cygnus.com>
 
 Fri Sep  1 08:20:19 1995  James G. Smith  <jsmith@beauty.cygnus.com>
 
-	* config/tc-mips.c (md_parse_option, md_begin, md_show_usage):
+        * config/tc-mips.c (md_parse_option, md_begin, md_show_usage):
 	Add support for "-mcpu=vr4300" as processor identifier.
 
 Thu Aug 31 16:41:06 1995  steve chamberlain  <sac@slash.cygnus.com>
@@ -1157,8 +1157,8 @@ Thu Aug 31 16:41:06 1995  steve chamberlain  <sac@slash.cygnus.com>
 Tue Aug 29 19:42:58 1995  Andreas Schwab  <schwab@issan.informatik.uni-dortmund.de>
 
 	* config/tc-m68k.c (m68k_ip) [case POST/PRE/BASE]: Fix typo when
-	looking at outer displacement.  Don't set the postindex bit if the
-	index suppress bit is set (for memory indirect addressing mode).
+ 	looking at outer displacement.  Don't set the postindex bit if the
+ 	index suppress bit is set (for memory indirect addressing mode).
 
 Thu Aug 31 06:49:37 1995  Doug Evans  <dje@canuck.cygnus.com>
 
@@ -1539,7 +1539,7 @@ Fri Aug 11 19:16:08 1995  Ian Lance Taylor  <ian@cygnus.com>
 	* doc/gasp.texi: Document -M/--mri.
 
 	* gasp.c: Include ansidecl.h.  Make all local functions static.
-	Add prototypes for all static functions.
+        Add prototypes for all static functions.
 	(mri): New global variable.
 	(sb_add_char): Change parameter c from char to int.
 	(sb_add_string): Make parameter s into a const pointer.
@@ -1618,7 +1618,7 @@ Thu Aug 10 00:38:11 1995  Ian Lance Taylor  <ian@cygnus.com>
 	(build_Mytes, md_atof): Likewise.
 	(md_convert_frag, md_apply_fix): Likewise.
 	(md_number_to_chars): Likewise.
-
+	
 Wed Aug  9 10:51:48 1995  Ian Lance Taylor  <ian@cygnus.com>
 
 	* config/tc-m68k.c (m68k_abspcadd): New static variable.
@@ -1843,7 +1843,7 @@ Mon Aug  7 02:54:20 1995  Jeff Law  (law@snake.cs.utah.edu)
 Fri Aug  4 12:29:21 1995  Ian Lance Taylor  <ian@cygnus.com>
 
 	* expr.c (op_encoding): Make non-const.  Don't set '"' to
-	O_bit_not.
+        O_bit_not.
 	(expr_begin): Set op_encoding['"'] in MRI mode.
 
 Wed Aug  2 18:39:43 1995  Ian Lance Taylor  <ian@cygnus.com>
@@ -1946,7 +1946,7 @@ Mon Jul 31 18:19:26 1995  steve chamberlain  <sac@slash.cygnus.com>
 
 	* gasp.c (main): Parse -I option.
 	(do_include): Look through include list.
-	* gasp.c (change_base): Don't modify numbers in strings.
+	* gasp.c (change_base): Don't modify numbers in strings. 
 
 Mon Jul 31 12:16:21 1995  Ian Lance Taylor  <ian@cygnus.com>
 
@@ -2253,7 +2253,7 @@ Fri Jul  7 11:17:27 1995  Ian Lance Taylor  <ian@cygnus.com>
 	Add SPARC ELF PIC support.
 	* write.c (fixup_segment): Pass fixP to TC_RELOC_RTSYM_LOC_FIXUP,
 	not fixP->fx_r_type.
-	* config/tc-sparc.c (sparc_pic_code): New global variable.
+	* config/tc-sparc.c (sparc_pic_code): New global variable. 
 	(md_apply_fix): If generating PIC, adjust fx_addnumber for any non
 	PC relative reloc.
 	(tc_gen_reloc): If generating PIC, adjust various reloc types.
@@ -2392,7 +2392,7 @@ Wed Jul  5 12:01:49 1995  Ian Lance Taylor  <ian@cygnus.com>
 	(s_stringer, s_mips_space): Remove unneeded declarations.
 	(md_parse_option): In case 'g', set mips_debug to debugging level.
 	(mips_local_label): New function.
-	* config/tc-mips.h (LOCAL_LABEL): Call mips_local_label.
+	* config/tc-mips.h (LOCAL_LABEL): Call mips_local_label. 
 	(mips_local_label): Declare.
 
 Wed Jul  5 00:59:22 1995  Fred Fish  (fnf@cygnus.com)
@@ -2471,7 +2471,7 @@ Wed Jun 21 18:07:59 1995  Ken Raeburn  <raeburn@cujo.cygnus.com>
 	(md_estimate_size_before_relax) [case TAB (FBRANCH, SZ_UNDEF)]:
 	Turn on long bit.
 	(m68k_ip) [case 'C']: Don't set set long bit, set it in the opcode
-	table.
+ 	table.
 	(md_estimate_size_before_relax) [case TAB (PCINDEX, SZ_UNDEF)]:
 	Variable part increases by four, not six.
 	* write.c (fixup_segment) [TC_M68K]: Don't do further pcrel
@@ -4143,7 +4143,7 @@ Tue Dec 13 08:04:15 1994  Ian Lance Taylor  <ian@cygnus.com>
 
 	* config/tc-mips.c (macro_build): Accept BFD_RELOC_PCREL* without
 	requiring that the X_op_symbol be in the text_section.
-	(macro): Change the test for a legal expression difference to
+	(macro): Change the test for a legel expression difference to
 	correspond to changes in pseudo_set in read.c.
 
 Fri Dec  9 21:04:17 1994  Ken Raeburn  <raeburn@cujo.cygnus.com>
@@ -9003,7 +9003,7 @@ Thu Oct 14 16:51:00 1993  Ian Lance Taylor  (ian@tweedledumb.cygnus.com)
 	* app.c (do_scrub_next_char): Always accept 'x' and 'X' as escape
 	characters in state 6.
 	* read.c (next_char_of_string): Accept \Xh* and \xh* where h* are
-	hexadecimal digits.
+	hexidecimal digits.
 
 	* config/tc-i386.c (md_apply_fix_1): Make cross segment calls work
 	for ELF by hacking around bizarre bfd_perform_relocation behaviour
@@ -10401,7 +10401,7 @@ Thu Jul  8 14:15:05 1993  Ken Raeburn  (raeburn@cambridge.cygnus.com)
 
 Thu Jul  8 07:25:25 1993  Doug Evans  (dje@canuck.cygnus.com)
 
-	* config/tc-h8300.h (TC_CONS_RELOC): Use R_RELLONG if H8/300H.
+	* config/tc-h8300.h (TC_CONS_RELOC): Use R_RELLONG if h8/300h.
 
 Wed Jul  7 18:11:07 1993  david d `zoo' zuhn  (zoo at rtl.cygnus.com)
 
@@ -12364,7 +12364,7 @@ Tue Nov 10 09:49:24 1992  Ian Lance Taylor  (ian@cygnus.com)
 	* config/atof-ieee.c, config/atof-ns32k.c, config/tc-*.c: made
 	EXP_CHARS, FLT_CHARS, comment_chars, line_comment_chars and
 	line_seperator_chars consistently const, and always
-	initialized them.  Included read.h.
+	initialized them.  Included read.h. 
 
 Thu Nov  5 17:55:41 1992  Jim Wilson  (wilson@sphagnum.cygnus.com)
 
@@ -12452,7 +12452,7 @@ Tue Sep 29 10:51:55 1992  Ian Lance Taylor  (ian@cygnus.com)
 
 	* config/tc-i960.h, config/tc-i960.c: avoid the ANSI
 	preprocessor addition #elif, since it is not supported by old
-	compilers.
+	compilers. 
 	config/ho-rs6000.h, config/tc-m68k.c: the native RS/6000
 	compiler miscompiles a couple of expressions in tc-m68k.c.
 
@@ -12561,7 +12561,7 @@ Wed Sep  9 11:06:25 1992  Ian Lance Taylor  (ian@cygnus.com)
 	 file.
 	* config/tc-m68kmote.c, config/tc-m68kmote.h: removed now
 	 superfluous files.
-
+	 
 	From Steve Chamberlain:
 	* config/m68kcoff.mt: for m68k COFF.
 	* config/obj-coffbfd.c: (fixup_mdeps) added
@@ -13007,7 +13007,7 @@ Sat Feb 22 12:26:28 1992  Steve Chamberlain  (sac at rtl.cygnus.com)
 	* app.c: MRI compatibility - allow single quote to start a string.
 	* as.c: fix typo recently introduced.
 	* as.h : Don't include aout/reloc.h - it's not right for COFF!
-	* expr.c: Much rewriting, to accommodate MRI syntax for
+	* expr.c: Much rewriting, to accomodate MRI syntax for
 	expressions. Also easier to read now.
 	* listing.c: Put back defuns
 	* read.c: modified to accept MRI syntax, put back listing pseudo
@@ -13115,16 +13115,3 @@ Mon Feb 17 07:51:06 1992  K. Richard Pixley  (rich at cygnus.com)
 	* nearly everything.  flush ChangeLog, package as gas-1.92.1.
 	  ChangeLog's prior to this are sketchy at best.  I have logs.
 	  They just aren't ChangeLogs.
-
-Copyright (C) 1992-1995 Free Software Foundation, Inc.
-
-Copying and distribution of this file, with or without modification,
-are permitted in any medium without royalty provided the copyright
-notice and this notice are preserved.
-
-Local Variables:
-mode: change-log
-left-margin: 8
-fill-column: 74
-version-control: never
-End:

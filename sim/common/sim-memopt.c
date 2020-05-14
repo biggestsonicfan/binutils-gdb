@@ -1,23 +1,24 @@
 /* Simulator memory option handling.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-1999 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "config.h"
+#include "cconfig.h"
 
 #include "sim-main.h"
 #include "sim-assert.h"
@@ -66,8 +67,7 @@ enum {
   OPTION_MEMORY_ALIAS,
   OPTION_MEMORY_CLEAR,
   OPTION_MEMORY_FILL,
-  OPTION_MEMORY_MAPFILE,
-  OPTION_MAP_INFO
+  OPTION_MEMORY_MAPFILE
 };
 
 static DECLARE_OPTION_HANDLER (memory_option_handler);
@@ -90,8 +90,8 @@ static const OPTION memory_options[] =
       memory_option_handler },
 
   { {"memory-size", required_argument, NULL, OPTION_MEMORY_SIZE },
-      '\0', "<size>[in bytes, Kb (k suffix), Mb (m suffix) or Gb (g suffix)]",
-     "Add memory at address zero", memory_option_handler },
+      '\0', "SIZE", "Add memory at address zero",
+      memory_option_handler },
 
   { {"memory-fill", required_argument, NULL, OPTION_MEMORY_FILL },
       '\0', "VALUE", "Fill subsequently added memory regions",
@@ -112,9 +112,6 @@ static const OPTION memory_options[] =
       memory_option_handler },
   { {"info-memory", no_argument, NULL, OPTION_MEMORY_INFO },
       '\0', NULL, NULL,
-      memory_option_handler },
-  { {"map-info", no_argument, NULL, OPTION_MAP_INFO },
-      '\0', NULL, "List mapped regions",
       memory_option_handler },
 
   { {NULL, no_argument, NULL, 0}, '\0', NULL, NULL, NULL }
@@ -153,27 +150,7 @@ do_memopt_add (SIM_DESC sd,
       /* Allocate new well-aligned buffer, just as sim_core_attach(). */
       void *aligned_buffer;
       int padding = (addr % sizeof (unsigned64));
-      unsigned long bytes;
-
-#ifdef HAVE_MMAP
-      struct stat s;
-
-      if (mmap_next_fd >= 0)
-	{
-	  /* Check that given file is big enough. */
-	  int rc = fstat (mmap_next_fd, &s);
-
-	  if (rc < 0)
-	    sim_io_error (sd, "Error, unable to stat file: %s\n",
-			  strerror (errno));
-
-	  /* Autosize the mapping to the file length.  */
-	  if (nr_bytes == 0)
-	    nr_bytes = s.st_size;
-	}
-#endif
-
-      bytes = (modulo == 0 ? nr_bytes : modulo) + padding;
+      unsigned long bytes = (modulo == 0 ? nr_bytes : modulo) + padding;
 
       free_buffer = NULL;
       free_length = bytes;
@@ -182,9 +159,14 @@ do_memopt_add (SIM_DESC sd,
       /* Memory map or malloc(). */
       if (mmap_next_fd >= 0)
 	{
+	  /* Check that given file is big enough. */
+	  struct stat s;
+	  int rc;
+
 	  /* Some kernels will SIGBUS the application if mmap'd file
-	     is not large enough.  */
-	  if (s.st_size < bytes)
+	     is not large enough.  */ 
+	  rc = fstat (mmap_next_fd, &s);
+	  if (rc < 0 || s.st_size < bytes)
 	    {
 	      sim_io_error (sd,
 			    "Error, cannot confirm that mmap file is large enough "
@@ -195,12 +177,12 @@ do_memopt_add (SIM_DESC sd,
 	  if (free_buffer == 0 || free_buffer == (char*)-1) /* MAP_FAILED */
 	    {
 	      sim_io_error (sd, "Error, cannot mmap file (%s).\n",
-			    strerror (errno));
+			    strerror(errno));
 	    }
 	}
-#endif
+#endif 
 
-      /* Need heap allocation? */
+      /* Need heap allocation? */ 
       if (free_buffer == NULL)
 	{
 	  /* If filling with non-zero value, do not use clearing allocator. */
@@ -282,7 +264,7 @@ do_memopt_delete (SIM_DESC sd,
 	munmap ((*entry)->buffer, (*entry)->munmap_length);
       else
 #endif
-	free ((*entry)->buffer);
+	zfree ((*entry)->buffer);
     }
 
   /* delete it and its aliases */
@@ -293,7 +275,7 @@ do_memopt_delete (SIM_DESC sd,
       sim_memopt *dead = alias;
       alias = alias->alias;
       sim_core_detach (sd, NULL, dead->level, dead->space, dead->addr);
-      free (dead);
+      zfree (dead);
     }
   return SIM_RC_OK;
 }
@@ -304,28 +286,11 @@ parse_size (char *chp,
 	    address_word *nr_bytes,
 	    unsigned *modulo)
 {
-  /* <nr_bytes>[K|M|G] [ "%" <modulo> ] */
+  /* <nr_bytes> [ "%" <modulo> ] */
   *nr_bytes = strtoul (chp, &chp, 0);
-  switch (*chp)
+  if (*chp == '%')
     {
-    case '%':
       *modulo = strtoul (chp + 1, &chp, 0);
-      break;
-    case 'g': case 'G': /* Gigabyte suffix.  */
-      *nr_bytes <<= 10;
-      /* Fall through.  */
-    case 'm': case 'M': /* Megabyte suffix.  */
-      *nr_bytes <<= 10;
-      /* Fall through.  */
-    case 'k': case 'K': /* Kilobyte suffix.  */
-      *nr_bytes <<= 10;
-      /* Check for a modulo specifier after the suffix.  */
-      ++ chp;
-      if (* chp == 'b' || * chp == 'B')
-	++ chp;
-      if (* chp == '%')
-	*modulo = strtoul (chp + 1, &chp, 0);
-      break;
     }
   return chp;
 }
@@ -384,7 +349,7 @@ memory_option_handler (SIM_DESC sd, sim_cpu *cpu, int opt,
 	  parse_addr (arg, &level, &space, &addr);
 	  return do_memopt_delete (sd, level, space, addr);
 	}
-
+    
     case OPTION_MEMORY_REGION:
       {
 	char *chp = arg;
@@ -397,15 +362,10 @@ memory_option_handler (SIM_DESC sd, sim_cpu *cpu, int opt,
 	chp = parse_addr (chp, &level, &space, &addr);
 	if (*chp != ',')
 	  {
-	    /* let the file autosize */
-	    if (mmap_next_fd == -1)
-	      {
-		sim_io_eprintf (sd, "Missing size for memory-region\n");
-		return SIM_RC_FAIL;
-	      }
+	    sim_io_eprintf (sd, "Missing size for memory-region\n");
+	    return SIM_RC_FAIL;
 	  }
-	else
-	  chp = parse_size (chp + 1, &nr_bytes, &modulo);
+	chp = parse_size (chp + 1, &nr_bytes, &modulo);
 	/* old style */
 	if (*chp == ',')
 	  modulo = strtoul (chp + 1, &chp, 0);
@@ -499,7 +459,7 @@ memory_option_handler (SIM_DESC sd, sim_cpu *cpu, int opt,
 	if (mmap_next_fd < 0)
 	  {
 	    sim_io_eprintf (sd, "Cannot open file `%s': %s\n",
-			    arg, strerror (errno));
+			    arg, strerror(errno));
 	    return SIM_RC_FAIL;
 	  }
 
@@ -539,45 +499,6 @@ memory_option_handler (SIM_DESC sd, sim_cpu *cpu, int opt,
 	      }
 	    sim_io_printf (sd, "\n");
 	  }
-	return SIM_RC_OK;
-	break;
-      }
-
-    case OPTION_MAP_INFO:
-      {
-	sim_core *memory = STATE_CORE (sd);
-	unsigned nr_map;
-
-	for (nr_map = 0; nr_map < nr_maps; ++nr_map)
-	  {
-	    sim_core_map *map = &memory->common.map[nr_map];
-	    sim_core_mapping *mapping = map->first;
-
-	    if (!mapping)
-	      continue;
-
-	    sim_io_printf (sd, "%s maps:\n", map_to_str (nr_map));
-	    do
-	      {
-		unsigned modulo;
-
-		sim_io_printf (sd, " map ");
-		if (mapping->space != 0)
-		  sim_io_printf (sd, "0x%x:", mapping->space);
-		sim_io_printf (sd, "0x%08lx", (long) mapping->base);
-		if (mapping->level != 0)
-		  sim_io_printf (sd, "@0x%x", mapping->level);
-		sim_io_printf (sd, ",0x%lx", (long) mapping->nr_bytes);
-		modulo = mapping->mask + 1;
-		if (modulo != 0)
-		  sim_io_printf (sd, "%%0x%x", modulo);
-		sim_io_printf (sd, "\n");
-
-		mapping = mapping->next;
-	      }
-	    while (mapping);
-	  }
-
 	return SIM_RC_OK;
 	break;
       }
@@ -629,7 +550,7 @@ sim_memory_uninstall (SIM_DESC sd)
 	    munmap ((*entry)->buffer, (*entry)->munmap_length);
 	  else
 #endif
-	    free ((*entry)->buffer);
+	    zfree ((*entry)->buffer);
 	}
 
       /* delete it and its aliases */
@@ -643,7 +564,7 @@ sim_memory_uninstall (SIM_DESC sd)
 	  sim_memopt *dead = alias;
 	  alias = alias->alias;
 	  sim_core_detach (sd, NULL, dead->level, dead->space, dead->addr);
-	  free (dead);
+	  zfree (dead);
 	}
     }
 }

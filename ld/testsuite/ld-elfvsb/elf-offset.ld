@@ -46,8 +46,6 @@ SECTIONS
     }
   .rel.got       : { *(.rel.got)		}
   .rela.got      : { *(.rela.got)		}
-  .rel.toc       : { *(.rel.toc)		}
-  .rela.toc      : { *(.rela.toc)		}
   .rel.ctors     : { *(.rel.ctors)	}
   .rela.ctors    : { *(.rela.ctors)	}
   .rel.dtors     : { *(.rel.dtors)	}
@@ -60,8 +58,6 @@ SECTIONS
   .rela.bss      : { *(.rela.bss)		}
   .rel.plt       : { *(.rel.plt)		}
   .rela.plt      : { *(.rela.plt)		}
-  .rel.eh_frame  : { *(.rel.eh_frame)		}
-  .rela.eh_frame : { *(.rela.eh_frame)		}
   .init          : { KEEP (*(.init))	}
   .plt      : { *(.plt)	}
   .text      :
@@ -69,7 +65,7 @@ SECTIONS
     *(.text)
     *(.text.*)
     *(.stub)
-    /* .gnu.warning sections are handled specially by elf.em.  */
+    /* .gnu.warning sections are handled specially by elf32.em.  */
     *(.gnu.warning)
     *(.gnu.linkonce.t*)
   }
@@ -113,7 +109,6 @@ SECTIONS
     KEEP (*(.dtors))
   }
   .got           : { *(.got.plt) *(.got) }
-  .toc           : { *(.toc) }
   .dynamic       : { *(.dynamic) }
   /* We want the small data sections together, so single-instruction offsets
      can access them all, and initialized data all before uninitialized, so
@@ -131,7 +126,7 @@ SECTIONS
    /* Align here to ensure that the .bss section occupies space up to
       _end.  Align after .bss to ensure correct alignment even if the
       .bss section disappears because there are no input sections.  */
-   . = ALIGN(. != 0 ? 32 / 8 : 1);
+   . = ALIGN(32 / 8);
   }
   . = ALIGN(32 / 8);
   _end = . ;

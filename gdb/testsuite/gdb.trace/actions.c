@@ -1,27 +1,6 @@
-/* This testcase is part of GDB, the GNU debugger.
-
-   Copyright 1998-2020 Free Software Foundation, Inc.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
-
 /*
  * Test program for trace action commands
  */
-
-#include <string.h>
-
-#include "trace-common.h"
 
 static char   gdb_char_test;
 static short  gdb_short_test;
@@ -48,11 +27,6 @@ static union GDB_UNION_TEST
 } gdb_union1_test;
 
 void gdb_recursion_test (int, int, int, int,  int,  int,  int);
-/* This function pointer is used to force the function to be called via
-   the global entry instead of local entry on ppc64le; otherwise, breakpoints
-   set at the global entry (i.e., '*foo') will not be hit.  */
-typedef void (*gdb_recursion_test_fp) (int, int, int, int,  int,  int,  int);
-gdb_recursion_test_fp gdb_recursion_test_ptr = gdb_recursion_test;
 
 void gdb_recursion_test (int depth, 
 			 int q1, 
@@ -71,7 +45,7 @@ void gdb_recursion_test (int depth,
   q5 = q6;						/* gdbtestline 6 */
   q6 = q;						/* gdbtestline 7 */
   if (depth--)						/* gdbtestline 8 */
-    gdb_recursion_test_ptr (depth, q1, q2, q3, q4, q5, q6);	/* gdbtestline 9 */
+    gdb_recursion_test (depth, q1, q2, q3, q4, q5, q6);	/* gdbtestline 9 */
 }
 
 
@@ -110,7 +84,7 @@ unsigned long   gdb_c_test( unsigned long *parm )
    gdb_structp_test      = &gdb_struct1_test;
    gdb_structpp_test     = &gdb_structp_test;
 
-   gdb_recursion_test_ptr (3, (long) parm[1], (long) parm[2], (long) parm[3],
+   gdb_recursion_test (3, (long) parm[1], (long) parm[2], (long) parm[3],
 		       (long) parm[4], (long) parm[5], (long) parm[6]);
 
    gdb_char_test = gdb_short_test = gdb_long_test = 0;
@@ -123,7 +97,7 @@ unsigned long   gdb_c_test( unsigned long *parm )
    return ( (unsigned long) 0 );
 }
 
-void gdb_asm_test (void)
+static void gdb_asm_test (void)
 {
 }
 
@@ -143,7 +117,10 @@ main (argc, argv, envp)
   int i;
   unsigned long myparms[10];
 
-  FAST_TRACEPOINT_LABEL (fast_tracepoint_loc);
+#ifdef usestubs
+  set_debug_traps ();
+  breakpoint ();
+#endif
 
   begin ();
   for (i = 0; i < sizeof (myparms) / sizeof (myparms[0]); i++)

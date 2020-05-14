@@ -1,34 +1,46 @@
-#   Copyright 1998-2020 Free Software Foundation, Inc.
+#   Copyright 1998 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Michael Snyder (msnyder@cygnus.com)
 
-load_lib "trace-support.exp"
+load_lib "trace-support.exp";
 
+if $tracelevel then {
+    strace $tracelevel
+}
+
+set prms_id 0
+set bug_id 0
 
 gdb_exit
 gdb_start
-standard_testfile actions.c
-if ![gdb_trace_common_supports_arch] {
-    unsupported "no trace-common.h support for arch"
-    return -1
-}
-if { [gdb_compile "$srcdir/$subdir/$srcfile" $binfile \
-	  executable {debug nowarnings}] != "" } {
-    untested "failed to compile"
-    return -1
+if [istarget "m68k-*-elf"] then {
+    set srcfile gdb_c_test.c
+    set binfile [board_info target d490_binfile];
+} else {
+    set testfile "actions"
+    set srcfile ${testfile}.c
+    set binfile $objdir/$subdir/$testfile
+    if { [gdb_compile "$srcdir/$subdir/$srcfile" $binfile \
+	    executable {debug additional_flags=-w}] != "" } {
+	gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+    }
 }
 gdb_reinitialize_dir $srcdir/$subdir
 
@@ -39,10 +51,10 @@ gdb_file_cmd $binfile
 
 # define relative source line numbers:
 # all subsequent line numbers are relative to this first one (baseline)
-set baseline  [gdb_find_recursion_test_baseline $srcfile]
+set baseline  [gdb_find_recursion_test_baseline $srcfile];
 if { $baseline == -1 } then {
-    fail "could not find gdb_recursion_test function"
-    return
+    fail "Could not find gdb_recursion_test function"
+    return;
 }
 
 set testline1 [expr $baseline + 1]
@@ -52,10 +64,110 @@ set testline2 [expr $baseline + 3]
 # test "help tracepoints"
 #
 
-set helpcnt 0
-test_class_help "tracepoints" {
-    "Tracing of program execution without stopping the program\.[\r\n\]+" 
-} {} "1.0: help tracepoints"
+set helpcnt 0;
+send_gdb "help tracepoints\n"
+gdb_expect {
+    -re "Tracing of program execution without stopping the program." {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "actions -- Specify the actions to be taken at a tracepoint" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "collect -- Specify one or more data items to be collected" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "delete tracepoints -- Delete specified tracepoints" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "end -- Ends a list of.*actions" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "info tracepoints -- Status of tracepoints" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "passcount -- Set the passcount for a tracepoint" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "save-tracepoints -- Save current tracepoint definitions" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tdump -- Print everything collected at the current tracepoint" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind -- Select a trace frame" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind end -- Synonym for 'none'" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind line -- Select a trace frame by line number" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind none -- De-select any trace frame and resume 'live' debugging" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind outside -- Select a trace frame whose PC is outside" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind pc -- Select a trace frame by PC" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind range -- Select a trace frame whose PC is in the given" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind start -- Select the first trace frame in the trace buffer" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tfind tracepoint -- Select a trace frame by tracepoint number" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "trace -- Set a tracepoint at a specified line or function or addr" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tstart -- Start trace data collection" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tstatus -- Display the status of the current trace data collection" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "tstop -- Stop trace data collection" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re "while-stepping -- Specify single-stepping behavior at a tracepoint" {
+	incr helpcnt;
+	exp_continue
+    }
+    -re ".*$gdb_prompt $" {
+	if { $helpcnt == 21 } {
+	    pass "1.0: help tracepoints"
+	} else {
+	    warning "$helpcnt";
+	    fail "1.0: help tracepoints"
+	}
+    }
+}
 
 #
 # test trace command:
@@ -66,13 +178,11 @@ gdb_delete_tracepoints
 gdb_test "trace $srcfile:$testline2" \
 	"Tracepoint $decimal at $hex: file.*$srcfile, line $testline2." \
 	"1.1a: set tracepoint at sourceline"
-gdb_test "info trace" "in gdb_recursion_test.*$srcfile:$testline2.
-\[\t \]+not installed on target." \
+gdb_test "info trace" "in gdb_recursion_test.*$srcfile:$testline2" \
 	"1.1b: trace sourcefile:line"
 
 # 1.2 trace invalid source line
 gdb_delete_tracepoints
-gdb_test_no_output "set breakpoint pending off"
 gdb_test "trace $srcfile:99999" "No line 99999 in file \".*$srcfile\"." \
 	"1.2a: trace invalid line in sourcefile"
 gdb_test "info trace" "No tracepoints.*" \
@@ -90,8 +200,7 @@ gdb_delete_tracepoints
 gdb_test "trace gdb_recursion_test" \
 	"Tracepoint $decimal at $hex: file.*$srcfile, line $testline1." \
 	"1.4a: trace function by name"
-gdb_test "info trace" "in gdb_recursion_test.*$srcfile:$testline1.
-\[\t \]+not installed on target." \
+gdb_test "info trace" "in gdb_recursion_test.*$srcfile:$testline1" \
 	"1.4b: trace function by name"
 
 # 1.5 trace non-existant function
@@ -103,10 +212,12 @@ gdb_test "info trace" "No tracepoints.*" \
 
 # 1.6 trace at a specific address
 #     Collect the address of "gdb_asm_test", and use that.
-gdb_test_multiple "print gdb_asm_test" "" {
+send_gdb "print gdb_asm_test\n"
+gdb_expect {
     -re "\[$\]\[0-9\].*0x(\[0-9a-fA-F\]+).*$gdb_prompt $" {
 	set asm_test_addr $expect_out(1,string)
     }
+    timeout { }
 }
 
 gdb_delete_tracepoints
@@ -118,38 +229,33 @@ gdb_test "info trace" "$asm_test_addr.*gdb_asm_test.*" \
 
 # 1.7 trace at function's exact address
 #     Collect the address of the function for comparison
-gdb_test_multiple "print gdb_recursion_test" "" {
+send_gdb "print gdb_recursion_test\n"
+gdb_expect {
     -re "\[$\]\[0-9\].*0x(\[0-9a-fA-F\]+).*$gdb_prompt $" {
 	set c_test_addr $expect_out(1,string)
     }
+    timeout { }
 }
 
 gdb_delete_tracepoints
 gdb_test "trace \*gdb_recursion_test" \
 	"Tracepoint $decimal at .*$c_test_addr.*" \
 	"1.7a: trace at function label (before prologue)"
-gdb_test "info trace" "$c_test_addr.*in gdb_recursion_test.*:$baseline.
-\[\t \]+not installed on target." \
+gdb_test "info trace" "$c_test_addr.*in gdb_recursion_test.*:$baseline" \
 	"1.7b: verify trace at specific address"
 
 # 1.8 trace at invalid address
 # no address is invalid
 
 # 1.9 trace no arguments
-gdb_test "trace" "No default breakpoint address now." \
+gdb_test "trace" "trace command requires an argument" \
 	"1.9: trace <no arguments>"
 
-# 1.10 there's no 1.10.
+# 1.10 set large number of tracepoints
+# deferred to limits test module
 
 # 1.11 tracepoint conditions
-gdb_delete_tracepoints
-gdb_test "trace gdb_recursion_test if q1 > 0" \
-	"Tracepoint $decimal at $hex: file.*$srcfile, line $testline1." \
-	"1.11a: conditional tracepoint"
-gdb_test "info trace" "in gdb_recursion_test.*$srcfile:$testline1.
-\[\t \]+trace only if q1 > 0.
-\[\t \]+not installed on target." \
-	"1.11b: verify conditional tracepoint"
+# conditions on tracepoints not implemented
 
 # 1.12 set tracepoint in prologue
 # [see tfind.exp]
@@ -160,16 +266,4 @@ gdb_test "info trace" "in gdb_recursion_test.*$srcfile:$testline1.
 # 1.14 help trace
 gdb_test "help trace" "Set a tracepoint at .*" "1.14: help trace"
 
-# 1.15 ftrace
 
-gdb_delete_tracepoints
-
-# Acceptance vs rejection of a location are target-specific, so allow both.
-gdb_test_multiple "ftrace gdb_recursion_test" "set a fast tracepoint" {
-    -re "Fast tracepoint $decimal at $hex: file.*$srcfile, line $testline1.*$gdb_prompt $" {
-	pass "set a fast tracepoint"
-    }
-    -re ".*May not have a fast tracepoint at $hex.*$gdb_prompt $" {
-	pass "declined to set a fast tracepoint"
-    }
-}

@@ -1,12 +1,11 @@
 /* Target-dependent code for the NEC V850 for GDB, the GNU debugger.
-
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright 1996, 1998, 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,484 +14,261 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
 #include "frame.h"
-#include "frame-base.h"
-#include "trad-frame.h"
-#include "frame-unwind.h"
-#include "dwarf2/frame.h"
-#include "gdbtypes.h"
 #include "inferior.h"
+#include "target.h"
+#include "value.h"
+#include "bfd.h"
+#include "gdb_string.h"
 #include "gdbcore.h"
+#include "symfile.h"
 #include "arch-utils.h"
 #include "regcache.h"
-#include "dis-asm.h"
-#include "osabi.h"
-#include "elf-bfd.h"
-#include "elf/v850.h"
+#include "symtab.h"
 
-enum
-  {
-    /* General purpose registers.  */
-    E_R0_REGNUM,
-    E_R1_REGNUM,
-    E_R2_REGNUM,
-    E_R3_REGNUM, E_SP_REGNUM = E_R3_REGNUM,
-    E_R4_REGNUM,
-    E_R5_REGNUM,
-    E_R6_REGNUM, E_ARG0_REGNUM = E_R6_REGNUM,
-    E_R7_REGNUM,
-    E_R8_REGNUM,
-    E_R9_REGNUM, E_ARGLAST_REGNUM = E_R9_REGNUM,
-    E_R10_REGNUM, E_V0_REGNUM = E_R10_REGNUM,
-    E_R11_REGNUM, E_V1_REGNUM = E_R11_REGNUM,
-    E_R12_REGNUM,
-    E_R13_REGNUM,
-    E_R14_REGNUM,
-    E_R15_REGNUM,
-    E_R16_REGNUM,
-    E_R17_REGNUM,
-    E_R18_REGNUM,
-    E_R19_REGNUM,
-    E_R20_REGNUM,
-    E_R21_REGNUM,
-    E_R22_REGNUM,
-    E_R23_REGNUM,
-    E_R24_REGNUM,
-    E_R25_REGNUM,
-    E_R26_REGNUM,
-    E_R27_REGNUM,
-    E_R28_REGNUM,
-    E_R29_REGNUM, E_FP_REGNUM = E_R29_REGNUM,
-    E_R30_REGNUM, E_EP_REGNUM = E_R30_REGNUM,
-    E_R31_REGNUM, E_LP_REGNUM = E_R31_REGNUM,
+struct gdbarch_tdep
+{
+  /* gdbarch target dependent data here. Currently unused for v850. */
+};
 
-    /* System registers - main banks.  */
-    E_R32_REGNUM, E_SR0_REGNUM = E_R32_REGNUM,
-    E_R33_REGNUM,
-    E_R34_REGNUM,
-    E_R35_REGNUM,
-    E_R36_REGNUM,
-    E_R37_REGNUM, E_PS_REGNUM = E_R37_REGNUM,
-    E_R38_REGNUM,
-    E_R39_REGNUM,
-    E_R40_REGNUM,
-    E_R41_REGNUM,
-    E_R42_REGNUM,
-    E_R43_REGNUM,
-    E_R44_REGNUM,
-    E_R45_REGNUM,
-    E_R46_REGNUM,
-    E_R47_REGNUM,
-    E_R48_REGNUM,
-    E_R49_REGNUM,
-    E_R50_REGNUM,
-    E_R51_REGNUM,
-    E_R52_REGNUM, E_CTBP_REGNUM = E_R52_REGNUM,
-    E_R53_REGNUM,
-    E_R54_REGNUM,
-    E_R55_REGNUM,
-    E_R56_REGNUM,
-    E_R57_REGNUM,
-    E_R58_REGNUM,
-    E_R59_REGNUM,
-    E_R60_REGNUM,
-    E_R61_REGNUM,
-    E_R62_REGNUM,
-    E_R63_REGNUM,
+/* Extra info which is saved in each frame_info. */
+struct frame_extra_info
+{ 
+};
 
-    /* PC.  */
-    E_R64_REGNUM, E_PC_REGNUM = E_R64_REGNUM,
-    E_R65_REGNUM,
-    E_NUM_OF_V850_REGS,
-    E_NUM_OF_V850E_REGS = E_NUM_OF_V850_REGS,
-
-    /* System registers - MPV (PROT00) bank.  */
-    E_R66_REGNUM = E_NUM_OF_V850_REGS,
-    E_R67_REGNUM,
-    E_R68_REGNUM,
-    E_R69_REGNUM,
-    E_R70_REGNUM,
-    E_R71_REGNUM,
-    E_R72_REGNUM,
-    E_R73_REGNUM,
-    E_R74_REGNUM,
-    E_R75_REGNUM,
-    E_R76_REGNUM,
-    E_R77_REGNUM,
-    E_R78_REGNUM,
-    E_R79_REGNUM,
-    E_R80_REGNUM,
-    E_R81_REGNUM,
-    E_R82_REGNUM,
-    E_R83_REGNUM,
-    E_R84_REGNUM,
-    E_R85_REGNUM,
-    E_R86_REGNUM,
-    E_R87_REGNUM,
-    E_R88_REGNUM,
-    E_R89_REGNUM,
-    E_R90_REGNUM,
-    E_R91_REGNUM,
-    E_R92_REGNUM,
-    E_R93_REGNUM,
-
-    /* System registers - MPU (PROT01) bank.  */
-    E_R94_REGNUM,
-    E_R95_REGNUM,
-    E_R96_REGNUM,
-    E_R97_REGNUM,
-    E_R98_REGNUM,
-    E_R99_REGNUM,
-    E_R100_REGNUM,
-    E_R101_REGNUM,
-    E_R102_REGNUM,
-    E_R103_REGNUM,
-    E_R104_REGNUM,
-    E_R105_REGNUM,
-    E_R106_REGNUM,
-    E_R107_REGNUM,
-    E_R108_REGNUM,
-    E_R109_REGNUM,
-    E_R110_REGNUM,
-    E_R111_REGNUM,
-    E_R112_REGNUM,
-    E_R113_REGNUM,
-    E_R114_REGNUM,
-    E_R115_REGNUM,
-    E_R116_REGNUM,
-    E_R117_REGNUM,
-    E_R118_REGNUM,
-    E_R119_REGNUM,
-    E_R120_REGNUM,
-    E_R121_REGNUM,
-
-    /* FPU system registers.  */
-    E_R122_REGNUM,
-    E_R123_REGNUM,
-    E_R124_REGNUM,
-    E_R125_REGNUM,
-    E_R126_REGNUM,
-    E_R127_REGNUM,
-    E_R128_REGNUM, E_FPSR_REGNUM = E_R128_REGNUM,
-    E_R129_REGNUM, E_FPEPC_REGNUM = E_R129_REGNUM,
-    E_R130_REGNUM, E_FPST_REGNUM = E_R130_REGNUM,
-    E_R131_REGNUM, E_FPCC_REGNUM = E_R131_REGNUM,
-    E_R132_REGNUM, E_FPCFG_REGNUM = E_R132_REGNUM,
-    E_R133_REGNUM,
-    E_R134_REGNUM,
-    E_R135_REGNUM,
-    E_R136_REGNUM,
-    E_R137_REGNUM,
-    E_R138_REGNUM,
-    E_R139_REGNUM,
-    E_R140_REGNUM,
-    E_R141_REGNUM,
-    E_R142_REGNUM,
-    E_R143_REGNUM,
-    E_R144_REGNUM,
-    E_R145_REGNUM,
-    E_R146_REGNUM,
-    E_R147_REGNUM,
-    E_R148_REGNUM,
-    E_R149_REGNUM,
-    E_NUM_OF_V850E2_REGS,
-
-    /* v850e3v5 system registers, selID 1 thru 7.  */
-    E_SELID_1_R0_REGNUM = E_NUM_OF_V850E2_REGS,
-    E_SELID_1_R31_REGNUM = E_SELID_1_R0_REGNUM + 31,
-
-    E_SELID_2_R0_REGNUM,
-    E_SELID_2_R31_REGNUM = E_SELID_2_R0_REGNUM + 31,
-
-    E_SELID_3_R0_REGNUM,
-    E_SELID_3_R31_REGNUM = E_SELID_3_R0_REGNUM + 31,
-
-    E_SELID_4_R0_REGNUM,
-    E_SELID_4_R31_REGNUM = E_SELID_4_R0_REGNUM + 31,
-
-    E_SELID_5_R0_REGNUM,
-    E_SELID_5_R31_REGNUM = E_SELID_5_R0_REGNUM + 31,
-
-    E_SELID_6_R0_REGNUM,
-    E_SELID_6_R31_REGNUM = E_SELID_6_R0_REGNUM + 31,
-
-    E_SELID_7_R0_REGNUM,
-    E_SELID_7_R31_REGNUM = E_SELID_7_R0_REGNUM + 31,
-
-    /* v850e3v5 vector registers.  */
-    E_VR0_REGNUM,
-    E_VR31_REGNUM = E_VR0_REGNUM + 31,
-
-    E_NUM_OF_V850E3V5_REGS,
-
-    /* Total number of possible registers.  */
-    E_NUM_REGS = E_NUM_OF_V850E3V5_REGS
-  };
+enum {
+ E_R0_REGNUM,
+ E_R1_REGNUM,
+ E_R2_REGNUM, E_SAVE1_START_REGNUM = E_R2_REGNUM, E_SAVE1_END_REGNUM = E_R2_REGNUM,
+ E_R3_REGNUM, E_SP_REGNUM = E_R3_REGNUM,
+ E_R4_REGNUM,
+ E_R5_REGNUM,
+ E_R6_REGNUM, E_ARG0_REGNUM = E_R6_REGNUM,
+ E_R7_REGNUM,
+ E_R8_REGNUM,
+ E_R9_REGNUM, E_ARGLAST_REGNUM = E_R9_REGNUM,
+ E_R10_REGNUM, E_V0_REGNUM = E_R10_REGNUM,
+ E_R11_REGNUM, E_V1_REGNUM = E_R11_REGNUM,
+ E_R12_REGNUM,
+ E_R13_REGNUM,
+ E_R14_REGNUM,
+ E_R15_REGNUM,
+ E_R16_REGNUM,
+ E_R17_REGNUM,
+ E_R18_REGNUM,
+ E_R19_REGNUM,
+ E_R20_REGNUM, E_SAVE2_START_REGNUM = E_R20_REGNUM,
+ E_R21_REGNUM,
+ E_R22_REGNUM,
+ E_R23_REGNUM,
+ E_R24_REGNUM,
+ E_R25_REGNUM,
+ E_R26_REGNUM,
+ E_R27_REGNUM,
+ E_R28_REGNUM,
+ E_R29_REGNUM, E_SAVE2_END_REGNUM = E_R29_REGNUM, E_FP_RAW_REGNUM = E_R29_REGNUM,
+ E_R30_REGNUM, E_EP_REGNUM = E_R30_REGNUM,
+ E_R31_REGNUM, E_SAVE3_START_REGNUM = E_R31_REGNUM, E_SAVE3_END_REGNUM = E_R31_REGNUM, E_RP_REGNUM = E_R31_REGNUM,
+ E_R32_REGNUM, E_SR0_REGNUM = E_R32_REGNUM,
+ E_R33_REGNUM,
+ E_R34_REGNUM,
+ E_R35_REGNUM,
+ E_R36_REGNUM,
+ E_R37_REGNUM, E_PS_REGNUM = E_R37_REGNUM,
+ E_R38_REGNUM,
+ E_R39_REGNUM,
+ E_R40_REGNUM,
+ E_R41_REGNUM,
+ E_R42_REGNUM,
+ E_R43_REGNUM,
+ E_R44_REGNUM,
+ E_R45_REGNUM,
+ E_R46_REGNUM,
+ E_R47_REGNUM,
+ E_R48_REGNUM,
+ E_R49_REGNUM,
+ E_R50_REGNUM,
+ E_R51_REGNUM,
+ E_R52_REGNUM, E_CTBP_REGNUM = E_R52_REGNUM,
+ E_R53_REGNUM,
+ E_R54_REGNUM,
+ E_R55_REGNUM,
+ E_R56_REGNUM,
+ E_R57_REGNUM,
+ E_R58_REGNUM,
+ E_R59_REGNUM,
+ E_R60_REGNUM,
+ E_R61_REGNUM,
+ E_R62_REGNUM,
+ E_R63_REGNUM,
+ E_R64_REGNUM, E_PC_REGNUM = E_R64_REGNUM,
+ E_R65_REGNUM, E_FP_REGNUM = E_R65_REGNUM,
+ E_NUM_REGS
+};
 
 enum
 {
   v850_reg_size = 4
 };
 
-/* Size of return datatype which fits into all return registers.  */
+/* Size of all registers as a whole. */
+enum
+{
+  E_ALL_REGS_SIZE = (E_NUM_REGS) * v850_reg_size
+};
+
+/* Size of return datatype which fits into all return registers. */
 enum
 {
   E_MAX_RETTYPE_SIZE_IN_REGS = 2 * v850_reg_size
 };
 
-/* When v850 support was added to GCC in the late nineties, the intention
-   was to follow the Green Hills ABI for v850.  In fact, the authors of
-   that support at the time thought that they were doing so.  As far as
-   I can tell, the calling conventions are correct, but the return value
-   conventions were not quite right.  Over time, the return value code
-   in this file was modified to mostly reflect what GCC was actually
-   doing instead of to actually follow the Green Hills ABI as it did
-   when the code was first written.
+static LONGEST call_dummy_nil[] = {0};
 
-   Renesas defined the RH850 ABI which they use in their compiler.  It
-   is similar to the original Green Hills ABI with some minor
-   differences.  */
-
-enum v850_abi
-{
-  V850_ABI_GCC,
-  V850_ABI_RH850
+static char *v850_generic_reg_names[] =
+{ "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", 
+  "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", 
+  "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", 
+  "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
+  "eipc", "eipsw", "fepc", "fepsw", "ecr", "psw", "sr6", "sr7",
+  "sr8", "sr9", "sr10", "sr11", "sr12", "sr13", "sr14", "sr15",
+  "sr16", "sr17", "sr18", "sr19", "sr20", "sr21", "sr22", "sr23",
+  "sr24", "sr25", "sr26", "sr27", "sr28", "sr29", "sr30", "sr31",
+  "pc", "fp"
 };
 
-/* Architecture specific data.  */
-
-struct gdbarch_tdep
+static char *v850e_reg_names[] =
 {
-  /* Fields from the ELF header.  */
-  int e_flags;
-  int e_machine;
-
-  /* Which ABI are we using?  */
-  enum v850_abi abi;
-  int eight_byte_align;
+  "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
+  "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
+  "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
+  "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
+  "eipc", "eipsw", "fepc", "fepsw", "ecr", "psw", "sr6", "sr7",
+  "sr8", "sr9", "sr10", "sr11", "sr12", "sr13", "sr14", "sr15",
+  "ctpc", "ctpsw", "dbpc", "dbpsw", "ctbp", "sr21", "sr22", "sr23",
+  "sr24", "sr25", "sr26", "sr27", "sr28", "sr29", "sr30", "sr31",
+  "pc", "fp"
 };
 
-struct v850_frame_cache
-{ 
-  /* Base address.  */
-  CORE_ADDR base;
-  LONGEST sp_offset;
-  CORE_ADDR pc;
-  
-  /* Flag showing that a frame has been created in the prologue code.  */
-  int uses_fp;
-  
-  /* Saved registers.  */
-  struct trad_frame_saved_reg *saved_regs;
+char **v850_register_names = v850_generic_reg_names;
+
+struct
+  {
+    char **regnames;
+    int mach;
+  }
+v850_processor_type_table[] =
+{
+  {
+    v850_generic_reg_names, bfd_mach_v850
+  }
+  ,
+  {
+    v850e_reg_names, bfd_mach_v850e
+  }
+  ,
+  {
+    v850e_reg_names, bfd_mach_v850ea
+  }
+  ,
+  {
+    NULL, 0
+  }
 };
 
 /* Info gleaned from scanning a function's prologue.  */
-struct pifsr		/* Info about one saved register.  */
-{
-  int offset;		/* Offset from sp or fp.  */
-  int cur_frameoffset;	/* Current frameoffset.  */
-  int reg;		/* Saved register number.  */
-};
 
-static const char *
-v850_register_name (struct gdbarch *gdbarch, int regnum)
-{
-  static const char *v850_reg_names[] =
-  { "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", 
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", 
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", 
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
-    "eipc", "eipsw", "fepc", "fepsw", "ecr", "psw", "sr6", "sr7",
-    "sr8", "sr9", "sr10", "sr11", "sr12", "sr13", "sr14", "sr15",
-    "sr16", "sr17", "sr18", "sr19", "sr20", "sr21", "sr22", "sr23",
-    "sr24", "sr25", "sr26", "sr27", "sr28", "sr29", "sr30", "sr31",
-    "pc", "fp"
-  };
-  if (regnum < 0 || regnum > E_NUM_OF_V850_REGS)
-    return NULL;
-  return v850_reg_names[regnum];
-}
-
-static const char *
-v850e_register_name (struct gdbarch *gdbarch, int regnum)
-{
-  static const char *v850e_reg_names[] =
+struct pifsr			/* Info about one saved reg */
   {
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
-    "eipc", "eipsw", "fepc", "fepsw", "ecr", "psw", "sr6", "sr7",
-    "sr8", "sr9", "sr10", "sr11", "sr12", "sr13", "sr14", "sr15",
-    "ctpc", "ctpsw", "dbpc", "dbpsw", "ctbp", "sr21", "sr22", "sr23",
-    "sr24", "sr25", "sr26", "sr27", "sr28", "sr29", "sr30", "sr31",
-    "pc", "fp"
+    int framereg;		/* Frame reg (SP or FP) */
+    int offset;			/* Offset from framereg */
+    int cur_frameoffset;	/* Current frameoffset */
+    int reg;			/* Saved register number */
   };
-  if (regnum < 0 || regnum > E_NUM_OF_V850E_REGS)
-    return NULL;
-  return v850e_reg_names[regnum];
-}
+
+struct prologue_info
+  {
+    int framereg;
+    int frameoffset;
+    int start_function;
+    struct pifsr *pifsrs;
+  };
+
+static CORE_ADDR v850_scan_prologue (CORE_ADDR pc, struct prologue_info *fs);
+
+/* Function: v850_register_name
+   Returns the name of the v850/v850e register N. */
 
 static const char *
-v850e2_register_name (struct gdbarch *gdbarch, int regnum)
+v850_register_name (int regnum)
 {
-  static const char *v850e2_reg_names[] =
-  {
-    /* General purpose registers.  */
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
+  if (regnum < 0 || regnum >= E_NUM_REGS)
+    internal_error (__FILE__, __LINE__,
+                    "v850_register_name: illegal register number %d",
+                    regnum);
+  else
+    return v850_register_names[regnum];
 
-    /* System registers - main banks.  */
-    "eipc", "eipsw", "fepc", "fepsw", "ecr", "psw", "pid", "cfg",
-    "", "", "", "sccfg", "scbp", "eiic", "feic", "dbic",
-    "ctpc", "ctpsw", "dbpc", "dbpsw", "ctbp", "dir", "", "",
-    "", "", "", "", "eiwr", "fewr", "dbwr", "bsel",
-
-
-    /* PC.  */
-    "pc", "",
-
-    /* System registers - MPV (PROT00) bank.  */
-    "vsecr", "vstid", "vsadr", "", "vmecr", "vmtid", "vmadr", "",
-    "vpecr", "vptid", "vpadr", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "mca", "mcs", "mcc", "mcr",
-
-    /* System registers - MPU (PROT01) bank.  */
-    "mpm", "mpc", "tid", "", "", "", "ipa0l", "ipa0u",
-    "ipa1l", "ipa1u", "ipa2l", "ipa2u", "ipa3l", "ipa3u", "ipa4l", "ipa4u",
-    "dpa0l", "dpa0u", "dpa1l", "dpa1u", "dpa2l", "dpa2u", "dpa3l", "dpa3u",
-    "dpa4l", "dpa4u", "dpa5l", "dpa5u",
-
-    /* FPU system registers.  */
-    "", "", "", "", "", "", "fpsr", "fpepc",
-    "fpst", "fpcc", "fpcfg", "fpec", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "fpspc"
-  };
-  if (regnum < 0 || regnum >= E_NUM_OF_V850E2_REGS)
-    return NULL;
-  return v850e2_reg_names[regnum];
 }
 
-/* Implement the "register_name" gdbarch method for v850e3v5.  */
+/* Function: v850_register_byte 
+   Returns the byte position in the register cache for register N. */
 
-static const char *
-v850e3v5_register_name (struct gdbarch *gdbarch, int regnum)
+static int
+v850_register_byte (int regnum)
 {
-  static const char *v850e3v5_reg_names[] =
-  {
-    /* General purpose registers.  */
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
-
-    /* selID 0, not including FPU registers.  The FPU registers are
-       listed later on.  */
-    "eipc", "eipsw", "fepc", "fepsw",
-    "", "psw", "" /* fpsr */, "" /* fpepc */,
-    "" /* fpst */, "" /* fpcc */, "" /* fpcfg */, "" /* fpec */,
-    "sesr", "eiic", "feic", "",
-    "ctpc", "ctpsw", "", "", "ctbp", "", "", "",
-    "", "", "", "", "eiwr", "fewr", "", "bsel",
-
-
-    /* PC.  */
-    "pc", "",
-
-    /* v850e2 MPV bank.  */
-    "", "", "", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "",
-
-    /* Skip v850e2 MPU bank.  It's tempting to reuse these, but we need
-       32 entries for this bank.  */
-    "", "", "", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "",
-
-    /* FPU system registers.  These are actually in selID 0, but
-       are placed here to preserve register numbering compatibility
-       with previous architectures.  */
-    "", "", "", "", "", "", "fpsr", "fpepc",
-    "fpst", "fpcc", "fpcfg", "fpec", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "",
-
-    /* selID 1.  */
-    "mcfg0", "mcfg1", "rbase", "ebase", "intbp", "mctl", "pid", "fpipr",
-    "", "", "tcsel", "sccfg", "scbp", "hvccfg", "hvcbp", "vsel",
-    "vmprt0", "vmprt1", "vmprt2", "", "", "", "", "vmscctl",
-    "vmsctbl0", "vmsctbl1", "vmsctbl2", "vmsctbl3", "", "", "", "",
-
-    /* selID 2.  */
-    "htcfg0", "", "", "", "", "htctl", "mea", "asid",
-    "mei", "ispr", "pmr", "icsr", "intcfg", "", "", "",
-    "tlbsch", "", "", "", "", "", "", "htscctl",
-    "htsctbl0", "htsctbl1", "htsctbl2", "htsctbl3",
-    "htsctbl4", "htsctbl5", "htsctbl6", "htsctbl7",
-
-    /* selID 3.  */
-    "", "", "", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-    "", "", "", "", "", "", "", "",
-
-    /* selID 4.  */
-    "tlbidx", "", "", "", "telo0", "telo1", "tehi0", "tehi1",
-    "", "", "tlbcfg", "", "bwerrl", "bwerrh", "brerrl", "brerrh",
-    "ictagl", "ictagh", "icdatl", "icdath",
-    "dctagl", "dctagh", "dcdatl", "dcdath",
-    "icctrl", "dcctrl", "iccfg", "dccfg", "icerr", "dcerr", "", "",
-
-    /* selID 5.  */
-    "mpm", "mprc", "", "", "mpbrgn", "mptrgn", "", "",
-    "mca", "mcs", "mcc", "mcr", "", "", "", "",
-    "", "", "", "", "mpprt0", "mpprt1", "mpprt2", "",
-    "", "", "", "", "", "", "", "",
-
-    /* selID 6.  */
-    "mpla0", "mpua0", "mpat0", "", "mpla1", "mpua1", "mpat1", "",
-    "mpla2", "mpua2", "mpat2", "", "mpla3", "mpua3", "mpat3", "",
-    "mpla4", "mpua4", "mpat4", "", "mpla5", "mpua5", "mpat5", "",
-    "mpla6", "mpua6", "mpat6", "", "mpla7", "mpua7", "mpat7", "",
-
-    /* selID 7.  */
-    "mpla8", "mpua8", "mpat8", "", "mpla9", "mpua9", "mpat9", "",
-    "mpla10", "mpua10", "mpat10", "", "mpla11", "mpua11", "mpat11", "",
-    "mpla12", "mpua12", "mpat12", "", "mpla13", "mpua13", "mpat13", "",
-    "mpla14", "mpua14", "mpat14", "", "mpla15", "mpua15", "mpat15", "",
-
-    /* Vector Registers */
-    "vr0", "vr1", "vr2", "vr3", "vr4", "vr5", "vr6", "vr7",
-    "vr8", "vr9", "vr10", "vr11", "vr12", "vr13", "vr14", "vr15",
-    "vr16", "vr17", "vr18", "vr19", "vr20", "vr21", "vr22", "vr23",
-    "vr24", "vr25", "vr26", "vr27", "vr28", "vr29", "vr30", "vr31",
-  };
-
-  if (regnum < 0 || regnum >= E_NUM_OF_V850E3V5_REGS)
-    return NULL;
-  return v850e3v5_reg_names[regnum];
+  if (regnum < 0 || regnum >= E_NUM_REGS)
+    internal_error (__FILE__, __LINE__,
+                    "v850_register_byte: illegal register number %d",
+                    regnum);
+  else
+    return regnum * v850_reg_size;
 }
 
-/* Returns the default type for register N.  */
+/* Function: v850_register_raw_size
+   Returns the number of bytes occupied by the register on the target. */
+
+static int
+v850_register_raw_size (int regnum)
+{
+  if (regnum < 0 || regnum >= E_NUM_REGS)
+    internal_error (__FILE__, __LINE__,
+                    "v850_register_raw_size: illegal register number %d",
+                    regnum);
+  /* Only the PC has 4 Byte, all other registers 2 Byte. */
+  else
+    return v850_reg_size;
+}
+
+/* Function: v850_register_virtual_size
+   Returns the number of bytes occupied by the register as represented
+   internally by gdb. */
+
+static int
+v850_register_virtual_size (int regnum)
+{
+  return v850_register_raw_size (regnum);
+}
+
+/* Function: v850_reg_virtual_type 
+   Returns the default type for register N. */
 
 static struct type *
-v850_register_type (struct gdbarch *gdbarch, int regnum)
+v850_reg_virtual_type (int regnum)
 {
-  if (regnum == E_PC_REGNUM)
-    return builtin_type (gdbarch)->builtin_func_ptr;
-  else if (E_VR0_REGNUM <= regnum && regnum <= E_VR31_REGNUM)
-    return builtin_type (gdbarch)->builtin_uint64;
-  return builtin_type (gdbarch)->builtin_int32;
+  if (regnum < 0 || regnum >= E_NUM_REGS)
+    internal_error (__FILE__, __LINE__,
+                    "v850_register_virtual_type: illegal register number %d",
+                    regnum);
+  else if (regnum == E_PC_REGNUM)
+    return builtin_type_uint32;
+  else
+    return builtin_type_int32;
 }
 
 static int
@@ -504,32 +280,30 @@ v850_type_is_scalar (struct type *t)
 }
 
 /* Should call_function allocate stack space for a struct return?  */
-
 static int
-v850_use_struct_convention (struct gdbarch *gdbarch, struct type *type)
+v850_use_struct_convention (int gcc_p, struct type *type)
 {
+  /* According to ABI:
+   * return TYPE_LENGTH (type) > 8);
+   */
+
+  /* Current implementation in gcc: */
+
   int i;
   struct type *fld_type, *tgt_type;
 
-  if (gdbarch_tdep (gdbarch)->abi == V850_ABI_RH850)
-    {
-      if (v850_type_is_scalar (type) && TYPE_LENGTH(type) <= 8)
-	return 0;
-
-      /* Structs are never returned in registers for this ABI.  */
-      return 1;
-    }
-  /* 1. The value is greater than 8 bytes -> returned by copying.  */
+  /* 1. The value is greater than 8 bytes -> returned by copying */
   if (TYPE_LENGTH (type) > 8)
     return 1;
 
-  /* 2. The value is a single basic type -> returned in register.  */
+  /* 2. The value is a single basic type -> returned in register */
   if (v850_type_is_scalar (type))
     return 0;
 
-  /* The value is a structure or union with a single element and that
-     element is either a single basic type or an array of a single basic
-     type whose size is greater than or equal to 4 -> returned in register.  */
+  /* The value is a structure or union with a single element
+   * and that element is either a single basic type or an array of
+   * a single basic type whoes size is greater than or equal to 4
+   * -> returned in register */
   if ((TYPE_CODE (type) == TYPE_CODE_STRUCT
        || TYPE_CODE (type) == TYPE_CODE_UNION)
        && TYPE_NFIELDS (type) == 1)
@@ -546,9 +320,9 @@ v850_use_struct_convention (struct gdbarch *gdbarch, struct type *type)
 	}
     }
 
-  /* The value is a structure whose first element is an integer or a float,
-     and which contains no arrays of more than two elements -> returned in
-     register.  */
+  /* The value is a structure whose first element is an integer or
+   * a float, and which contains no arrays of more than two elements
+   * -> returned in register */
   if (TYPE_CODE (type) == TYPE_CODE_STRUCT
       && v850_type_is_scalar (TYPE_FIELD_TYPE (type, 0))
       && TYPE_LENGTH (TYPE_FIELD_TYPE (type, 0)) == 4)
@@ -559,7 +333,7 @@ v850_use_struct_convention (struct gdbarch *gdbarch, struct type *type)
 	  if (TYPE_CODE (fld_type) == TYPE_CODE_ARRAY)
 	    {
 	      tgt_type = TYPE_TARGET_TYPE (fld_type);
-	      if (TYPE_LENGTH (tgt_type) > 0
+	      if (TYPE_LENGTH (fld_type) >= 0 && TYPE_LENGTH (tgt_type) >= 0
 		  && TYPE_LENGTH (fld_type) / TYPE_LENGTH (tgt_type) > 2)
 		return 1;
 	    }
@@ -568,34 +342,35 @@ v850_use_struct_convention (struct gdbarch *gdbarch, struct type *type)
     }
     
   /* The value is a union which contains at least one field which
-     would be returned in registers according to these rules ->
-     returned in register.  */
+   * would be returned in registers according to these rules
+   * -> returned in register */
   if (TYPE_CODE (type) == TYPE_CODE_UNION)
     {
       for (i = 0; i < TYPE_NFIELDS (type); ++i)
         {
 	  fld_type = TYPE_FIELD_TYPE (type, 0);
-	  if (!v850_use_struct_convention (gdbarch, fld_type))
+	  if (!v850_use_struct_convention (0, fld_type))
 	    return 0;
 	}
     }
 
   return 1;
 }
+
 
-/* Structure for mapping bits in register lists to register numbers.  */
 
+/* Structure for mapping bits in register lists to register numbers. */
 struct reg_list
 {
   long mask;
   int regno;
 };
 
-/* Helper function for v850_scan_prologue to handle prepare instruction.  */
+/* Helper function for v850_scan_prologue to handle prepare instruction. */
 
 static void
-v850_handle_prepare (int insn, int insn2, CORE_ADDR * current_pc_ptr,
-		     struct v850_frame_cache *pi, struct pifsr **pifsr_ptr)
+handle_prepare (int insn, int insn2, CORE_ADDR * current_pc_ptr,
+		struct prologue_info *pi, struct pifsr **pifsr_ptr)
 {
   CORE_ADDR current_pc = *current_pc_ptr;
   struct pifsr *pifsr = *pifsr_ptr;
@@ -620,23 +395,23 @@ v850_handle_prepare (int insn, int insn2, CORE_ADDR * current_pc_ptr,
   };
   int i;
 
-  if ((next & 0x1f) == 0x0b)		/* skip imm16 argument */
+  if ((next & 0x1f) == 0x0b)	/* skip imm16 argument */
     current_pc += 2;
   else if ((next & 0x1f) == 0x13)	/* skip imm16 argument */
     current_pc += 2;
   else if ((next & 0x1f) == 0x1b)	/* skip imm32 argument */
     current_pc += 4;
 
-  /* Calculate the total size of the saved registers, and add it to the
-     immediate value used to adjust SP.  */
+  /* Calculate the total size of the saved registers, and add it
+     it to the immediate value used to adjust SP. */
   for (i = 0; reg_table[i].mask != 0; i++)
     if (list12 & reg_table[i].mask)
-      offset += v850_reg_size;
-  pi->sp_offset -= offset;
+      offset += v850_register_raw_size (reg_table[i].regno);
+  pi->frameoffset -= offset;
 
-  /* Calculate the offsets of the registers relative to the value the SP
-     will have after the registers have been pushed and the imm5 value has
-     been subtracted from it.  */
+  /* Calculate the offsets of the registers relative to the value
+     the SP will have after the registers have been pushed and the
+     imm5 value has been subtracted from it. */
   if (pifsr)
     {
       for (i = 0; reg_table[i].mask != 0; i++)
@@ -644,28 +419,34 @@ v850_handle_prepare (int insn, int insn2, CORE_ADDR * current_pc_ptr,
 	  if (list12 & reg_table[i].mask)
 	    {
 	      int reg = reg_table[i].regno;
-	      offset -= v850_reg_size;
+	      offset -= v850_register_raw_size (reg);
 	      pifsr->reg = reg;
 	      pifsr->offset = offset;
-	      pifsr->cur_frameoffset = pi->sp_offset;
+	      pifsr->cur_frameoffset = pi->frameoffset;
+#ifdef DEBUG
+	      printf_filtered ("\tSaved register r%d, offset %d", reg, pifsr->offset);
+#endif
 	      pifsr++;
 	    }
 	}
     }
+#ifdef DEBUG
+  printf_filtered ("\tfound ctret after regsave func");
+#endif
 
-  /* Set result parameters.  */
+  /* Set result parameters. */
   *current_pc_ptr = current_pc;
   *pifsr_ptr = pifsr;
 }
 
 
 /* Helper function for v850_scan_prologue to handle pushm/pushl instructions.
-   The SR bit of the register list is not supported.  gcc does not generate
-   this bit.  */
+   FIXME: the SR bit of the register list is not supported; must check
+   that the compiler does not ever generate this bit. */
 
 static void
-v850_handle_pushm (int insn, int insn2, struct v850_frame_cache *pi,
-		   struct pifsr **pifsr_ptr)
+handle_pushm (int insn, int insn2, struct prologue_info *pi,
+	      struct pifsr **pifsr_ptr)
 {
   struct pifsr *pifsr = *pifsr_ptr;
   long list12 = ((insn & 0x0f) << 16) + (insn2 & 0xfff0);
@@ -713,22 +494,22 @@ v850_handle_pushm (int insn, int insn2, struct v850_frame_cache *pi,
   struct reg_list *reg_table;
   int i;
 
-  /* Is this a pushml or a pushmh?  */
+  /* Is this a pushml or a pushmh? */
   if ((insn2 & 7) == 1)
     reg_table = pushml_reg_table;
   else
     reg_table = pushmh_reg_table;
 
-  /* Calculate the total size of the saved registers, and add it to the
-     immediate value used to adjust SP.  */
+  /* Calculate the total size of the saved registers, and add it
+     it to the immediate value used to adjust SP. */
   for (i = 0; reg_table[i].mask != 0; i++)
     if (list12 & reg_table[i].mask)
-      offset += v850_reg_size;
-  pi->sp_offset -= offset;
+      offset += v850_register_raw_size (reg_table[i].regno);
+  pi->frameoffset -= offset;
 
-  /* Calculate the offsets of the registers relative to the value the SP
-     will have after the registers have been pushed and the imm5 value is
-     subtracted from it.  */
+  /* Calculate the offsets of the registers relative to the value
+     the SP will have after the registers have been pushed and the
+     imm5 value is subtracted from it. */
   if (pifsr)
     {
       for (i = 0; reg_table[i].mask != 0; i++)
@@ -736,34 +517,30 @@ v850_handle_pushm (int insn, int insn2, struct v850_frame_cache *pi,
 	  if (list12 & reg_table[i].mask)
 	    {
 	      int reg = reg_table[i].regno;
-	      offset -= v850_reg_size;
+	      offset -= v850_register_raw_size (reg);
 	      pifsr->reg = reg;
 	      pifsr->offset = offset;
-	      pifsr->cur_frameoffset = pi->sp_offset;
+	      pifsr->cur_frameoffset = pi->frameoffset;
+#ifdef DEBUG
+	      printf_filtered ("\tSaved register r%d, offset %d", reg, pifsr->offset);
+#endif
 	      pifsr++;
 	    }
 	}
     }
+#ifdef DEBUG
+  printf_filtered ("\tfound ctret after regsave func");
+#endif
 
-  /* Set result parameters.  */
+  /* Set result parameters. */
   *pifsr_ptr = pifsr;
 }
+
 
-/* Helper function to evaluate if register is one of the "save" registers.
-   This allows to simplify conditionals in v850_analyze_prologue a lot.  */
 
-static int
-v850_is_save_register (int reg)
-{
- /* The caller-save registers are R2, R20 - R29 and R31.  All other
-    registers are either special purpose (PC, SP), argument registers,
-    or just considered free for use in the caller.  */
- return reg == E_R2_REGNUM
-	|| (reg >= E_R20_REGNUM && reg <= E_R29_REGNUM)
-	|| reg == E_R31_REGNUM;
-}
 
-/* Scan the prologue of the function that contains PC, and record what
+/* Function: scan_prologue
+   Scan the prologue of the function that contains PC, and record what
    we find in PI.  Returns the pc after the prologue.  Note that the
    addresses saved in frame->saved_regs are just frame relative (negative
    offsets from the frame pointer).  This is because we don't know the
@@ -772,47 +549,82 @@ v850_is_save_register (int reg)
    prologue.  */
 
 static CORE_ADDR
-v850_analyze_prologue (struct gdbarch *gdbarch,
-		       CORE_ADDR func_addr, CORE_ADDR pc,
-		       struct v850_frame_cache *pi, ULONGEST ctbp)
+v850_scan_prologue (CORE_ADDR pc, struct prologue_info *pi)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  CORE_ADDR prologue_end, current_pc;
-  struct pifsr pifsrs[E_NUM_REGS + 1];
+  CORE_ADDR func_addr, prologue_end, current_pc;
   struct pifsr *pifsr, *pifsr_tmp;
+  int fp_used;
   int ep_used;
   int reg;
   CORE_ADDR save_pc, save_end;
   int regsave_func_p;
   int r12_tmp;
 
-  memset (&pifsrs, 0, sizeof pifsrs);
-  pifsr = &pifsrs[0];
+  /* First, figure out the bounds of the prologue so that we can limit the
+     search to something reasonable.  */
 
-  prologue_end = pc;
+  if (find_pc_partial_function (pc, NULL, &func_addr, NULL))
+    {
+      struct symtab_and_line sal;
+
+      sal = find_pc_line (func_addr, 0);
+
+      if (func_addr == entry_point_address ())
+	pi->start_function = 1;
+      else
+	pi->start_function = 0;
+
+#if 0
+      if (sal.line == 0)
+	prologue_end = pc;
+      else
+	prologue_end = sal.end;
+#else
+      prologue_end = pc;
+#endif
+    }
+  else
+    {				/* We're in the boondocks */
+      func_addr = pc - 100;
+      prologue_end = pc;
+    }
+
+  prologue_end = min (prologue_end, pc);
 
   /* Now, search the prologue looking for instructions that setup fp, save
      rp, adjust sp and such.  We also record the frame offset of any saved
-     registers.  */
+     registers. */
 
-  pi->sp_offset = 0;
-  pi->uses_fp = 0;
+  pi->frameoffset = 0;
+  pi->framereg = E_SP_REGNUM;
+  fp_used = 0;
   ep_used = 0;
+  pifsr = pi->pifsrs;
   regsave_func_p = 0;
   save_pc = 0;
   save_end = 0;
   r12_tmp = 0;
+
+#ifdef DEBUG
+  printf_filtered ("Current_pc = 0x%.8lx, prologue_end = 0x%.8lx\n",
+		   (long) func_addr, (long) prologue_end);
+#endif
 
   for (current_pc = func_addr; current_pc < prologue_end;)
     {
       int insn;
       int insn2 = -1; /* dummy value */
 
-      insn = read_memory_integer (current_pc, 2, byte_order);
+#ifdef DEBUG
+      printf_filtered ("0x%.8lx ", (long) current_pc);
+      TARGET_PRINT_INSN (current_pc, &tm_print_insn_info);
+#endif
+
+      insn = read_memory_unsigned_integer (current_pc, 2);
       current_pc += 2;
-      if ((insn & 0x0780) >= 0x0600)	/* Four byte instruction?  */
+      if ((insn & 0x0780) >= 0x0600)	/* Four byte instruction? */
 	{
-	  insn2 = read_memory_integer (current_pc, 2, byte_order);
+	  insn2 = read_memory_unsigned_integer (current_pc, 2);
 	  current_pc += 2;
 	}
 
@@ -828,219 +640,310 @@ v850_analyze_prologue (struct gdbarch *gdbarch,
 	  current_pc += disp - 4;
 	  prologue_end = (current_pc
 			  + (2 * 3)	/* moves to/from ep */
-			  + 4		/* addi <const>,sp,sp */
-			  + 2		/* jmp [r10] */
+			  + 4	/* addi <const>,sp,sp */
+			  + 2	/* jmp [r10] */
 			  + (2 * 12)	/* sst.w to save r2, r20-r29, r31 */
 			  + 20);	/* slop area */
+
+#ifdef DEBUG
+	  printf_filtered ("\tfound jarl <func>,r10, disp = %ld, low_disp = %ld, new pc = 0x%.8lx\n",
+			   disp, low_disp, (long) current_pc + 2);
+#endif
+	  continue;
 	}
       else if ((insn & 0xffc0) == 0x0200 && !regsave_func_p)
 	{			/* callt <imm6> */
+	  long ctbp = read_register (E_CTBP_REGNUM);
 	  long adr = ctbp + ((insn & 0x3f) << 1);
 
 	  save_pc = current_pc;
 	  save_end = prologue_end;
 	  regsave_func_p = 1;
-	  current_pc = ctbp + (read_memory_unsigned_integer (adr, 2, byte_order)
-			       & 0xffff);
+	  current_pc = ctbp + (read_memory_unsigned_integer (adr, 2) & 0xffff);
 	  prologue_end = (current_pc
 			  + (2 * 3)	/* prepare list2,imm5,sp/imm */
-			  + 4		/* ctret */
+			  + 4	/* ctret */
 			  + 20);	/* slop area */
+
+#ifdef DEBUG
+	  printf_filtered ("\tfound callt,  ctbp = 0x%.8lx, adr = %.8lx, new pc = 0x%.8lx\n",
+			   ctbp, adr, (long) current_pc);
+#endif
 	  continue;
 	}
       else if ((insn & 0xffc0) == 0x0780)	/* prepare list2,imm5 */
 	{
-	  v850_handle_prepare (insn, insn2, &current_pc, pi, &pifsr);
+	  handle_prepare (insn, insn2, &current_pc, pi, &pifsr);
 	  continue;
 	}
       else if (insn == 0x07e0 && regsave_func_p && insn2 == 0x0144)
-	{			/* ctret after processing register save.  */
+	{			/* ctret after processing register save function */
 	  current_pc = save_pc;
 	  prologue_end = save_end;
 	  regsave_func_p = 0;
+#ifdef DEBUG
+	  printf_filtered ("\tfound ctret after regsave func");
+#endif
 	  continue;
 	}
       else if ((insn & 0xfff0) == 0x07e0 && (insn2 & 5) == 1)
 	{			/* pushml, pushmh */
-	  v850_handle_pushm (insn, insn2, pi, &pifsr);
+	  handle_pushm (insn, insn2, pi, &pifsr);
 	  continue;
 	}
       else if ((insn & 0xffe0) == 0x0060 && regsave_func_p)
-	{			/* jmp after processing register save.  */
+	{			/* jmp after processing register save function */
 	  current_pc = save_pc;
 	  prologue_end = save_end;
 	  regsave_func_p = 0;
+#ifdef DEBUG
+	  printf_filtered ("\tfound jmp after regsave func");
+#endif
 	  continue;
 	}
       else if ((insn & 0x07c0) == 0x0780	/* jarl or jr */
 	       || (insn & 0xffe0) == 0x0060	/* jmp */
 	       || (insn & 0x0780) == 0x0580)	/* branch */
 	{
-	  break;		/* Ran into end of prologue.  */
+#ifdef DEBUG
+	  printf_filtered ("\n");
+#endif
+	  break;		/* Ran into end of prologue */
 	}
 
-      else if ((insn & 0xffe0) == ((E_SP_REGNUM << 11) | 0x0240))
-        /* add <imm>,sp */
-	pi->sp_offset += ((insn & 0x1f) ^ 0x10) - 0x10;
-      else if (insn == ((E_SP_REGNUM << 11) | 0x0600 | E_SP_REGNUM))
-        /* addi <imm>,sp,sp */
-	pi->sp_offset += insn2;
-      else if (insn == ((E_FP_REGNUM << 11) | 0x0000 | E_SP_REGNUM))
-        /* mov sp,fp */
-	pi->uses_fp = 1;
-      else if (insn == ((E_R12_REGNUM << 11) | 0x0640 | E_R0_REGNUM))
-        /* movhi hi(const),r0,r12 */
-	r12_tmp = insn2 << 16;
-      else if (insn == ((E_R12_REGNUM << 11) | 0x0620 | E_R12_REGNUM))
-        /* movea lo(const),r12,r12 */
-	r12_tmp += insn2;
-      else if (insn == ((E_SP_REGNUM << 11) | 0x01c0 | E_R12_REGNUM) && r12_tmp)
-        /* add r12,sp */
-	pi->sp_offset += r12_tmp;
-      else if (insn == ((E_EP_REGNUM << 11) | 0x0000 | E_SP_REGNUM))
-        /* mov sp,ep */
-	ep_used = 1;
-      else if (insn == ((E_EP_REGNUM << 11) | 0x0000 | E_R1_REGNUM))
-        /* mov r1,ep */
-	ep_used = 0;
-      else if (((insn & 0x07ff) == (0x0760 | E_SP_REGNUM)	
-		|| (pi->uses_fp
-		    && (insn & 0x07ff) == (0x0760 | E_FP_REGNUM)))
-	       && pifsr
-	       && v850_is_save_register (reg = (insn >> 11) & 0x1f))
+      else if ((insn & 0xffe0) == ((E_SP_REGNUM << 11) | 0x0240))		/* add <imm>,sp */
+	pi->frameoffset += ((insn & 0x1f) ^ 0x10) - 0x10;
+      else if (insn == ((E_SP_REGNUM << 11) | 0x0600 | E_SP_REGNUM))	/* addi <imm>,sp,sp */
+	pi->frameoffset += insn2;
+      else if (insn == ((E_FP_RAW_REGNUM << 11) | 0x0000 | E_SP_REGNUM))	/* mov sp,fp */
 	{
-	  /* st.w <reg>,<offset>[sp] or st.w <reg>,<offset>[fp] */
+	  fp_used = 1;
+	  pi->framereg = E_FP_RAW_REGNUM;
+	}
+
+      else if (insn == ((E_R12_REGNUM << 11) | 0x0640 | E_R0_REGNUM))	/* movhi hi(const),r0,r12 */
+	r12_tmp = insn2 << 16;
+      else if (insn == ((E_R12_REGNUM << 11) | 0x0620 | E_R12_REGNUM))	/* movea lo(const),r12,r12 */
+	r12_tmp += insn2;
+      else if (insn == ((E_SP_REGNUM << 11) | 0x01c0 | E_R12_REGNUM) && r12_tmp)	/* add r12,sp */
+	pi->frameoffset = r12_tmp;
+      else if (insn == ((E_EP_REGNUM << 11) | 0x0000 | E_SP_REGNUM))	/* mov sp,ep */
+	ep_used = 1;
+      else if (insn == ((E_EP_REGNUM << 11) | 0x0000 | E_R1_REGNUM))	/* mov r1,ep */
+	ep_used = 0;
+      else if (((insn & 0x07ff) == (0x0760 | E_SP_REGNUM)		/* st.w <reg>,<offset>[sp] */
+		|| (fp_used
+		    && (insn & 0x07ff) == (0x0760 | E_FP_RAW_REGNUM)))	/* st.w <reg>,<offset>[fp] */
+	       && pifsr
+	       && (((reg = (insn >> 11) & 0x1f) >= E_SAVE1_START_REGNUM && reg <= E_SAVE1_END_REGNUM)
+		   || (reg >= E_SAVE2_START_REGNUM && reg <= E_SAVE2_END_REGNUM)
+		 || (reg >= E_SAVE3_START_REGNUM && reg <= E_SAVE3_END_REGNUM)))
+	{
 	  pifsr->reg = reg;
 	  pifsr->offset = insn2 & ~1;
-	  pifsr->cur_frameoffset = pi->sp_offset;
+	  pifsr->cur_frameoffset = pi->frameoffset;
+#ifdef DEBUG
+	  printf_filtered ("\tSaved register r%d, offset %d", reg, pifsr->offset);
+#endif
 	  pifsr++;
 	}
-      else if (ep_used
+
+      else if (ep_used		/* sst.w <reg>,<offset>[ep] */
 	       && ((insn & 0x0781) == 0x0501)
 	       && pifsr
-	       && v850_is_save_register (reg = (insn >> 11) & 0x1f))
+	       && (((reg = (insn >> 11) & 0x1f) >= E_SAVE1_START_REGNUM && reg <= E_SAVE1_END_REGNUM)
+		   || (reg >= E_SAVE2_START_REGNUM && reg <= E_SAVE2_END_REGNUM)
+		 || (reg >= E_SAVE3_START_REGNUM && reg <= E_SAVE3_END_REGNUM)))
 	{
-	  /* sst.w <reg>,<offset>[ep] */
 	  pifsr->reg = reg;
 	  pifsr->offset = (insn & 0x007e) << 1;
-	  pifsr->cur_frameoffset = pi->sp_offset;
+	  pifsr->cur_frameoffset = pi->frameoffset;
+#ifdef DEBUG
+	  printf_filtered ("\tSaved register r%d, offset %d", reg, pifsr->offset);
+#endif
 	  pifsr++;
 	}
+
+#ifdef DEBUG
+      printf_filtered ("\n");
+#endif
     }
 
-  /* Fix up any offsets to the final offset.  If a frame pointer was created,
-     use it instead of the stack pointer.  */
-  for (pifsr_tmp = pifsrs; pifsr_tmp != pifsr; pifsr_tmp++)
+  if (pifsr)
+    pifsr->framereg = 0;	/* Tie off last entry */
+
+  /* Fix up any offsets to the final offset.  If a frame pointer was created, use it
+     instead of the stack pointer.  */
+  for (pifsr_tmp = pi->pifsrs; pifsr_tmp && pifsr_tmp != pifsr; pifsr_tmp++)
     {
-      pifsr_tmp->offset -= pi->sp_offset - pifsr_tmp->cur_frameoffset;
-      pi->saved_regs[pifsr_tmp->reg].addr = pifsr_tmp->offset;
+      pifsr_tmp->offset -= pi->frameoffset - pifsr_tmp->cur_frameoffset;
+      pifsr_tmp->framereg = pi->framereg;
+
+#ifdef DEBUG
+      printf_filtered ("Saved register r%d, offset = %d, framereg = r%d\n",
+		    pifsr_tmp->reg, pifsr_tmp->offset, pifsr_tmp->framereg);
+#endif
     }
+
+#ifdef DEBUG
+  printf_filtered ("Framereg = r%d, frameoffset = %d\n", pi->framereg, pi->frameoffset);
+#endif
 
   return current_pc;
 }
 
-/* Return the address of the first code past the prologue of the function.  */
+/* Function: find_callers_reg
+   Find REGNUM on the stack.  Otherwise, it's in an active register.
+   One thing we might want to do here is to check REGNUM against the
+   clobber mask, and somehow flag it as invalid if it isn't saved on
+   the stack somewhere.  This would provide a graceful failure mode
+   when trying to get the value of caller-saves registers for an inner
+   frame.  */
 
-static CORE_ADDR
-v850_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
+CORE_ADDR
+v850_find_callers_reg (struct frame_info *fi, int regnum)
+{
+  for (; fi; fi = fi->next)
+    if (PC_IN_CALL_DUMMY (fi->pc, fi->frame, fi->frame))
+      return generic_read_register_dummy (fi->pc, fi->frame, regnum);
+    else if (fi->saved_regs[regnum] != 0)
+      return read_memory_unsigned_integer (fi->saved_regs[regnum],
+					   v850_register_raw_size (regnum));
+
+  return read_register (regnum);
+}
+
+/* Function: frame_chain
+   Figure out the frame prior to FI.  Unfortunately, this involves
+   scanning the prologue of the caller, which will also be done
+   shortly by v850_init_extra_frame_info.  For the dummy frame, we
+   just return the stack pointer that was in use at the time the
+   function call was made.  */
+
+CORE_ADDR
+v850_frame_chain (struct frame_info *fi)
+{
+  struct prologue_info pi;
+  CORE_ADDR callers_pc, fp;
+
+  /* First, find out who called us */
+  callers_pc = FRAME_SAVED_PC (fi);
+  /* If caller is a call-dummy, then our FP bears no relation to his FP! */
+  fp = v850_find_callers_reg (fi, E_FP_RAW_REGNUM);
+  if (PC_IN_CALL_DUMMY (callers_pc, fp, fp))
+    return fp;			/* caller is call-dummy: return oldest value of FP */
+
+  /* Caller is NOT a call-dummy, so everything else should just work.
+     Even if THIS frame is a call-dummy! */
+  pi.pifsrs = NULL;
+
+  v850_scan_prologue (callers_pc, &pi);
+
+  if (pi.start_function)
+    return 0;			/* Don't chain beyond the start function */
+
+  if (pi.framereg == E_FP_RAW_REGNUM)
+    return v850_find_callers_reg (fi, pi.framereg);
+
+  return fi->frame - pi.frameoffset;
+}
+
+/* Function: skip_prologue
+   Return the address of the first code past the prologue of the function.  */
+
+CORE_ADDR
+v850_skip_prologue (CORE_ADDR pc)
 {
   CORE_ADDR func_addr, func_end;
 
-  /* See what the symbol table says.  */
+  /* See what the symbol table says */
 
   if (find_pc_partial_function (pc, NULL, &func_addr, &func_end))
     {
       struct symtab_and_line sal;
 
       sal = find_pc_line (func_addr, 0);
+
       if (sal.line != 0 && sal.end < func_end)
 	return sal.end;
-
-      /* Either there's no line info, or the line after the prologue is after
-	 the end of the function.  In this case, there probably isn't a
-	 prologue.  */
-      return pc;
+      else
+	/* Either there's no line info, or the line after the prologue is after
+	   the end of the function.  In this case, there probably isn't a
+	   prologue.  */
+	return pc;
     }
 
-  /* We can't find the start of this function, so there's nothing we
-     can do.  */
+/* We can't find the start of this function, so there's nothing we can do. */
   return pc;
 }
 
-/* Return 1 if the data structure has any 8-byte fields that'll require
-   the entire data structure to be aligned.  Otherwise, return 0.  */
+/* Function: pop_frame
+   This routine gets called when either the user uses the `return'
+   command, or the call dummy breakpoint gets hit.  */
 
-static int
-v850_eight_byte_align_p (struct type *type)
+void
+v850_pop_frame (void)
 {
-  type = check_typedef (type);
+  struct frame_info *frame = get_current_frame ();
+  int regnum;
 
-  if (v850_type_is_scalar (type))
-    return (TYPE_LENGTH (type) == 8);
+  if (PC_IN_CALL_DUMMY (frame->pc, frame->frame, frame->frame))
+    generic_pop_dummy_frame ();
   else
     {
-      int i;
+      write_register (E_PC_REGNUM, FRAME_SAVED_PC (frame));
 
-      for (i = 0; i < TYPE_NFIELDS (type); i++)
-	{
-	  if (v850_eight_byte_align_p (TYPE_FIELD_TYPE (type, i)))
-	    return 1;
-	}
+      for (regnum = 0; regnum < E_NUM_REGS; regnum++)
+	if (frame->saved_regs[regnum] != 0)
+	  write_register (regnum,
+		      read_memory_unsigned_integer (frame->saved_regs[regnum],
+					     v850_register_raw_size (regnum)));
+
+      write_register (E_SP_REGNUM, FRAME_FP (frame));
     }
-  return 0;
+
+  flush_cached_frames ();
 }
 
-static CORE_ADDR
-v850_frame_align (struct gdbarch *ignore, CORE_ADDR sp)
-{
-  return sp & ~3;
-}
-
-/* Setup arguments and LP for a call to the target.  First four args
+/* Function: push_arguments
+   Setup arguments and RP for a call to the target.  First four args
    go in R6->R9, subsequent args go into sp + 16 -> sp + ...  Structs
-   are passed by reference.  64 bit quantities (doubles and long longs)
-   may be split between the regs and the stack.  When calling a function
-   that returns a struct, a pointer to the struct is passed in as a secret
-   first argument (always in R6).
+   are passed by reference.  64 bit quantities (doubles and long
+   longs) may be split between the regs and the stack.  When calling a
+   function that returns a struct, a pointer to the struct is passed
+   in as a secret first argument (always in R6).
 
-   Stack space for the args has NOT been allocated: that job is up to us.  */
+   Stack space for the args has NOT been allocated: that job is up to us.
+ */
 
-static CORE_ADDR
-v850_push_dummy_call (struct gdbarch *gdbarch,
-		      struct value *function,
-		      struct regcache *regcache,
-		      CORE_ADDR bp_addr,
-		      int nargs,
-		      struct value **args,
-		      CORE_ADDR sp,
-		      function_call_return_method return_method,
-		      CORE_ADDR struct_addr)
+CORE_ADDR
+v850_push_arguments (int nargs, struct value **args, CORE_ADDR sp,
+		     int struct_return, CORE_ADDR struct_addr)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   int argreg;
   int argnum;
-  int arg_space = 0;
+  int len = 0;
   int stack_offset;
 
-  if (gdbarch_tdep (gdbarch)->abi == V850_ABI_RH850)
-    stack_offset = 0;
-  else
+  /* First, just for safety, make sure stack is aligned */
+  sp &= ~3;
+
   /* The offset onto the stack at which we will start copying parameters
      (after the registers are used up) begins at 16 rather than at zero.
-     That's how the ABI is defined, though there's no indication that these
-     16 bytes are used for anything, not even for saving incoming
-     argument registers.  */
+     I don't really know why, that's just the way it seems to work.  */
   stack_offset = 16;
 
-  /* Now make space on the stack for the args.  */
+  /* Now make space on the stack for the args. */
   for (argnum = 0; argnum < nargs; argnum++)
-    arg_space += ((TYPE_LENGTH (value_type (args[argnum])) + 3) & ~3);
-  sp -= arg_space + stack_offset;
+    len += ((TYPE_LENGTH (VALUE_TYPE (args[argnum])) + 3) & ~3);
+  sp -= len + stack_offset;	/* possibly over-allocating, but it works... */
+  /* (you might think we could allocate 16 bytes */
+  /* less, but the ABI seems to use it all! )  */
 
   argreg = E_ARG0_REGNUM;
-  /* The struct_return pointer occupies the first parameter register.  */
-  if (return_method == return_method_struct)
-    regcache_cooked_write_unsigned (regcache, argreg++, struct_addr);
+  /* the struct_return pointer occupies the first parameter-passing reg */
+  if (struct_return)
+    argreg++;
 
   /* Now load as many as possible of the first arguments into
      registers, and push the rest onto the stack.  There are 16 bytes
@@ -1048,31 +951,20 @@ v850_push_dummy_call (struct gdbarch *gdbarch,
   for (argnum = 0; argnum < nargs; argnum++)
     {
       int len;
-      gdb_byte *val;
-      gdb_byte valbuf[v850_reg_size];
+      char *val;
+      char valbuf[v850_register_raw_size (E_ARG0_REGNUM)];
 
-      if (!v850_type_is_scalar (value_type (*args))
-         && gdbarch_tdep (gdbarch)->abi == V850_ABI_GCC
-	  && TYPE_LENGTH (value_type (*args)) > E_MAX_RETTYPE_SIZE_IN_REGS)
+      if (!v850_type_is_scalar (VALUE_TYPE (*args))
+	  && TYPE_LENGTH (VALUE_TYPE (*args)) > E_MAX_RETTYPE_SIZE_IN_REGS)
 	{
-	  store_unsigned_integer (valbuf, 4, byte_order,
-				  value_address (*args));
+	  store_address (valbuf, 4, VALUE_ADDRESS (*args));
 	  len = 4;
 	  val = valbuf;
 	}
       else
 	{
-	  len = TYPE_LENGTH (value_type (*args));
-	  val = (gdb_byte *) value_contents (*args);
-	}
-
-      if (gdbarch_tdep (gdbarch)->eight_byte_align
-          && v850_eight_byte_align_p (value_type (*args)))
-        {
-	  if (argreg <= E_ARGLAST_REGNUM && (argreg & 1))
-	    argreg++;
-	  else if (stack_offset & 0x4)
-	    stack_offset += 4;
+	  len = TYPE_LENGTH (VALUE_TYPE (*args));
+	  val = (char *) VALUE_CONTENTS (*args);
 	}
 
       while (len > 0)
@@ -1080,11 +972,11 @@ v850_push_dummy_call (struct gdbarch *gdbarch,
 	  {
 	    CORE_ADDR regval;
 
-	    regval = extract_unsigned_integer (val, v850_reg_size, byte_order);
-	    regcache_cooked_write_unsigned (regcache, argreg, regval);
+	    regval = extract_address (val, v850_register_raw_size (argreg));
+	    write_register (argreg, regval);
 
-	    len -= v850_reg_size;
-	    val += v850_reg_size;
+	    len -= v850_register_raw_size (argreg);
+	    val += v850_register_raw_size (argreg);
 	    argreg++;
 	  }
 	else
@@ -1097,366 +989,321 @@ v850_push_dummy_call (struct gdbarch *gdbarch,
 	  }
       args++;
     }
-
-  /* Store return address.  */
-  regcache_cooked_write_unsigned (regcache, E_LP_REGNUM, bp_addr);
-
-  /* Update stack pointer.  */
-  regcache_cooked_write_unsigned (regcache, E_SP_REGNUM, sp);
-
   return sp;
 }
 
-static void
-v850_extract_return_value (struct type *type, struct regcache *regcache,
-			   gdb_byte *valbuf)
+/* Function: push_return_address (pc)
+   Set up the return address for the inferior function call.
+   Needed for targets where we don't actually execute a JSR/BSR instruction */
+
+CORE_ADDR
+v850_push_return_address (CORE_ADDR pc, CORE_ADDR sp)
 {
-  struct gdbarch *gdbarch = regcache->arch ();
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  int len = TYPE_LENGTH (type);
-
-  if (len <= v850_reg_size)
-    {
-      ULONGEST val;
-
-      regcache_cooked_read_unsigned (regcache, E_V0_REGNUM, &val);
-      store_unsigned_integer (valbuf, len, byte_order, val);
-    }
-  else if (len <= 2 * v850_reg_size)
-    {
-      int i, regnum = E_V0_REGNUM;
-      gdb_byte buf[v850_reg_size];
-      for (i = 0; len > 0; i += 4, len -= 4)
-	{
-	  regcache->raw_read (regnum++, buf);
-	  memcpy (valbuf + i, buf, len > 4 ? 4 : len);
-	}
-    }
+  write_register (E_RP_REGNUM, CALL_DUMMY_ADDRESS ());
+  return sp;
 }
 
-static void
-v850_store_return_value (struct type *type, struct regcache *regcache,
-			 const gdb_byte *valbuf)
+/* Function: frame_saved_pc 
+   Find the caller of this frame.  We do this by seeing if E_RP_REGNUM
+   is saved in the stack anywhere, otherwise we get it from the
+   registers.  If the inner frame is a dummy frame, return its PC
+   instead of RP, because that's where "caller" of the dummy-frame
+   will be found.  */
+
+CORE_ADDR
+v850_frame_saved_pc (struct frame_info *fi)
 {
-  struct gdbarch *gdbarch = regcache->arch ();
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  int len = TYPE_LENGTH (type);
-
-  if (len <= v850_reg_size)
-      regcache_cooked_write_unsigned
-	(regcache, E_V0_REGNUM,
-	 extract_unsigned_integer (valbuf, len, byte_order));
-  else if (len <= 2 * v850_reg_size)
-    {
-      int i, regnum = E_V0_REGNUM;
-      for (i = 0; i < len; i += 4)
-	regcache->raw_write (regnum++, valbuf + i);
-    }
-}
-
-static enum return_value_convention
-v850_return_value (struct gdbarch *gdbarch, struct value *function,
-		   struct type *type, struct regcache *regcache,
-		   gdb_byte *readbuf, const gdb_byte *writebuf)
-{
-  if (v850_use_struct_convention (gdbarch, type))
-    return RETURN_VALUE_STRUCT_CONVENTION;
-  if (writebuf)
-    v850_store_return_value (type, regcache, writebuf);
-  else if (readbuf)
-    v850_extract_return_value (type, regcache, readbuf);
-  return RETURN_VALUE_REGISTER_CONVENTION;
-}
-
-/* Implement the breakpoint_kind_from_pc gdbarch method.  */
-
-static int
-v850_breakpoint_kind_from_pc (struct gdbarch *gdbarch, CORE_ADDR *pcptr)
-{
-  return 2;
-}
-
-/* Implement the sw_breakpoint_from_kind gdbarch method.  */
-
-static const gdb_byte *
-v850_sw_breakpoint_from_kind (struct gdbarch *gdbarch, int kind, int *size)
-{
-  *size = kind;
-
-    switch (gdbarch_bfd_arch_info (gdbarch)->mach)
-    {
-    case bfd_mach_v850e2:
-    case bfd_mach_v850e2v3:
-    case bfd_mach_v850e3v5:
-      {
-	/* Implement software breakpoints by using the dbtrap instruction.
-	   Older architectures had no such instruction.  For those, an
-	   unconditional branch to self instruction is used.  */
-
-	static unsigned char dbtrap_breakpoint[] = { 0x40, 0xf8 };
-
-	return dbtrap_breakpoint;
-      }
-      break;
-    default:
-      {
-	static unsigned char breakpoint[] = { 0x85, 0x05 };
-
-	return breakpoint;
-      }
-      break;
-    }
-}
-
-static struct v850_frame_cache *
-v850_alloc_frame_cache (struct frame_info *this_frame)
-{
-  struct v850_frame_cache *cache;
-
-  cache = FRAME_OBSTACK_ZALLOC (struct v850_frame_cache);
-  cache->saved_regs = trad_frame_alloc_saved_regs (this_frame);
-
-  /* Base address.  */
-  cache->base = 0;
-  cache->sp_offset = 0;
-  cache->pc = 0;
-
-  /* Frameless until proven otherwise.  */
-  cache->uses_fp = 0;
-
-  return cache;
-}
-
-static struct v850_frame_cache *
-v850_frame_cache (struct frame_info *this_frame, void **this_cache)
-{
-  struct gdbarch *gdbarch = get_frame_arch (this_frame);
-  struct v850_frame_cache *cache;
-  CORE_ADDR current_pc;
-  int i;
-
-  if (*this_cache)
-    return (struct v850_frame_cache *) *this_cache;
-
-  cache = v850_alloc_frame_cache (this_frame);
-  *this_cache = cache;
-
-  /* In principle, for normal frames, fp holds the frame pointer,
-     which holds the base address for the current stack frame.
-     However, for functions that don't need it, the frame pointer is
-     optional.  For these "frameless" functions the frame pointer is
-     actually the frame pointer of the calling frame.  */
-  cache->base = get_frame_register_unsigned (this_frame, E_FP_REGNUM);
-  if (cache->base == 0)
-    return cache;
-
-  cache->pc = get_frame_func (this_frame);
-  current_pc = get_frame_pc (this_frame);
-  if (cache->pc != 0)
-    {
-      ULONGEST ctbp;
-      ctbp = get_frame_register_unsigned (this_frame, E_CTBP_REGNUM);
-      v850_analyze_prologue (gdbarch, cache->pc, current_pc, cache, ctbp);
-    }
-
-  if (!cache->uses_fp)
-    {
-      /* We didn't find a valid frame, which means that CACHE->base
-         currently holds the frame pointer for our calling frame.  If
-         we're at the start of a function, or somewhere half-way its
-         prologue, the function's frame probably hasn't been fully
-         setup yet.  Try to reconstruct the base address for the stack
-         frame by looking at the stack pointer.  For truly "frameless"
-         functions this might work too.  */
-      cache->base = get_frame_register_unsigned (this_frame, E_SP_REGNUM);
-    }
-
-  /* Now that we have the base address for the stack frame we can
-     calculate the value of sp in the calling frame.  */
-  trad_frame_set_value (cache->saved_regs, E_SP_REGNUM,
-  			cache->base - cache->sp_offset);
-
-  /* Adjust all the saved registers such that they contain addresses
-     instead of offsets.  */
-  for (i = 0; i < gdbarch_num_regs (gdbarch); i++)
-    if (trad_frame_addr_p (cache->saved_regs, i))
-      cache->saved_regs[i].addr += cache->base;
-
-  /* The call instruction moves the caller's PC in the callee's LP.
-     Since this is an unwind, do the reverse.  Copy the location of LP
-     into PC (the address / regnum) so that a request for PC will be
-     converted into a request for the LP.  */
-
-  cache->saved_regs[E_PC_REGNUM] = cache->saved_regs[E_LP_REGNUM];
-
-  return cache;
+  if (PC_IN_CALL_DUMMY (fi->pc, fi->frame, fi->frame))
+    return generic_read_register_dummy (fi->pc, fi->frame, E_PC_REGNUM);
+  else
+    return v850_find_callers_reg (fi, E_RP_REGNUM);
 }
 
 
-static struct value *
-v850_frame_prev_register (struct frame_info *this_frame,
-			  void **this_cache, int regnum)
+/* Function: fix_call_dummy
+   Pokes the callee function's address into the CALL_DUMMY assembly stub.
+   Assumes that the CALL_DUMMY looks like this:
+   jarl <offset24>, r31
+   trap
+ */
+
+void
+v850_fix_call_dummy (char *dummy, CORE_ADDR sp, CORE_ADDR fun, int nargs,
+		     struct value **args, struct type *type, int gcc_p)
 {
-  struct v850_frame_cache *cache = v850_frame_cache (this_frame, this_cache);
+  long offset24;
 
-  gdb_assert (regnum >= 0);
+  offset24 = (long) fun - (long) entry_point_address ();
+  offset24 &= 0x3fffff;
+  offset24 |= 0xff800000;	/* jarl <offset24>, r31 */
 
-  return trad_frame_get_prev_register (this_frame, cache->saved_regs, regnum);
+  store_unsigned_integer ((unsigned int *) &dummy[2], 2, offset24 & 0xffff);
+  store_unsigned_integer ((unsigned int *) &dummy[0], 2, offset24 >> 16);
 }
-
-static void
-v850_frame_this_id (struct frame_info *this_frame, void **this_cache,
-		    struct frame_id *this_id)
-{
-  struct v850_frame_cache *cache = v850_frame_cache (this_frame, this_cache);
-
-  /* This marks the outermost frame.  */
-  if (cache->base == 0)
-    return;
-
-  *this_id = frame_id_build (cache->saved_regs[E_SP_REGNUM].addr, cache->pc);
-}
-
-static const struct frame_unwind v850_frame_unwind = {
-  NORMAL_FRAME,
-  default_frame_unwind_stop_reason,
-  v850_frame_this_id,
-  v850_frame_prev_register,
-  NULL,
-  default_frame_sniffer
-};
 
 static CORE_ADDR
-v850_frame_base_address (struct frame_info *this_frame, void **this_cache)
+v850_saved_pc_after_call (struct frame_info *ignore)
 {
-  struct v850_frame_cache *cache = v850_frame_cache (this_frame, this_cache);
-
-  return cache->base;
+  return read_register (E_RP_REGNUM);
 }
 
-static const struct frame_base v850_frame_base = {
-  &v850_frame_unwind,
-  v850_frame_base_address,
-  v850_frame_base_address,
-  v850_frame_base_address
-};
+static void
+v850_extract_return_value (struct type *type, char *regbuf, char *valbuf)
+{
+  CORE_ADDR return_buffer;
+
+  if (!v850_use_struct_convention (0, type))
+    {
+      /* Scalar return values of <= 8 bytes are returned in 
+         E_V0_REGNUM to E_V1_REGNUM. */
+      memcpy (valbuf,
+	      &regbuf[REGISTER_BYTE (E_V0_REGNUM)],
+	      TYPE_LENGTH (type));
+    }
+  else
+    {
+      /* Aggregates and return values > 8 bytes are returned in memory,
+         pointed to by R6. */
+      return_buffer =
+	extract_address (regbuf + REGISTER_BYTE (E_V0_REGNUM),
+			 REGISTER_RAW_SIZE (E_V0_REGNUM));
+
+      read_memory (return_buffer, valbuf, TYPE_LENGTH (type));
+    }
+}
+
+const static unsigned char *
+v850_breakpoint_from_pc (CORE_ADDR *pcptr, int *lenptr)
+{
+  static unsigned char breakpoint[] = { 0x85, 0x05 };
+  *lenptr = sizeof (breakpoint);
+  return breakpoint;
+}
+
+static CORE_ADDR
+v850_extract_struct_value_address (char *regbuf)
+{
+  return extract_address (regbuf + v850_register_byte (E_V0_REGNUM),
+			  v850_register_raw_size (E_V0_REGNUM));
+}
+
+static void
+v850_store_return_value (struct type *type, char *valbuf)
+{
+  CORE_ADDR return_buffer;
+
+  if (!v850_use_struct_convention (0, type))
+    write_register_bytes (REGISTER_BYTE (E_V0_REGNUM), valbuf,	
+    			  TYPE_LENGTH (type));
+  else
+    {
+      return_buffer = read_register (E_V0_REGNUM);
+      write_memory (return_buffer, valbuf, TYPE_LENGTH (type));
+    }
+}
+
+static void
+v850_frame_init_saved_regs (struct frame_info *fi)
+{
+  struct prologue_info pi;
+  struct pifsr pifsrs[E_NUM_REGS + 1], *pifsr;
+  CORE_ADDR func_addr, func_end;
+
+  if (!fi->saved_regs)
+    {
+      frame_saved_regs_zalloc (fi);
+
+      /* The call dummy doesn't save any registers on the stack, so we
+         can return now.  */
+      if (PC_IN_CALL_DUMMY (fi->pc, fi->frame, fi->frame))
+	return;
+
+      /* Find the beginning of this function, so we can analyze its
+         prologue. */
+      if (find_pc_partial_function (fi->pc, NULL, &func_addr, &func_end))
+	{
+	  pi.pifsrs = pifsrs;
+
+	  v850_scan_prologue (fi->pc, &pi);
+
+	  if (!fi->next && pi.framereg == E_SP_REGNUM)
+	    fi->frame = read_register (pi.framereg) - pi.frameoffset;
+
+	  for (pifsr = pifsrs; pifsr->framereg; pifsr++)
+	    {
+	      fi->saved_regs[pifsr->reg] = pifsr->offset + fi->frame;
+
+	      if (pifsr->framereg == E_SP_REGNUM)
+		fi->saved_regs[pifsr->reg] += pi.frameoffset;
+	    }
+	}
+      /* Else we're out of luck (can't debug completely stripped code). 
+         FIXME. */
+    }
+}
+
+/* Function: init_extra_frame_info
+   Setup the frame's frame pointer, pc, and frame addresses for saved
+   registers.  Most of the work is done in scan_prologue().
+
+   Note that when we are called for the last frame (currently active frame),
+   that fi->pc and fi->frame will already be setup.  However, fi->frame will
+   be valid only if this routine uses FP.  For previous frames, fi-frame will
+   always be correct (since that is derived from v850_frame_chain ()).
+
+   We can be called with the PC in the call dummy under two circumstances.
+   First, during normal backtracing, second, while figuring out the frame
+   pointer just prior to calling the target function (see run_stack_dummy).  */
+
+static void
+v850_init_extra_frame_info (int fromleaf, struct frame_info *fi)
+{
+  struct prologue_info pi;
+
+  if (fi->next)
+    fi->pc = FRAME_SAVED_PC (fi->next);
+
+  v850_frame_init_saved_regs (fi);
+}
+
+static void
+v850_store_struct_return (CORE_ADDR addr, CORE_ADDR sp)
+{
+  write_register (E_ARG0_REGNUM, addr);
+}
+
+static CORE_ADDR
+v850_target_read_fp (void)
+{
+  return read_register (E_FP_RAW_REGNUM);
+}
 
 static struct gdbarch *
 v850_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
+  static LONGEST call_dummy_words[1] = { 0 };
+  struct gdbarch_tdep *tdep = NULL;
   struct gdbarch *gdbarch;
-  struct gdbarch_tdep *tdep;
-  int e_flags, e_machine;
+  int i;
 
-  /* Extract the elf_flags if available.  */
-  if (info.abfd != NULL
-      && bfd_get_flavour (info.abfd) == bfd_target_elf_flavour)
+  /* find a candidate among the list of pre-declared architectures. */
+  arches = gdbarch_list_lookup_by_info (arches, &info);
+  if (arches != NULL)
+    return (arches->gdbarch);
+
+#if 0
+  tdep = (struct gdbarch_tdep *) xmalloc (sizeof (struct gdbarch_tdep));
+#endif
+
+  /* Change the register names based on the current machine type. */
+  if (info.bfd_arch_info->arch != bfd_arch_v850)
+    return 0;
+
+  gdbarch = gdbarch_alloc (&info, 0);
+
+  for (i = 0; v850_processor_type_table[i].regnames != NULL; i++)
     {
-      e_flags = elf_elfheader (info.abfd)->e_flags;
-      e_machine = elf_elfheader (info.abfd)->e_machine;
-    }
-  else
-    {
-      e_flags = 0;
-      e_machine = 0;
-    }
-
-
-  /* Try to find the architecture in the list of already defined
-     architectures.  */
-  for (arches = gdbarch_list_lookup_by_info (arches, &info);
-       arches != NULL;
-       arches = gdbarch_list_lookup_by_info (arches->next, &info))
-    {
-      if (gdbarch_tdep (arches->gdbarch)->e_flags != e_flags
-          || gdbarch_tdep (arches->gdbarch)->e_machine != e_machine)
-	continue;
-
-      return arches->gdbarch;
-    }
-  tdep = XCNEW (struct gdbarch_tdep);
-  tdep->e_flags = e_flags;
-  tdep->e_machine = e_machine;
-
-  switch (tdep->e_machine)
-    {
-    case EM_V800:
-      tdep->abi = V850_ABI_RH850;
-      break;
-    default:
-      tdep->abi = V850_ABI_GCC;
-      break;
+      if (v850_processor_type_table[i].mach == info.bfd_arch_info->mach)
+	{
+	  v850_register_names = v850_processor_type_table[i].regnames;
+	  tm_print_insn_info.mach = info.bfd_arch_info->mach;
+	  break;
+	}
     }
 
-  tdep->eight_byte_align = (tdep->e_flags & EF_RH850_DATA_ALIGN8) ? 1 : 0;
-  gdbarch = gdbarch_alloc (&info, tdep);
-
-  switch (info.bfd_arch_info->mach)
-    {
-    case bfd_mach_v850:
-      set_gdbarch_register_name (gdbarch, v850_register_name);
-      set_gdbarch_num_regs (gdbarch, E_NUM_OF_V850_REGS);
-      break;
-    case bfd_mach_v850e:
-    case bfd_mach_v850e1:
-      set_gdbarch_register_name (gdbarch, v850e_register_name);
-      set_gdbarch_num_regs (gdbarch, E_NUM_OF_V850E_REGS);
-      break;
-    case bfd_mach_v850e2:
-    case bfd_mach_v850e2v3:
-      set_gdbarch_register_name (gdbarch, v850e2_register_name);
-      set_gdbarch_num_regs (gdbarch, E_NUM_REGS);
-      break;
-    case bfd_mach_v850e3v5:
-      set_gdbarch_register_name (gdbarch, v850e3v5_register_name);
-      set_gdbarch_num_regs (gdbarch, E_NUM_OF_V850E3V5_REGS);
-      break;
-    }
-
+  /*
+   * Basic register fields and methods.
+   */
+  set_gdbarch_num_regs (gdbarch, E_NUM_REGS);
   set_gdbarch_num_pseudo_regs (gdbarch, 0);
   set_gdbarch_sp_regnum (gdbarch, E_SP_REGNUM);
+  set_gdbarch_fp_regnum (gdbarch, E_FP_REGNUM);
   set_gdbarch_pc_regnum (gdbarch, E_PC_REGNUM);
-  set_gdbarch_fp0_regnum (gdbarch, -1);
+  set_gdbarch_register_name (gdbarch, v850_register_name);
+  set_gdbarch_register_size (gdbarch, v850_reg_size);
+  set_gdbarch_register_bytes (gdbarch, E_ALL_REGS_SIZE);
+  set_gdbarch_register_byte (gdbarch, v850_register_byte);
+  set_gdbarch_register_raw_size (gdbarch, v850_register_raw_size);
+  set_gdbarch_max_register_raw_size (gdbarch, v850_reg_size);
+  set_gdbarch_register_virtual_size (gdbarch, v850_register_raw_size);
+  set_gdbarch_max_register_virtual_size (gdbarch, v850_reg_size);
+  set_gdbarch_register_virtual_type (gdbarch, v850_reg_virtual_type);
 
-  set_gdbarch_register_type (gdbarch, v850_register_type);
+  set_gdbarch_read_fp (gdbarch, v850_target_read_fp);
 
-  set_gdbarch_char_signed (gdbarch, 1);
-  set_gdbarch_short_bit (gdbarch, 2 * TARGET_CHAR_BIT);
+  /*
+   * Frame Info
+   */
+  set_gdbarch_init_extra_frame_info (gdbarch, v850_init_extra_frame_info);
+  set_gdbarch_frame_init_saved_regs (gdbarch, v850_frame_init_saved_regs);
+  set_gdbarch_frame_chain (gdbarch, v850_frame_chain);
+  set_gdbarch_get_saved_register (gdbarch, generic_unwind_get_saved_register);
+  set_gdbarch_saved_pc_after_call (gdbarch, v850_saved_pc_after_call);
+  set_gdbarch_frame_saved_pc (gdbarch, v850_frame_saved_pc);
+  set_gdbarch_skip_prologue (gdbarch, v850_skip_prologue);
+  set_gdbarch_frame_chain_valid (gdbarch, generic_file_frame_chain_valid);
+  set_gdbarch_frame_args_address (gdbarch, default_frame_address);
+  set_gdbarch_frame_locals_address (gdbarch, default_frame_address);
+
+  /* 
+   * Miscelany
+   */
+  /* Stack grows up. */
+  set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
+  /* PC stops zero byte after a trap instruction
+     (which means: exactly on trap instruction). */
+  set_gdbarch_decr_pc_after_break (gdbarch, 0);
+  /* This value is almost never non-zero... */
+  set_gdbarch_function_start_offset (gdbarch, 0);
+  /* This value is almost never non-zero... */
+  set_gdbarch_frame_args_skip (gdbarch, 0);
+  /* OK to default this value to 'unknown'. */
+  set_gdbarch_frame_num_args (gdbarch, frame_num_args_unknown);
+  /* W/o prototype, coerce float args to double. */
+  set_gdbarch_coerce_float_to_double (gdbarch, standard_coerce_float_to_double);
+
+  /*
+   * Call Dummies
+   * 
+   * These values and methods are used when gdb calls a target function.  */
+  set_gdbarch_use_generic_dummy_frames (gdbarch, 1);
+  set_gdbarch_push_dummy_frame (gdbarch, generic_push_dummy_frame);
+  set_gdbarch_push_return_address (gdbarch, v850_push_return_address);
+  set_gdbarch_deprecated_extract_return_value (gdbarch, v850_extract_return_value);
+  set_gdbarch_push_arguments (gdbarch, v850_push_arguments);
+  set_gdbarch_pop_frame (gdbarch, v850_pop_frame);
+  set_gdbarch_store_struct_return (gdbarch, v850_store_struct_return);
+  set_gdbarch_store_return_value (gdbarch, v850_store_return_value);
+  set_gdbarch_deprecated_extract_struct_value_address (gdbarch, v850_extract_struct_value_address);
+  set_gdbarch_use_struct_convention (gdbarch, v850_use_struct_convention);
+  set_gdbarch_call_dummy_location (gdbarch, AT_ENTRY_POINT);
+  set_gdbarch_call_dummy_address (gdbarch, entry_point_address);
+  set_gdbarch_call_dummy_start_offset (gdbarch, 0);
+  set_gdbarch_call_dummy_breakpoint_offset (gdbarch, 0);
+  set_gdbarch_call_dummy_breakpoint_offset_p (gdbarch, 1);
+  set_gdbarch_call_dummy_length (gdbarch, 0);
+  set_gdbarch_pc_in_call_dummy (gdbarch, generic_pc_in_call_dummy);
+  set_gdbarch_call_dummy_p (gdbarch, 1);
+  set_gdbarch_call_dummy_words (gdbarch, call_dummy_nil);
+  set_gdbarch_sizeof_call_dummy_words (gdbarch, 0);
+  set_gdbarch_call_dummy_stack_adjust_p (gdbarch, 0);
+  /* set_gdbarch_call_dummy_stack_adjust */
+  set_gdbarch_fix_call_dummy (gdbarch, v850_fix_call_dummy);
+  set_gdbarch_breakpoint_from_pc (gdbarch, v850_breakpoint_from_pc);
+
   set_gdbarch_int_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-  set_gdbarch_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-  set_gdbarch_long_long_bit (gdbarch, 8 * TARGET_CHAR_BIT);
-
-  set_gdbarch_float_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-  set_gdbarch_double_bit (gdbarch, 8 * TARGET_CHAR_BIT);
-  set_gdbarch_long_double_bit (gdbarch, 8 * TARGET_CHAR_BIT);
-
   set_gdbarch_ptr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
   set_gdbarch_addr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_long_double_bit (gdbarch, 8 * TARGET_CHAR_BIT);
 
-  set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
-
-  set_gdbarch_breakpoint_kind_from_pc (gdbarch, v850_breakpoint_kind_from_pc);
-  set_gdbarch_sw_breakpoint_from_kind (gdbarch, v850_sw_breakpoint_from_kind);
-  set_gdbarch_return_value (gdbarch, v850_return_value);
-  set_gdbarch_push_dummy_call (gdbarch, v850_push_dummy_call);
-  set_gdbarch_skip_prologue (gdbarch, v850_skip_prologue);
-
-  set_gdbarch_frame_align (gdbarch, v850_frame_align);
-  frame_base_set_default (gdbarch, &v850_frame_base);
-
-  /* Hook in ABI-specific overrides, if they have been registered.  */
-  gdbarch_init_osabi (info, gdbarch);
-
-  dwarf2_append_unwinders (gdbarch);
-  frame_unwind_append_unwinder (gdbarch, &v850_frame_unwind);
+  set_gdbarch_extra_stack_alignment_needed (gdbarch, 0);
 
   return gdbarch;
 }
 
-void _initialize_v850_tdep ();
 void
-_initialize_v850_tdep ()
+_initialize_v850_tdep (void)
 {
+  tm_print_insn = print_insn_v850;
   register_gdbarch_init (bfd_arch_v850, v850_gdbarch_init);
-  register_gdbarch_init (bfd_arch_v850_rh850, v850_gdbarch_init);
 }

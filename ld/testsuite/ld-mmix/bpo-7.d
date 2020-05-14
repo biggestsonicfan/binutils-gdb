@@ -3,4 +3,4 @@
 #source: greg-1.s
 #as: -linker-allocated-gregs
 #ld: -m elf64mmix
-#error: too many global registers: 224
+#error: Too many global registers: 224

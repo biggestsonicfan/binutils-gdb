@@ -1,26 +1,25 @@
 /* BFD back end for Lynx core files
-   Copyright (C) 1993-2020 Free Software Foundation, Inc.
+   Copyright 1993, 1994, 1995, 2001, 2002 Free Software Foundation, Inc.
    Written by Stu Grossman of Cygnus Support.
 
-   This file is part of BFD, the Binary File Descriptor library.
+This file is part of BFD, the Binary File Descriptor library.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
+#include "sysdep.h"
 #include "libbfd.h"
 
 #ifdef LYNX_CORE
@@ -51,18 +50,16 @@ struct lynx_core_struct
 #define core_signal(bfd) (core_hdr(bfd)->sig)
 #define core_command(bfd) (core_hdr(bfd)->cmd)
 
-#define lynx_core_file_matches_executable_p generic_core_file_matches_executable_p
-#define lynx_core_file_pid _bfd_nocore_core_file_pid
-
 /* Handle Lynx core dump file.  */
 
 static asection *
-make_bfd_asection (bfd *abfd,
-		   const char *name,
-		   flagword flags,
-		   bfd_size_type size,
-		   bfd_vma vma,
-		   file_ptr filepos)
+make_bfd_asection (abfd, name, flags, _raw_size, vma, filepos)
+     bfd *abfd;
+     const char *name;
+     flagword flags;
+     bfd_size_type _raw_size;
+     bfd_vma vma;
+     file_ptr filepos;
 {
   asection *asect;
   char *newname;
@@ -73,11 +70,12 @@ make_bfd_asection (bfd *abfd,
 
   strcpy (newname, name);
 
-  asect = bfd_make_section_with_flags (abfd, newname, flags);
+  asect = bfd_make_section (abfd, newname);
   if (!asect)
     return NULL;
 
-  asect->size = size;
+  asect->flags = flags;
+  asect->_raw_size = _raw_size;
   asect->vma = vma;
   asect->filepos = filepos;
   asect->alignment_power = 2;
@@ -85,8 +83,9 @@ make_bfd_asection (bfd *abfd,
   return asect;
 }
 
-bfd_cleanup
-lynx_core_file_p (bfd *abfd)
+const bfd_target *
+lynx_core_file_p (abfd)
+     bfd *abfd;
 {
   int secnum;
   struct pssentry pss;
@@ -94,7 +93,7 @@ lynx_core_file_p (bfd *abfd)
   core_st_t *threadp;
   int pagesize;
   asection *newsect;
-  size_t amt;
+  bfd_size_type amt;
 
   pagesize = getpagesize ();	/* Serious cross-target issue here...  This
 				   really needs to come from a system-specific
@@ -126,13 +125,24 @@ lynx_core_file_p (bfd *abfd)
 
   tcontext_size = pss.threadcnt * sizeof (core_st_t);
 
-  /* Save thread contexts */
-  if (bfd_seek (abfd, pagesize, SEEK_SET) != 0)
-    goto fail;
-  threadp = (core_st_t *) _bfd_alloc_and_read (abfd, tcontext_size,
-					       tcontext_size);
+  /* Allocate space for the thread contexts */
+
+  threadp = (core_st_t *) bfd_alloc (abfd, tcontext_size);
   if (!threadp)
     goto fail;
+
+  /* Save thread contexts */
+
+  if (bfd_seek (abfd, (file_ptr) pagesize, SEEK_SET) != 0)
+    goto fail;
+
+  if (bfd_bread ((void *) threadp, tcontext_size, abfd) != tcontext_size)
+    {
+      /* Probably too small to be a core file */
+      if (bfd_get_error () != bfd_error_system_call)
+	bfd_set_error (bfd_error_wrong_format);
+      goto fail;
+    }
 
   core_signal (abfd) = threadp->currsig;
 
@@ -151,11 +161,11 @@ lynx_core_file_p (bfd *abfd)
 			       pagesize + tcontext_size + pss.ssize
 #if defined (SPARC) || defined (__SPARC__)
 			       /* SPARC Lynx seems to start dumping
-				  the .data section at a page
-				  boundary.  It's OK to check a
-				  #define like SPARC here because this
-				  file can only be compiled on a Lynx
-				  host.  */
+                                  the .data section at a page
+                                  boundary.  It's OK to check a
+                                  #define like SPARC here because this
+                                  file can only be compiled on a Lynx
+                                  host.  */
 			       + pss.data_start % pagesize
 #endif
 			       );
@@ -191,7 +201,7 @@ lynx_core_file_p (bfd *abfd)
 	goto fail;
     }
 
-  return _bfd_no_cleanup;
+  return abfd->xvec;
 
  fail:
   bfd_release (abfd, core_hdr (abfd));
@@ -201,15 +211,24 @@ lynx_core_file_p (bfd *abfd)
 }
 
 char *
-lynx_core_file_failing_command (bfd *abfd)
+lynx_core_file_failing_command (abfd)
+     bfd *abfd;
 {
   return core_command (abfd);
 }
 
 int
-lynx_core_file_failing_signal (bfd *abfd)
+lynx_core_file_failing_signal (abfd)
+     bfd *abfd;
 {
   return core_signal (abfd);
+}
+
+boolean
+lynx_core_file_matches_executable_p  (core_bfd, exec_bfd)
+     bfd *core_bfd, *exec_bfd;
+{
+  return true;		/* FIXME, We have no way of telling at this point */
 }
 
 #endif /* LYNX_CORE */

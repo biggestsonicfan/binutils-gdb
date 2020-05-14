@@ -1,6 +1,7 @@
 /* Simulate breakpoints by patching locations in the target system, for GDB.
 
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1992, 1993, 1995, 1997, 1998, 1999, 2000,
+   2002 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.  Written by John Gilmore.
 
@@ -8,7 +9,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -17,113 +18,118 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #include "defs.h"
+
+/* This file is only useful if BREAKPOINT is set.  If not, we punt.  */
+
 #include "symtab.h"
 #include "breakpoint.h"
 #include "inferior.h"
 #include "target.h"
-#include "gdbarch.h"
 
-/* Insert a breakpoint on targets that don't have any better
-   breakpoint support.  We read the contents of the target location
-   and stash it, then overwrite it with a breakpoint instruction.
-   BP_TGT->placed_address is the target location in the target
-   machine.  BP_TGT->shadow_contents is some memory allocated for
-   saving the target contents.  It is guaranteed by the caller to be
-   long enough to save BREAKPOINT_LEN bytes (this is accomplished via
-   BREAKPOINT_MAX).  */
+
+/* Use the program counter to determine the contents and size
+   of a breakpoint instruction.  If no target-dependent macro
+   BREAKPOINT_FROM_PC has been defined to implement this function,
+   assume that the breakpoint doesn't depend on the PC, and
+   use the values of the BIG_BREAKPOINT and LITTLE_BREAKPOINT macros.
+   Return a pointer to a string of bytes that encode a breakpoint
+   instruction, stores the length of the string to *lenptr,
+   and optionally adjust the pc to point to the correct memory location
+   for inserting the breakpoint.  */
+
+const unsigned char *
+memory_breakpoint_from_pc (CORE_ADDR *pcptr, int *lenptr)
+{
+  /* {BIG_,LITTLE_}BREAKPOINT is the sequence of bytes we insert for a
+     breakpoint.  On some machines, breakpoints are handled by the
+     target environment and we don't have to worry about them here.  */
+#ifdef BIG_BREAKPOINT
+  if (TARGET_BYTE_ORDER == BFD_ENDIAN_BIG)
+    {
+      static unsigned char big_break_insn[] = BIG_BREAKPOINT;
+      *lenptr = sizeof (big_break_insn);
+      return big_break_insn;
+    }
+#endif
+#ifdef LITTLE_BREAKPOINT
+  if (TARGET_BYTE_ORDER != BFD_ENDIAN_BIG)
+    {
+      static unsigned char little_break_insn[] = LITTLE_BREAKPOINT;
+      *lenptr = sizeof (little_break_insn);
+      return little_break_insn;
+    }
+#endif
+#ifdef BREAKPOINT
+  {
+    static unsigned char break_insn[] = BREAKPOINT;
+    *lenptr = sizeof (break_insn);
+    return break_insn;
+  }
+#endif
+  *lenptr = 0;
+  return NULL;
+}
+
+
+/* Insert a breakpoint on targets that don't have any better breakpoint
+   support.  We read the contents of the target location and stash it,
+   then overwrite it with a breakpoint instruction.  ADDR is the target
+   location in the target machine.  CONTENTS_CACHE is a pointer to 
+   memory allocated for saving the target contents.  It is guaranteed
+   by the caller to be long enough to save BREAKPOINT_LEN bytes (this
+   is accomplished via BREAKPOINT_MAX).  */
 
 int
-default_memory_insert_breakpoint (struct gdbarch *gdbarch,
-				  struct bp_target_info *bp_tgt)
+default_memory_insert_breakpoint (CORE_ADDR addr, char *contents_cache)
 {
-  CORE_ADDR addr = bp_tgt->placed_address;
-  const unsigned char *bp;
-  gdb_byte *readbuf;
-  int bplen;
   int val;
+  const unsigned char *bp;
+  int bplen;
 
   /* Determine appropriate breakpoint contents and size for this address.  */
-  bp = gdbarch_sw_breakpoint_from_kind (gdbarch, bp_tgt->kind, &bplen);
+  bp = BREAKPOINT_FROM_PC (&addr, &bplen);
+  if (bp == NULL)
+    error ("Software breakpoints not implemented for this target.");
 
-  /* Save the memory contents in the shadow_contents buffer and then
-     write the breakpoint instruction.  */
-  readbuf = (gdb_byte *) alloca (bplen);
-  val = target_read_memory (addr, readbuf, bplen);
+  /* Save the memory contents.  */
+  val = target_read_memory (addr, contents_cache, bplen);
+
+  /* Write the breakpoint.  */
   if (val == 0)
-    {
-      /* These must be set together, either before or after the shadow
-	 read, so that if we're "reinserting" a breakpoint that
-	 doesn't have a shadow yet, the breakpoint masking code inside
-	 target_read_memory doesn't mask out this breakpoint using an
-	 unfilled shadow buffer.  The core may be trying to reinsert a
-	 permanent breakpoint, for targets that support breakpoint
-	 conditions/commands on the target side for some types of
-	 breakpoints, such as target remote.  */
-      bp_tgt->shadow_len = bplen;
-      memcpy (bp_tgt->shadow_contents, readbuf, bplen);
-
-      val = target_write_raw_memory (addr, bp, bplen);
-    }
+    val = target_write_memory (addr, (char *) bp, bplen);
 
   return val;
 }
 
 
 int
-default_memory_remove_breakpoint (struct gdbarch *gdbarch,
-				  struct bp_target_info *bp_tgt)
+default_memory_remove_breakpoint (CORE_ADDR addr, char *contents_cache)
 {
+  const unsigned char *bp;
   int bplen;
 
-  gdbarch_sw_breakpoint_from_kind (gdbarch, bp_tgt->kind, &bplen);
-
-  return target_write_raw_memory (bp_tgt->placed_address, bp_tgt->shadow_contents,
-				  bplen);
-}
-
-
-int
-memory_insert_breakpoint (struct target_ops *ops, struct gdbarch *gdbarch,
-			  struct bp_target_info *bp_tgt)
-{
-  return gdbarch_memory_insert_breakpoint (gdbarch, bp_tgt);
-}
-
-int
-memory_remove_breakpoint (struct target_ops *ops, struct gdbarch *gdbarch,
-			  struct bp_target_info *bp_tgt,
-			  enum remove_bp_reason reason)
-{
-  return gdbarch_memory_remove_breakpoint (gdbarch, bp_tgt);
-}
-
-int
-memory_validate_breakpoint (struct gdbarch *gdbarch,
-			    struct bp_target_info *bp_tgt)
-{
-  CORE_ADDR addr = bp_tgt->placed_address;
-  const gdb_byte *bp;
-  int val;
-  int bplen;
-  gdb_byte cur_contents[BREAKPOINT_MAX];
-
-  /* Determine appropriate breakpoint contents and size for this
-     address.  */
-  bp = gdbarch_breakpoint_from_pc (gdbarch, &addr, &bplen);
-
+  /* Determine appropriate breakpoint contents and size for this address.  */
+  bp = BREAKPOINT_FROM_PC (&addr, &bplen);
   if (bp == NULL)
-    return 0;
+    error ("Software breakpoints not implemented for this target.");
 
-  /* Make sure we see the memory breakpoints.  */
-  scoped_restore restore_memory
-    = make_scoped_restore_show_memory_breakpoints (1);
-  val = target_read_memory (addr, cur_contents, bplen);
+  return target_write_memory (addr, contents_cache, bplen);
+}
 
-  /* If our breakpoint is no longer at the address, this means that
-     the program modified the code on us, so it is wrong to put back
-     the old value.  */
-  return (val == 0 && memcmp (bp, cur_contents, bplen) == 0);
+
+int
+memory_insert_breakpoint (CORE_ADDR addr, char *contents_cache)
+{
+  return MEMORY_INSERT_BREAKPOINT(addr, contents_cache);
+}
+
+int
+memory_remove_breakpoint (CORE_ADDR addr, char *contents_cache)
+{
+  return MEMORY_REMOVE_BREAKPOINT(addr, contents_cache);
 }

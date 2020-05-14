@@ -1,10 +1,4 @@
 # Linker script for PE.
-#
-# Copyright (C) 2014-2020 Free Software Foundation, Inc.
-#
-# Copying and distribution of this file, with or without modification,
-# are permitted in any medium without royalty provided the copyright
-# notice and this notice are preserved.
 
 if test -z "${RELOCATEABLE_OUTPUT_FORMAT}"; then
   RELOCATEABLE_OUTPUT_FORMAT=${OUTPUT_FORMAT}
@@ -39,37 +33,31 @@ else
 fi
 
 cat <<EOF
-/* Copyright (C) 2014-2020 Free Software Foundation, Inc.
-
-   Copying and distribution of this script, with or without modification,
-   are permitted in any medium without royalty provided the copyright
-   notice and this notice are preserved.  */
-
 ${RELOCATING+OUTPUT_FORMAT(${OUTPUT_FORMAT})}
 ${RELOCATING-OUTPUT_FORMAT(${RELOCATEABLE_OUTPUT_FORMAT})}
 
 ${LIB_SEARCH_DIRS}
 
-${RELOCATING+ENTRY (__start)}
+ENTRY(__start)
 ${RELOCATING+header = .;}
 ${RELOCATING+__fltused = .; /* set up floating pt for MS .obj\'s */}
 ${RELOCATING+__ldused = .;}
 SECTIONS
 {
-  .text ${RELOCATING+ __image_base__ + __section_alignment__ } :
+  .text ${RELOCATING+ __image_base__ + __section_alignment__ } : 
   {
     ${RELOCATING+ __text_start__ = . ;}
-    ${RELOCATING+ KEEP (*(SORT_NONE(.init)))}
+    ${RELOCATING+ *(.init)}
     *(.text)
     ${R_TEXT}
     *(.glue_7t)
     *(.glue_7)
-    ${CONSTRUCTING+ ___CTOR_LIST__ = .; __CTOR_LIST__ = . ;
+    ${CONSTRUCTING+ ___CTOR_LIST__ = .; __CTOR_LIST__ = . ; 
 			LONG (-1); *(.ctors); *(.ctor); LONG (0); }
-    ${CONSTRUCTING+ ___DTOR_LIST__ = .; __DTOR_LIST__ = . ;
+    ${CONSTRUCTING+ ___DTOR_LIST__ = .; __DTOR_LIST__ = . ; 
 			LONG (-1); *(.dtors); *(.dtor);  LONG (0); }
-    ${RELOCATING+ KEEP (*(SORT_NONE(.fini)))}
-    ${RELOCATING+/* ??? Why is .gcc_exc here?  */}
+    ${RELOCATING+ *(.fini)}
+    /* ??? Why is .gcc_exc here?  */
     ${RELOCATING+ *(.gcc_exc)}
     ${RELOCATING+ etext = .;}
     ${RELOCATING+ __text_end__ = .;}
@@ -80,9 +68,9 @@ SECTIONS
      on fork.  This used to be named ".data$nocopy".  The linker used
      to include this between __data_start__ and __data_end__, but that
      breaks building the cygwin32 dll.  Instead, we name the section
-     ".data_cygwin_nocopy" and explicitly include it after __data_end__. */
+     ".data_cygwin_nocopy" and explictly include it after __data_end__. */
 
-  .data ${RELOCATING+BLOCK(__section_alignment__)} :
+  .data ${RELOCATING+BLOCK(__section_alignment__)} : 
   {
     ${RELOCATING+__data_start__ = . ;}
     *(.data)
@@ -134,7 +122,7 @@ SECTIONS
     ${R_IDATA}
   }
   .CRT ${RELOCATING+BLOCK(__section_alignment__)} :
-  {
+  { 					
     ${R_CRT}
   }
 
@@ -147,18 +135,18 @@ SECTIONS
   }
 
   .reloc ${RELOCATING+BLOCK(__section_alignment__)} :
-  {
+  { 					
     *(.reloc)
   }
 
   .rsrc ${RELOCATING+BLOCK(__section_alignment__)} :
-  {
+  { 					
     *(.rsrc)
     ${R_RSRC}
   }
 
   .exc ${RELOCATING+BLOCK(__section_alignment__)} :
-  {
+  { 					
     *(.exc)
     ${R_EXC}
   }
@@ -172,10 +160,35 @@ SECTIONS
   {
     [ .stabstr ]
   }
-EOF
+  /* DWARF debug sections.
+     Symbols in the DWARF debugging sections are relative to the beginning
+     of the section so we begin them at 0.  */
 
-. $srcdir/scripttempl/DWARF.sc
+  /* DWARF 1 */
+  .debug          0 ${RELOCATING+(NOLOAD)} : { *(.debug) }
+  .line           0 ${RELOCATING+(NOLOAD)} : { *(.line) }
 
-cat <<EOF
+  /* GNU DWARF 1 extensions */
+  .debug_srcinfo  0 ${RELOCATING+(NOLOAD)} : { *(.debug_srcinfo) }
+  .debug_sfnames  0 ${RELOCATING+(NOLOAD)} : { *(.debug_sfnames) }
+
+  /* DWARF 1.1 and DWARF 2 */
+  .debug_aranges  0 ${RELOCATING+(NOLOAD)} : { *(.debug_aranges) }
+  .debug_pubnames 0 ${RELOCATING+(NOLOAD)} : { *(.debug_pubnames) }
+
+  /* DWARF 2 */
+  .debug_info     0 ${RELOCATING+(NOLOAD)} : { *(.debug_info) *(.gnu.linkonce.wi.*) }
+  .debug_abbrev   0 ${RELOCATING+(NOLOAD)} : { *(.debug_abbrev) }
+  .debug_line     0 ${RELOCATING+(NOLOAD)} : { *(.debug_line) }
+  .debug_frame    0 ${RELOCATING+(NOLOAD)} : { *(.debug_frame) }
+  .debug_str      0 ${RELOCATING+(NOLOAD)} : { *(.debug_str) }
+  .debug_loc      0 ${RELOCATING+(NOLOAD)} : { *(.debug_loc) }
+  .debug_macinfo  0 ${RELOCATING+(NOLOAD)} : { *(.debug_macinfo) }
+
+  /* SGI/MIPS DWARF 2 extensions */
+  .debug_weaknames 0 ${RELOCATING+(NOLOAD)} : { *(.debug_weaknames) }
+  .debug_funcnames 0 ${RELOCATING+(NOLOAD)} : { *(.debug_funcnames) }
+  .debug_typenames 0 ${RELOCATING+(NOLOAD)} : { *(.debug_typenames) }
+  .debug_varnames  0 ${RELOCATING+(NOLOAD)} : { *(.debug_varnames) }
 }
 EOF

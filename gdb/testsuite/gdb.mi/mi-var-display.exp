@@ -1,8 +1,8 @@
-# Copyright 1999-2020 Free Software Foundation, Inc.
+#   Copyright (C) 1999 2000 Cygnus Solutions
 #
-# This program is free software; you can redistribute it and/or modify
+# This Program Is Free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -11,7 +11,11 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # Test essential Machine interface (MI) operations
 #
@@ -27,30 +31,30 @@ if [mi_gdb_start] {
     continue
 }
 
-standard_testfile var-cmd.c
-
-if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
-    untested "failed to compile"
-    return -1
+set testfile "var-cmd"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug additional_flags=-DFAKEARGV}] != "" } {
+    gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
 }
 
 mi_delete_breakpoints
 mi_gdb_reinitialize_dir $srcdir/$subdir
 mi_gdb_load ${binfile}
 
-set line_dct_end [gdb_get_line_number "{int a = 0;}"]
-
-mi_create_breakpoint "$srcfile:$line_dct_end" \
-    "break-insert operation" \
-    -number 1 -func do_children_tests -file ".*var-cmd.c" \
-    -line $line_dct_end
+mi_gdb_test "200-break-insert 260" \
+	"200\\^done,bkpt=\{number=\"1\",type=\"breakpoint\",disp=\"keep\",enabled=\"y\",addr=\"$hex\",func=\"do_children_tests\",file=\".*var-cmd.c\",line=\"260\",times=\"0\"\}" \
+	"break-insert operation"
 
 mi_run_cmd
-mi_expect_stop "breakpoint-hit" "do_children_tests" "" ".*var-cmd.c" \
-	$line_dct_end { "" "disp=\"keep\"" } "run to main"
-
-# Prevent symbol on the address being printed.
-mi_gdb_test "-gdb-set print symbol off"
+# The running part has been checked already by mi_run_cmd
+gdb_expect {
+    -re "\[\r\n\]*000\\*stopped,reason=\"breakpoint-hit\",bkptno=\"1\",thread-id=\"\[01\]\",frame=\{addr=\"$hex\",func=\"do_children_tests\",args=\\\[\\\],file=\".*var-cmd.c\",line=\"260\"\}\r\n$mi_gdb_prompt$" {
+	pass "run to do_children_tests"
+    }
+    -re ".*$mi_gdb_prompt$" {fail "run to do_children_tests (2)"}
+    timeout {fail "run to do_children_tests (timeout 2)"}
+}
 
 #####       #####
 #               #
@@ -60,7 +64,9 @@ mi_gdb_test "-gdb-set print symbol off"
 
 # Test: c_variable-6.1
 # Desc: create variable bar
-mi_create_varobj bar bar "create local variable bar"
+mi_gdb_test "-var-create bar * bar" \
+	"\\^done,name=\"bar\",numchild=\"0\",type=\"int\"" \
+	"create local variable bar"
 
 # Test: c_variable-6.2
 # Desc: type of variable bar
@@ -81,15 +87,10 @@ mi_gdb_test "-var-evaluate-expression bar" \
 	"eval variable bar"
 
 # Test: c_variable-6.5
-# Desc: change format of bar to zero-padded hexadecimal
-mi_gdb_test "-var-set-format bar zero-hexadecimal" \
-	"\\^done,format=\"zero-hexadecimal\",value=\"0x0.*849\"" \
-	"set format variable bar in zero-padded hexadecimal"
-
 # Desc: change format of bar to hex
 mi_gdb_test "-var-set-format bar hexadecimal" \
-	"\\^done,format=\"hexadecimal\",value=\"0x849\"" \
-	"set format variable bar in hex"
+	"\\^done,format=\"hexadecimal\"" \
+	"set format variable bar"
 
 # Test: c_variable-6.6
 # Desc: value of bar with new format
@@ -104,8 +105,8 @@ mi_gdb_test "-var-assign bar 3" \
 	"assing to variable bar"
 
 mi_gdb_test "-var-set-format bar decimal" \
-	"\\^done,format=\"decimal\",value=\"3\"" \
-	"set format variable bar in decimal"
+	"\\^done,format=\"decimal\"" \
+	"set format variable bar"
 
 mi_gdb_test "-var-evaluate-expression bar" \
 	"\\^done,value=\"3\"" \
@@ -117,7 +118,9 @@ mi_gdb_test "-var-delete bar" \
 
 # Test: c_variable-6.11
 # Desc: create variable foo
-mi_create_varobj foo foo "create local variable foo"
+mi_gdb_test "-var-create foo * foo" \
+	"\\^done,name=\"foo\",numchild=\"1\",type=\"int \\*\"" \
+	"create local variable foo"
 
 # Test: c_variable-6.12
 # Desc: type of variable foo
@@ -129,29 +132,29 @@ mi_gdb_test "-var-info-type foo" \
 # Desc: format of variable foo
 mi_gdb_test "-var-show-format foo" \
 	"\\^done,format=\"natural\"" \
-	"show format variable foo in natural"
+	"show format variable foo"
 
 # Test: c_variable-6.14
 # Desc: value of variable foo
 mi_gdb_test "-var-evaluate-expression foo" \
 	"\\^done,value=\"$hex\"" \
-	"eval variable foo in natural"
+	"eval variable foo"
 
 # Test: c_variable-6.15
 # Desc: change format of var to octal
 mi_gdb_test "-var-set-format foo octal" \
-	"\\^done,format=\"octal\",value=\"$octal\"" \
-	"set format variable foo in octal"
+	"\\^done,format=\"octal\"" \
+	"set format variable foo"
 
 mi_gdb_test "-var-show-format foo" \
 	"\\^done,format=\"octal\"" \
-	"show format variable foo in octal"
+	"show format variable foo"
 
 # Test: c_variable-6.16
 # Desc: value of foo with new format
 mi_gdb_test "-var-evaluate-expression foo" \
 	"\\^done,value=\"\[0-7\]+\"" \
-	"eval variable foo in octal"
+	"eval variable foo"
 
 # Test: c_variable-6.17
 # Desc: change value of foo
@@ -160,58 +163,14 @@ mi_gdb_test "-var-assign foo 3" \
 	"assing to variable foo"
 
 mi_gdb_test "-var-set-format foo decimal" \
-	"\\^done,format=\"decimal\",value=\"3\"" \
-	"set format variable foo decimal"
+	"\\^done,format=\"decimal\"" \
+	"set format variable foo"
 
 # Test: c_variable-6.18
 # Desc: check new value of foo
 mi_gdb_test "-var-evaluate-expression foo" \
 	"\\^done,value=\"3\"" \
-	"eval variable foo in decimal"
-
-
-# Test: c_variable-6.19
-# Desc: check optional format parameter of var-evaluate-expression
-#       and check that current format is not changed
-mi_gdb_test "-var-evaluate-expression -f hex foo" \
-	"\\^done,value=\"0x3\"" \
-	"eval variable foo in hex"
-
-mi_gdb_test "-var-show-format foo" \
-	"\\^done,format=\"decimal\"" \
-	"show format variable foo after eval in hex"
-
-mi_gdb_test "-var-evaluate-expression -f octal foo" \
-	"\\^done,value=\"03\"" \
-	"eval variable -f octal foo"
-
-mi_gdb_test "-var-show-format foo" \
-	"\\^done,format=\"decimal\"" \
-	"show format variable foo after eval in octal"
-
-mi_gdb_test "-var-evaluate-expression -f decimal foo" \
-	"\\^done,value=\"3\"" \
-	"eval variable -f decimal foo"
-
-mi_gdb_test "-var-show-format foo" \
-	"\\^done,format=\"decimal\"" \
-	"show format variable foo after eval in decimal"
-
-mi_gdb_test "-var-evaluate-expression -f nat foo" \
-	"\\^done,value=\"0x3\"" \
-	"eval variable -f nat foo"
-
-mi_gdb_test "-var-show-format foo" \
-	"\\^done,format=\"decimal\"" \
-	"show format variable foo after eval in natural"
-
-mi_gdb_test "-var-evaluate-expression -f bin foo" \
-	"\\^done,value=\"11\"" \
-	"eval variable foo in binary"
-
-mi_gdb_test "-var-show-format foo" \
-	"\\^done,format=\"decimal\"" \
-	"show format variable foo after eval in binary"
+	"eval variable foo"
 
 mi_gdb_test "-var-delete foo" \
 	"\\^done,ndeleted=\"1\"" \
@@ -219,107 +178,81 @@ mi_gdb_test "-var-delete foo" \
 
 # Test: c_variable-6.21
 # Desc: create variable weird and children
-mi_create_varobj weird weird "create local variable weird"
+mi_gdb_test "-var-create weird * weird" \
+	"\\^done,name=\"weird\",numchild=\"11\",type=\"weird_struct \\*\"" \
+	"create local variable weird"
 
-mi_list_varobj_children weird {
-        {weird.integer integer 0 int}
-        {weird.character character 0 char}
-        {weird.char_ptr char_ptr 1 "char \\*"}
-        {weird.long_int long_int 0 "long"}
-        {weird.int_ptr_ptr int_ptr_ptr 1 "int \\*\\*"}
-        {weird.long_array long_array 10 "long \\[10\\]"}
-        {weird.func_ptr func_ptr 0 "void \\(\\*\\)\\((void)?\\)"}
-        {weird.func_ptr_struct func_ptr_struct 0 \
-                 "struct _struct_decl \\(\\*\\)(\\(int, char \\*, long\\))?"}
-        {weird.func_ptr_ptr func_ptr_ptr 0 \
-                 "struct _struct_decl \\*\\(\\*\\)\\((int, char \\*, long)?\\)"}
-        {weird.u1 u1 4 "union \\{\\.\\.\\.\\}"}
-        {weird.s2 s2 4 "struct \\{\\.\\.\\.\\}"}
-} "get children local variable weird"
+mi_gdb_test "-var-list-children weird" \
+	"\\^done,numchild=\"11\",children=\{child=\{name=\"weird.integer\",exp=\"integer\",numchild=\"0\",type=\"int\"\},child=\{name=\"weird.character\",exp=\"character\",numchild=\"0\",type=\"char\"\},child={name=\"weird.char_ptr\",exp=\"char_ptr\",numchild=\"1\",type=\"char \\*\"\},child=\{name=\"weird.long_int\",exp=\"long_int\",numchild=\"0\",type=\"long int\"\},child=\{name=\"weird.int_ptr_ptr\",exp=\"int_ptr_ptr\",numchild=\"1\",type=\"int \\*\\*\"\},child=\{name=\"weird.long_array\",exp=\"long_array\",numchild=\"10\",type=\"long int \\\[10\\\]\"\},child=\{name=\"weird.func_ptr\",exp=\"func_ptr\",numchild=\"0\",type=\"void \\(\\*\\)\\(\\)\"\},child=\{name=\"weird.func_ptr_struct\",exp=\"func_ptr_struct\",numchild=\"0\",type=\"struct _struct_decl \\(\\*\\)\\(\\)\"\},child=\{name=\"weird.func_ptr_ptr\",exp=\"func_ptr_ptr\",numchild=\"0\",type=\"struct _struct_decl \\*\\(\\*\\)\\(\\)\"\},child=\{name=\"weird.u1\",exp=\"u1\",numchild=\"4\",type=\"union \{\\.\\.\\.\}\"\},child=\{name=\"weird.s2\",exp=\"s2\",numchild=\"4\",type=\"struct \{\\.\\.\\.\}\"\}\}" \
+	"get children local variable weird"
 
 
 # Test: c_variable-6.23
 # Desc: change format of weird.func_ptr and weird.func_ptr_ptr
 mi_gdb_test "-var-set-format weird.func_ptr hexadecimal" \
-	"\\^done,format=\"hexadecimal\",value=\"$hex\"" \
-	"set format variable weird.func_ptr in hex (1)"
+	"\\^done,format=\"hexadecimal\"" \
+	"set format variable weird.func_ptr"
 
 mi_gdb_test "-var-show-format weird.func_ptr" \
 	"\\^done,format=\"hexadecimal\"" \
-	"show format variable weird.func_ptr (hex)"
+	"show format variable weird.func_ptr"
 
 mi_gdb_test "-var-set-format weird.func_ptr_ptr hexadecimal" \
-	"\\^done,format=\"hexadecimal\",value=\"$hex\"" \
-	"set format variable weird.func_ptr_ptr in hex"
+	"\\^done,format=\"hexadecimal\"" \
+	"set format variable weird.func_ptr_ptr"
 
 mi_gdb_test "-var-show-format weird.func_ptr_ptr" \
 	"\\^done,format=\"hexadecimal\"" \
-	"show format variable weird.func_ptr_ptr (hex)"
-
-mi_gdb_test "-var-set-format weird.func_ptr zero-hexadecimal" \
-	"\\^done,format=\"zero-hexadecimal\",value=\"$hex\"" \
-	"set format variable weird.func_ptr in zero-padded hex"
-
-mi_gdb_test "-var-show-format weird.func_ptr" \
-	"\\^done,format=\"zero-hexadecimal\"" \
-	"show format variable weird.func_ptr (zhex)"
-
-mi_gdb_test "-var-set-format weird.func_ptr_ptr zero-hexadecimal" \
-	"\\^done,format=\"zero-hexadecimal\",value=\"$hex\"" \
-	"set format variable weird.func_ptr_ptr in zero-padded hex"
-
-mi_gdb_test "-var-show-format weird.func_ptr_ptr" \
-	"\\^done,format=\"zero-hexadecimal\"" \
-	"show format variable weird.func_ptr_ptr (zhex)"
+	"show format variable weird.func_ptr_ptr"
 
 # Test: c_variable-6.24
 # Desc: format of weird and children
 mi_gdb_test "-var-set-format weird natural" \
-	"\\^done,format=\"natural\",value=\"$hex\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird"
 
 mi_gdb_test "-var-set-format weird.integer natural" \
-	"\\^done,format=\"natural\",value=\"123\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.integer"
 
 mi_gdb_test "-var-set-format weird.character natural" \
-	"\\^done,format=\"natural\",value=\"0 '\\\\\\\\000'\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.character"
 
 mi_gdb_test "-var-set-format weird.char_ptr natural" \
-	"\\^done,format=\"natural\",value=\"$hex \\\\\"hello\\\\\"\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.char_ptr"
 
 mi_gdb_test "-var-set-format weird.long_int natural" \
-	"\\^done,format=\"natural\",value=\"0\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.long_int"
 
 mi_gdb_test "-var-set-format weird.int_ptr_ptr natural" \
-	"\\^done,format=\"natural\",value=\"$hex\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.int_ptr_ptr"
 
 mi_gdb_test "-var-set-format weird.long_array natural" \
-	"\\^done,format=\"natural\",value=\"\\\[10\\\]\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.long_array"
 
 mi_gdb_test "-var-set-format weird.func_ptr hexadecimal" \
-	"\\^done,format=\"hexadecimal\",value=\"$hex\"" \
-	"set format variable weird.func_ptr in hex (2)"
+	"\\^done,format=\"hexadecimal\"" \
+	"set format variable weird.func_ptr"
 
 mi_gdb_test "-var-set-format weird.func_ptr_struct hexadecimal" \
-	"\\^done,format=\"hexadecimal\",value=\"$hex\"" \
+	"\\^done,format=\"hexadecimal\"" \
 	"set format variable weird.func_ptr_struct"
 
 mi_gdb_test "-var-set-format weird.func_ptr_ptr natural" \
-	"\\^done,format=\"natural\",value=\"$hex <nothing2>\"" \
-	"set format variable weird.func_ptr_ptr in natural"
+	"\\^done,format=\"natural\"" \
+	"set format variable weird.func_ptr_ptr"
 
 mi_gdb_test "-var-set-format weird.u1 natural" \
-	"\\^done,format=\"natural\",value=\"\{...\}\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.u1"
 
 mi_gdb_test "-var-set-format weird.s2 natural" \
-	"\\^done,format=\"natural\",value=\"\{...\}\"" \
+	"\\^done,format=\"natural\"" \
 	"set format variable weird.s2"
 
 # Test: c_variable-6.25
@@ -390,22 +323,26 @@ mi_gdb_test "-var-delete weird" \
 #                       #
 #####               #####
 
-# Stop at the end of "do_special_tests"
+# Stop in "do_special_tests"
+mi_gdb_test "200-break-insert do_special_tests" \
+	"200\\^done,bkpt=\{number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"y\",addr=\"$hex\",func=\"do_special_tests\",file=\".*var-cmd.c\",line=\"282\",times=\"0\"\}" \
+	"break-insert operation"
 
-set line_dst_incr_a_2 [gdb_get_line_number "incr_a(2);"]
-
-mi_create_breakpoint "$line_dst_incr_a_2" \
-    "break-insert operation 2" \
-    -number 2 -func do_special_tests -file ".*var-cmd.c" \
-    -line $line_dst_incr_a_2
-
-mi_execute_to "exec-continue" "breakpoint-hit" "do_special_tests" "" \
-    ".*var-cmd.c" $line_dst_incr_a_2 { "" "disp=\"keep\"" } \
-    "continue to do_special_tests"
+send_gdb "-exec-continue\n"
+gdb_expect {
+    -re "\\^running\r\n${mi_gdb_prompt}\\*stopped,reason=\"breakpoint-hit\",bkptno=\"2\",thread-id=\"\[01\]\",frame=\{addr=\"$hex\",func=\"do_special_tests\",args=\\\[\\\],file=\".*var-cmd.c\",line=\"282\"\}\r\n$mi_gdb_prompt$" {
+	pass "continue to do_special_tests"
+    }
+    timeout {
+	fail "continue to do_special_tests (timeout)"
+    }
+}
 
 # Test: c_variable-7.10
 # Desc: create union u
-mi_create_varobj u u "create local variable u"
+mi_gdb_test "-var-create u * u" \
+	"\\^done,name=\"u\",numchild=\"2\",type=\"union named_union\"" \
+	"create local variable u"
 
 # Test: c_variable-7.11
 # Desc: value of u
@@ -433,14 +370,15 @@ mi_gdb_test "-var-info-num-children u" \
 
 # Test: c_variable-7.15
 # Desc: children of u
-mi_list_varobj_children u {
-        {u.integer integer 0 int}
-        {u.char_ptr char_ptr 1 {char \*}}
-} "get children of u"
+mi_gdb_test "-var-list-children u" \
+	"\\^done,numchild=\"2\",children=\{child=\{name=\"u.integer\",exp=\"integer\",numchild=\"0\",type=\"int\"\},child=\{name=\"u.char_ptr\",exp=\"char_ptr\",numchild=\"1\",type=\"char \\*\"\}\}" \
+	"get children of u"
 
 # Test: c_variable-7.20
 # Desc: create anonu
-mi_create_varobj anonu anonu "create local variable anonu"
+mi_gdb_test "-var-create anonu * anonu" \
+	"\\^done,name=\"anonu\",numchild=\"3\",type=\"union \{\\.\\.\\.\}\"" \
+	"create local variable anonu"
 
 # Test: c_variable-7.21
 # Desc: value of anonu
@@ -468,15 +406,15 @@ mi_gdb_test "-var-info-num-children anonu" \
 
 # Test: c_variable-7.25
 # Desc: children of anonu
-mi_list_varobj_children "anonu" {
-        {anonu.a a 0 int}
-        {anonu.b b 0 char}
-        {anonu.c c 0 "long"}
-} "get children of anonu"
+mi_gdb_test "-var-list-children anonu" \
+	"\\^done,numchild=\"3\",children=\{child=\{name=\"anonu.a\",exp=\"a\",numchild=\"0\",type=\"int\"\},child=\{name=\"anonu.b\",exp=\"b\",numchild=\"0\",type=\"char\"\},child=\{name=\"anonu.c\",exp=\"c\",numchild=\"0\",type=\"long int\"\}\}" \
+	"get children of anonu"
 
 # Test: c_variable-7.30
 # Desc: create struct s
-mi_create_varobj s s "create local variable s"
+mi_gdb_test "-var-create s * s" \
+	"\\^done,name=\"s\",numchild=\"6\",type=\"struct _simple_struct\"" \
+	"create local variable s"
 
 
 # Test: c_variable-7.31
@@ -505,19 +443,16 @@ mi_gdb_test "-var-info-num-children s" \
 
 # Test: c_variable-7.35
 # Desc: children of s
-mi_list_varobj_children s {
-        {s.integer integer 0 int}
-        {s.unsigned_integer unsigned_integer 0 "unsigned int"}
-        {s.character character 0 char}
-        {s.signed_character signed_character 0 "signed char"}
-        {s.char_ptr char_ptr 1 {char \*}}
-        {s.array_of_10 array_of_10 10 {int \[10\]}}
-} "get children of s"
+mi_gdb_test "-var-list-children s" \
+	"\\^done,numchild=\"6\",children=\{child=\{name=\"s.integer\",exp=\"integer\",numchild=\"0\",type=\"int\"\},child=\{name=\"s.unsigned_integer\",exp=\"unsigned_integer\",numchild=\"0\",type=\"unsigned int\"\},child=\{name=\"s.character\",exp=\"character\",numchild=\"0\",type=\"char\"\},child=\{name=\"s.signed_character\",exp=\"signed_character\",numchild=\"0\",type=\"signed char\"\},child=\{name=\"s.char_ptr\",exp=\"char_ptr\",numchild=\"1\",type=\"char \\*\"\},child=\{name=\"s.array_of_10\",exp=\"array_of_10\",numchild=\"10\",type=\"int \\\[10\\\]\"\}\}" \
+	"get children of s"
 #} {integer unsigned_integer character signed_character char_ptr array_of_10}
 
 # Test: c_variable-7.40
 # Desc: create anons
-mi_create_varobj anons anons "create local variable anons"
+mi_gdb_test "-var-create anons * anons" \
+	"\\^done,name=\"anons\",numchild=\"3\",type=\"struct \{\\.\\.\\.\}\"" \
+	"create local variable anons"
 
 # Test: c_variable-7.41
 # Desc: value of anons
@@ -545,21 +480,24 @@ mi_gdb_test "-var-info-num-children anons" \
 
 # Test: c_variable-7.45
 # Desc: children of anons
-mi_list_varobj_children anons {
-        {anons.a a 0 int}
-        {anons.b b 0 char}
-        {anons.c c 0 "long"}
-} "get children of anons"
+mi_gdb_test "-var-list-children anons" \
+	"\\^done,numchild=\"3\",children=\{child=\{name=\"anons.a\",exp=\"a\",numchild=\"0\",type=\"int\"\},child=\{name=\"anons.b\",exp=\"b\",numchild=\"0\",type=\"char\"\},child=\{name=\"anons.c\",exp=\"c\",numchild=\"0\",type=\"long int\"\}\}" \
+	"get children of anons"
+
 
 # Test: c_variable-7.50
 # Desc: create enum e
-mi_create_varobj e e "create local variable e"
+mi_gdb_test "-var-create e * e" \
+	"\\^done,name=\"e\",numchild=\"0\",type=\"enum foo\"" \
+	"create local variable e"
 
+setup_xfail "*-*-*"
 # Test: c_variable-7.51
 # Desc: value of e
 mi_gdb_test "-var-evaluate-expression e" \
-	"\\^done,value=\"bar\"" \
+	"\\^done,value=\"FIXME\"" \
 	"eval variable e"
+clear_xfail "*-*-*"
 
 # Test: c_variable-7.52
 # Desc: type of e
@@ -582,23 +520,28 @@ mi_gdb_test "-var-info-num-children e" \
 # Test: c_variable-7.55
 # Desc: children of e
 mi_gdb_test "-var-list-children e" \
-	"\\^done,numchild=\"0\",has_more=\"0\"" \
+	"\\^done,numchild=\"0\"" \
 	"get children of e"
 
 # Test: c_variable-7.60
 # Desc: create anone
-mi_create_varobj anone anone "create local variable anone"
+mi_gdb_test "-var-create anone * anone" \
+	"\\^done,name=\"anone\",numchild=\"0\",type=\"enum \{\\.\\.\\.\}\"" \
+	"create local variable anone"
 
+setup_xfail "*-*-*"
 # Test: c_variable-7.61
 # Desc: value of anone
 mi_gdb_test "-var-evaluate-expression anone" \
 	"\\^done,value=\"A\"" \
 	"eval variable anone"
+clear_xfail "*-*-*"
+
 
 # Test: c_variable-7.70
 # Desc: create anone
 mi_gdb_test "-var-create anone * anone" \
-	"\\^error,msg=\"Duplicate variable object name\"" \
+	"&\"Duplicate variable object name\\\\n\".*\\^error,msg=\"Duplicate variable object name\"" \
 	"create duplicate local variable anone"
 
 
@@ -624,30 +567,50 @@ mi_gdb_test "-var-info-num-children anone" \
 # Test: c_variable-7.75
 # Desc: children of anone
 mi_gdb_test "-var-list-children anone" \
-	"\\^done,numchild=\"0\",has_more=\"0\"" \
+	"\\^done,numchild=\"0\"" \
 	"get children of anone"
 
 
 # Record fp
-if ![mi_gdb_test "p/x \$fp" ".*($hex).*\\^done" "print FP register"] {
-    set fp $expect_out(3,string) 
+
+send_gdb "p/x \$fp\n"
+gdb_expect {
+    -re ".*($hex).*\\^done\r\n$mi_gdb_prompt$" { 
+	pass "print FP register"
+	set fp $expect_out(1,string) 
+    }
+#    -re ".*" { fail "print FP register"}
+    timeout { fail "print FP register (timeout)"}
 }
 
-mi_continue_to "incr_a"
+mi_gdb_test "200-break-insert incr_a" \
+	"200\\^done,bkpt=\{number=\"3\",type=\"breakpoint\",disp=\"keep\",enabled=\"y\",addr=\"$hex\",func=\"incr_a\",file=\".*var-cmd.c\",line=\"85\",times=\"0\"\}" \
+	"break-insert operation"
+send_gdb "-exec-continue\n"
+gdb_expect {
+    -re "\\^running\r\n${mi_gdb_prompt}\\*stopped,reason=\"breakpoint-hit\",bkptno=\"3\",thread-id=\"\[01\]\",frame=\{addr=\"$hex\",func=\"incr_a\",args=\\\[\{name=\"a\",value=\"2\.*\"\}\\\],file=\".*var-cmd.c\",line=\"85\"\}\r\n$mi_gdb_prompt$" {
+	pass "continue to incr_a"
+    }
+    -re "\\^running\r\n${mi_gdb_prompt}\\*stopped,reason=\"breakpoint-hit\",bkptno=\"3\",thread-id=\"\[01\]\",frame=\{addr=\"$hex\",func=\"incr_a\",args=\\\[\{name=\"a\",value=\"\.*\"\}\\\],file=\".*var-cmd.c\",line=\"8\[345\]\"\}\r\n$mi_gdb_prompt$" {
+	fail "continue to incr_a (compiler debug info incorrect)"
+    }
+    -re "\\^running\r\n${mi_gdb_prompt}.*\r\n$mi_gdb_prompt$" {
+	fail "continue to incr_a (unknown output)"
+    }
+    timeout {
+	fail "continue to incr_a (timeout)"
+    }
+}
 
 # Test: c_variable-7.81
 # Desc: Create variables in different scopes
 mi_gdb_test "-var-create a1 * a" \
-	"\\^done,name=\"a1\",numchild=\"0\",value=\".*\",type=\"char\".*" \
+	"\\^done,name=\"a1\",numchild=\"0\",type=\"char\"" \
 	"create local variable a1"
 
-if { [info exists fp] } {
-    mi_gdb_test "-var-create a2 $fp a" \
-	"\\^done,name=\"a2\",numchild=\"0\",value=\".*\",type=\"int\".*" \
+mi_gdb_test "-var-create a2 $fp a" \
+	"\\^done,name=\"a2\",numchild=\"0\",type=\"int\"" \
 	"create variable a2 in different scope"
-} else {
-    untested "create variable a2 in different scope"
-}
 
 #gdbtk_test c_variable-7.81 {create variables in different scopes} {
 #  set a1 [gdb_variable create -expr a]

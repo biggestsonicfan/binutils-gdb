@@ -1,5 +1,5 @@
 /* Provide a version of _doprnt in terms of fprintf.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002   Free Software Foundation, Inc.
    Contributed by Kaveh Ghazi  (ghazi@caip.rutgers.edu)  3/29/98
 
 This program is free software; you can redistribute it and/or modify it
@@ -14,14 +14,18 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "ansidecl.h"
 #include "safe-ctype.h"
 
 #include <stdio.h>
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
@@ -75,7 +79,10 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
       } while (0)
 
 int
-_doprnt (const char *format, va_list ap, FILE *stream)
+_doprnt (format, ap, stream)
+  const char * format;
+  va_list ap;
+  FILE * stream;
 {
   const char * ptr = format;
   char specifier[128];
@@ -216,23 +223,23 @@ _doprnt (const char *format, va_list ap, FILE *stream)
     fflush(stdin); \
 } while (0)
 
-static int checkit (const char * format, ...) ATTRIBUTE_PRINTF_1;
+static int checkit PARAMS ((const char * format, ...)) ATTRIBUTE_PRINTF_1;
 
 static int
-checkit (const char* format, ...)
+checkit VPARAMS ((const char* format, ...))
 {
   int result;
-  va_list args;
-  va_start (args, format);
+  VA_OPEN (args, format);
+  VA_FIXEDARG (args, char *, format);
 
   result = _doprnt (format, args, stdout);
-  va_end (args);
+  VA_CLOSE (args);
 
   return result;
 }
 
 int
-main (void)
+main ()
 {
   RESULT(checkit ("<%d>\n", 0x12345678));
   RESULT(printf ("<%d>\n", 0x12345678));

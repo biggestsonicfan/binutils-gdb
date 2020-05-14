@@ -4,7 +4,7 @@
     
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
     
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
     
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
     
     */
 
@@ -103,14 +104,14 @@
    input-buffering = "unbuffered" (optional)
 
    Specifying "unbuffered" buffering disables buffering on the serial
-   devices input stream (all data is immediately read).  In the future,
+   devices input stream (all data is immediatly read).  In the future,
    this option may be used to provide input buffering alternatives.
 
 
    output-buffering = "unbuffered" (optional)
 
    Specifying "unbuffered" buffering disables buffering on the serial 
-   devices output stream (all data is immediately written).  In the future, 
+   devices output stream (all data is immediatly written).  In the future, 
    this option may be extended to include other buffering alternatives.
 
 
@@ -248,7 +249,7 @@ hw_com_device_init_data(device *me)
   if (device_find_property(me, "output-file") != NULL) {
     const char *output_file = device_find_string_property(me, "output-file");
     com->output.file = fopen(output_file, "w");
-    if (com->output.file == NULL)
+    if (com->input.file == NULL)
       device_error(me, "Problem opening output file %s\n", output_file);
     if (device_find_property(me, "output-buffering") != NULL) {
       const char *buffering = device_find_string_property(me, "output-buffering");

@@ -1,11 +1,11 @@
 /* Traditional MIPS targets
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,8 +15,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 /* This file is te-tmips.h and is intended to provide support for
    traditional mips targets like mips-dde-sysv4.2MP (Supermax ) ,
@@ -24,7 +24,7 @@
    Created by Koundinya.K < kk@ddeorg.soft.net > with the help of
    Ian Lance Taylor, Cygnus Support, <ian@cygnus.com>.  */
 
-/* Added these, because if we don't know what we're targeting we may
+/* Added these, because if we don't know what we're targetting we may
    need an assembler version of libgcc, and that will use local
    labels.  */
 

@@ -16,6 +16,10 @@ void foo()
 
 int main()
 {
+#ifdef usestubs
+  set_debug_traps ();
+  breakpoint ();
+#endif
   foo();
   bar();
   return 0;

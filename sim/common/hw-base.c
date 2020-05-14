@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1996, 1998, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #include "hw-main.h"
@@ -40,8 +39,7 @@
 
 #include "hw-config.h"
 
-struct hw_base_data
-{
+struct hw_base_data {
   int finished_p;
   const struct hw_descriptor *descriptor;
   hw_delete_callback *to_delete;
@@ -81,16 +79,14 @@ generic_hw_unit_decode (struct hw *bus,
 	    return -1;
 	  unit++;
 	}
-      if (nr_cells < max_nr_cells)
-	{
-	  /* shift everything to correct position */
-	  int i;
-
-	  for (i = 1; i <= nr_cells; i++)
-	    phys->cells[max_nr_cells - i] = phys->cells[nr_cells - i];
-	  for (i = 0; i < (max_nr_cells - nr_cells); i++)
-	    phys->cells[i] = 0;
-	}
+      if (nr_cells < max_nr_cells) {
+	/* shift everything to correct position */
+	int i;
+	for (i = 1; i <= nr_cells; i++)
+	  phys->cells[max_nr_cells - i] = phys->cells[nr_cells - i];
+	for (i = 0; i < (max_nr_cells - nr_cells); i++)
+	  phys->cells[i] = 0;
+      }
       phys->nr_cells = max_nr_cells;
       return max_nr_cells;
   }
@@ -114,29 +110,28 @@ generic_hw_unit_encode (struct hw *bus,
   /* don't output anything if empty */
   if (phys->nr_cells == 0)
     {
-      strcpy (pos, "");
+      strcpy(pos, "");
       len = 0;
     }
   else if (i == phys->nr_cells)
     {
       /* all zero */
-      strcpy (pos, "0");
+      strcpy(pos, "0");
       len = 1;
     }
   else
     {
       for (; i < phys->nr_cells; i++)
 	{
-	  if (pos != buf)
-	    {
-	      strcat (pos, ",");
-	      pos = strchr (pos, '\0');
-	    }
+	  if (pos != buf) {
+	    strcat(pos, ",");
+	    pos = strchr(pos, '\0');
+	  }
 	  if (phys->cells[i] < 10)
 	    sprintf (pos, "%ld", (unsigned long)phys->cells[i]);
 	  else
 	    sprintf (pos, "0x%lx", (unsigned long)phys->cells[i]);
-	  pos = strchr (pos, '\0');
+	  pos = strchr(pos, '\0');
 	}
       len = pos - buf;
     }
@@ -317,7 +312,7 @@ full_name_of_hw (struct hw *leaf,
       strcat (buf, hw_name (leaf));
       strcat (buf, unit);
     }
-
+  
   /* return it usefully */
   if (buf == full_name)
     buf = hw_strdup (leaf, full_name);
@@ -366,7 +361,7 @@ hw_create (struct sim_state *sd,
 	root = root->parent_of_hw;
       hw->root_of_hw = root;
     }
-
+  
   /* a unique identifier for the device on the parents bus */
   if (parent != NULL)
     {
@@ -428,7 +423,7 @@ hw_create (struct sim_state *sd,
   create_hw_event_data (hw);
   create_hw_handle_data (hw);
   create_hw_instance_data (hw);
-
+  
   return hw;
 }
 
@@ -465,7 +460,7 @@ hw_finish (struct hw *me)
 	   && hw_find_property (hw_root (me), "global-trace?") != NULL
 	   && hw_find_boolean_property (hw_root (me), "global-trace?"))
     me->trace_of_hw_p = 1;
-
+    
 
   /* Allow the real device to override any methods */
   me->base_of_hw->descriptor->to_finish (me);
@@ -515,7 +510,7 @@ hw_delete (struct hw *me)
   delete_hw_alloc_data (me);
 
   /* finally */
-  free (me);
+  zfree (me);
 }
 
 void

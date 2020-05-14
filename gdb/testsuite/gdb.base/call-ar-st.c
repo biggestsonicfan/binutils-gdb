@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../lib/unbuffer_output.c"
-
 /**************************************************************************
  * TESTS :
  *   -- function arguments that are enumerated types
@@ -143,7 +141,13 @@ struct int_char_combo_t {
  * IN     id_int student       -- enumerated type
  * IN     colors shirt         -- enumerated type
  *****************************************************************/
+#ifdef PROTOTYPES
 void print_student_id_shirt_color (id_int student, colors shirt)
+#else
+void print_student_id_shirt_color ( student, shirt ) 
+ id_int student;
+ colors shirt;
+#endif
 {
 
  printf("student id : %d\t", student);
@@ -192,7 +196,12 @@ void print_student_id_shirt_color (id_int student, colors shirt)
  * PRINT_CHAR_ARRAY : 
  * IN     char  array_c[]      -- character array 
  *****************************************************************/
+#ifdef PROTOTYPES
 void print_char_array (char array_c[])
+#else
+void print_char_array ( array_c ) 
+     char    array_c[];
+#endif
 {
 
   int index;
@@ -210,7 +219,12 @@ void print_char_array (char array_c[])
  * PRINT_DOUBLE_ARRAY : 
  * IN     double array_d[]      -- array of doubles
  *****************************************************************/
+#ifdef PROTOTYPES
 void print_double_array (double  array_d[])
+#else
+void print_double_array (array_d) 
+     double  array_d[];
+#endif
 {
 
   int index;
@@ -228,7 +242,12 @@ void print_double_array (double  array_d[])
  * PRINT_FLOAT_ARRAY: 
  * IN     float array_f[]      -- array of floats 
  *****************************************************************/
+#ifdef PROTOTYPES
 void print_float_array (float array_f[])
+#else
+void print_float_array ( array_f )
+     float array_f[];
+#endif
 {
 
   int index;
@@ -247,7 +266,12 @@ void print_float_array (float array_f[])
  * PRINT_INT_ARRAY: 
  * IN     int  array_i[]      -- array of integers 
  *****************************************************************/
+#ifdef PROTOTYPES
 void print_int_array (int array_i[])
+#else
+void print_int_array ( array_i )
+     int array_i[];
+#endif
 {
 
   int index;
@@ -269,10 +293,18 @@ void print_int_array (int array_i[])
  * IN     float array_f[]      -- array of floats 
  * IN     double array_d[]      -- array of doubles 
  *****************************************************************/
+#ifdef PROTOTYPES
 void print_all_arrays(int array_i[], char array_c[], float array_f[], double array_d[])
+#else
+void print_all_arrays( array_i, array_c, array_f, array_d )
+     int array_i[];
+     char array_c[];
+     float array_f[];
+     double array_d[];
+#endif
 {
-  print_int_array(array_i);	/* -step1- */
-  print_char_array(array_c);	/* -next1- */
+  print_int_array(array_i);
+  print_char_array(array_c);
   print_float_array(array_f);
   print_double_array(array_d);
 }
@@ -293,7 +325,12 @@ void loop_count () {
  * A do nothing function. Used to provide a point at which calls can be made.  
  * IN  int seed
  *****************************************************************/
+#ifdef PROTOTYPES
 void compute_with_small_structs (int seed)
+#else
+void compute_with_small_structs ( seed ) 
+ int seed;
+#endif
 {
 
      struct small_rep_info_t array[4];
@@ -323,7 +360,18 @@ void compute_with_small_structs (int seed)
  * IN  unsigned e  -- 0 or 1 
  * IN  unsigned o  -- 0 or 1 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_bit_flags (struct bit_flags_t *bit_flags, unsigned a, unsigned b, unsigned g, unsigned d, unsigned e, unsigned o)
+#else
+void init_bit_flags ( bit_flags, a, b, g, d, e, o )
+struct bit_flags_t *bit_flags;
+unsigned a;
+unsigned b;
+unsigned g;
+unsigned d;
+unsigned e;
+unsigned o; 
+#endif
 {
 
    bit_flags->alpha = a;
@@ -349,10 +397,23 @@ void init_bit_flags (struct bit_flags_t *bit_flags, unsigned a, unsigned b, unsi
  * IN  unsigned e  -- 0 or 1 
  * IN  unsigned o  -- 0 or 1 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_bit_flags_combo (struct bit_flags_combo_t *bit_flags_combo, unsigned a, unsigned b, char ch1, unsigned g, unsigned d, char ch2, unsigned e, unsigned o)
+#else
+void init_bit_flags_combo ( bit_flags_combo, a, b, ch1, g, d, ch2, e, o )
+     struct bit_flags_combo_t *bit_flags_combo;
+     unsigned a;
+     unsigned b;
+     char     ch1;
+     unsigned g;
+     unsigned d;
+     char     ch2;
+     unsigned e;
+     unsigned o; 
+#endif
 {
 
-   bit_flags_combo->alpha = a;	/* -step3- */
+   bit_flags_combo->alpha = a;
    bit_flags_combo->beta = b;
    bit_flags_combo->ch1 = ch1;
    bit_flags_combo->gamma = g;
@@ -368,7 +429,13 @@ void init_bit_flags_combo (struct bit_flags_combo_t *bit_flags_combo, unsigned a
  * OUT  struct one_double_t *one_double  -- structure to fill 
  * IN   double init_val
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_one_double (struct one_double_t *one_double, double init_val)
+#else
+void init_one_double ( one_double, init_val )
+     struct one_double_t *one_double;
+     double init_val; 
+#endif
 {
 
      one_double->double1  = init_val;
@@ -380,7 +447,14 @@ void init_one_double (struct one_double_t *one_double, double init_val)
  * IN  float init_val1 
  * IN  float init_val2 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_two_floats (struct two_floats_t *two_floats, float init_val1, float init_val2)
+#else
+void init_two_floats ( two_floats, init_val1, init_val2 )
+     struct two_floats_t *two_floats; 
+     float init_val1;
+     float init_val2;
+#endif
 {
      two_floats->float1 = init_val1;
      two_floats->float2 = init_val2;
@@ -392,7 +466,14 @@ void init_two_floats (struct two_floats_t *two_floats, float init_val1, float in
  * IN  char init_val1 
  * IN  char init_val2 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_two_chars (struct two_char_t *two_char, char init_val1, char init_val2)
+#else
+void init_two_chars ( two_char, init_val1, init_val2 )
+     struct two_char_t *two_char;
+     char init_val1;
+     char init_val2; 
+#endif
 {
 
      two_char->ch1 = init_val1;
@@ -406,7 +487,15 @@ void init_two_chars (struct two_char_t *two_char, char init_val1, char init_val2
  * IN  char init_val2 
  * IN  char init_val3 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_three_chars (struct three_char_t *three_char, char init_val1, char init_val2, char init_val3)
+#else
+void init_three_chars ( three_char, init_val1, init_val2, init_val3 )  
+     struct three_char_t *three_char; 
+     char init_val1;
+     char init_val2;
+     char init_val3;
+#endif
 {
 
      three_char->ch1 = init_val1;
@@ -423,7 +512,17 @@ void init_three_chars (struct three_char_t *three_char, char init_val1, char ini
  * IN  char init_val4 
  * IN  char init_val5 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_five_chars (struct five_char_t *five_char, char init_val1, char init_val2, char init_val3, char init_val4, char init_val5)
+#else
+void init_five_chars ( five_char, init_val1, init_val2, init_val3,init_val4,init_val5 )
+     struct five_char_t *five_char;
+     char init_val1;
+     char init_val2;
+     char init_val3;
+     char init_val4;
+     char init_val5;
+#endif
 {
      five_char->ch1 = init_val1;
      five_char->ch2 = init_val2;
@@ -438,7 +537,14 @@ void init_five_chars (struct five_char_t *five_char, char init_val1, char init_v
  * IN  int  init_val1 
  * IN  char init_val2 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_int_char_combo (struct int_char_combo_t *combo, int init_val1, char init_val2)
+#else
+void init_int_char_combo ( combo, init_val1, init_val2 )
+     struct int_char_combo_t *combo;
+     int init_val1; 
+     char init_val2; 
+#endif
 {
 
      combo->int1 = init_val1;
@@ -450,7 +556,13 @@ void init_int_char_combo (struct int_char_combo_t *combo, int init_val1, char in
  * OUT struct small_rep_into_t *small_struct -- structure to be filled
  * IN  int  seed 
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_struct_rep(struct small_rep_info_t *small_struct, int seed)
+#else
+void init_struct_rep( small_struct, seed )
+     struct small_rep_info_t *small_struct;
+     int    seed;
+#endif
 {
 
       small_struct->value = 2 + (seed*2); 
@@ -462,6 +574,7 @@ void init_struct_rep(struct small_rep_info_t *small_struct, int seed)
  * Takes all the small structures as input and calls the appropriate
  * initialization routine for each structure
  *****************************************************************/
+#ifdef PROTOTYPES
 void init_small_structs (
      struct small_rep_info_t  *struct1,
      struct small_rep_info_t  *struct2,
@@ -478,6 +591,25 @@ void init_small_structs (
      struct two_floats_t      *f1,
      struct two_floats_t      *f2,
      struct two_floats_t      *f3)
+#else
+void init_small_structs (struct1, struct2, struct3,struct4,flags,flags_combo,
+three_char, five_char,int_char_combo, d1, d2,d3,f1,f2,f3)
+     struct small_rep_info_t  *struct1;
+     struct small_rep_info_t  *struct2;
+     struct small_rep_info_t  *struct3;
+     struct small_rep_info_t  *struct4;
+     struct bit_flags_t       *flags;
+     struct bit_flags_combo_t *flags_combo;
+     struct three_char_t      *three_char;
+     struct five_char_t       *five_char;
+     struct int_char_combo_t  *int_char_combo;
+     struct one_double_t      *d1;
+     struct one_double_t      *d2;
+     struct one_double_t      *d3;
+     struct two_floats_t      *f1;
+     struct two_floats_t      *f2;
+     struct two_floats_t      *f3;
+#endif
 {
 
      init_bit_flags(flags, (unsigned)1, (unsigned)0, (unsigned)1, 
@@ -504,6 +636,7 @@ void init_small_structs (
  * PRINT_TEN_DOUBLES : 
  * ?????????????????????????????
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_ten_doubles (
      double d1,
      double d2,
@@ -515,6 +648,19 @@ void print_ten_doubles (
      double d8,
      double d9,
      double d10)
+#else
+void print_ten_doubles ( d1, d2, d3, d4, d5, d6, d7, d8, d9, d10 )
+     double d1;
+     double d2;
+     double d3;
+     double d4;
+     double d5;
+     double d6;
+     double d7;
+     double d8;
+     double d9;
+     double d10; 
+#endif
 {
 
   printf("Two Doubles : %f\t%f\n", d1, d2);
@@ -528,7 +674,12 @@ void print_ten_doubles (
  * PRINT_BIT_FLAGS : 
  * IN struct bit_flags_t bit_flags 
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_bit_flags (struct bit_flags_t bit_flags)
+#else
+void print_bit_flags ( bit_flags )
+struct bit_flags_t bit_flags;
+#endif
 {
 
      if (bit_flags.alpha) printf("alpha\n");
@@ -543,7 +694,12 @@ void print_bit_flags (struct bit_flags_t bit_flags)
  * PRINT_BIT_FLAGS_COMBO : 
  * IN struct bit_flags_combo_t bit_flags_combo 
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_bit_flags_combo (struct bit_flags_combo_t bit_flags_combo)
+#else
+void print_bit_flags_combo ( bit_flags_combo )
+     struct bit_flags_combo_t bit_flags_combo;
+#endif
 {
 
      if (bit_flags_combo.alpha) printf("alpha\n");
@@ -559,7 +715,12 @@ void print_bit_flags_combo (struct bit_flags_combo_t bit_flags_combo)
  * PRINT_ONE_DOUBLE : 
  * IN struct one_double_t one_double 
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_one_double (struct one_double_t one_double)
+#else
+void print_one_double ( one_double )
+struct one_double_t one_double;
+#endif
 {
 
      printf("Contents of one_double_t: \n\n");
@@ -570,7 +731,12 @@ void print_one_double (struct one_double_t one_double)
  * PRINT_TWO_FLOATS : 
  * IN struct two_floats_t two_floats 
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_two_floats (struct two_floats_t two_floats)
+#else
+void print_two_floats ( two_floats )
+struct two_floats_t two_floats; 
+#endif
 {
 
      printf("Contents of two_floats_t: \n\n");
@@ -581,7 +747,12 @@ void print_two_floats (struct two_floats_t two_floats)
  * PRINT_TWO_CHARS : 
  * IN struct two_char_t two_char
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_two_chars (struct two_char_t two_char)
+#else
+void print_two_chars ( two_char )
+struct two_char_t two_char; 
+#endif
 {
 
      printf("Contents of two_char_t: \n\n");
@@ -592,7 +763,12 @@ void print_two_chars (struct two_char_t two_char)
  * PRINT_THREE_CHARS : 
  * IN struct three_char_t three_char
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_three_chars (struct three_char_t three_char)
+#else
+void print_three_chars ( three_char )
+struct three_char_t three_char;
+#endif
 {
 
      printf("Contents of three_char_t: \n\n");
@@ -603,7 +779,12 @@ void print_three_chars (struct three_char_t three_char)
  * PRINT_FIVE_CHARS : 
  * IN struct five_char_t five_char
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_five_chars (struct five_char_t five_char)
+#else
+void print_five_chars ( five_char ) 
+struct five_char_t five_char; 
+#endif
 {
 
      printf("Contents of five_char_t: \n\n");
@@ -616,7 +797,12 @@ void print_five_chars (struct five_char_t five_char)
  * PRINT_INT_CHAR_COMBO : 
  * IN struct int_char_combo_t int_char_combo
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_int_char_combo (struct int_char_combo_t int_char_combo)
+#else
+void print_int_char_combo ( int_char_combo )
+struct int_char_combo_t int_char_combo;
+#endif
 {
 
      printf("Contents of int_char_combo_t: \n\n");
@@ -631,10 +817,17 @@ void print_int_char_combo (struct int_char_combo_t int_char_combo)
  * IN struct small_rep_info_t  struct2
  * IN struct small_rep_info_t  struct3
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_struct_rep(
      struct small_rep_info_t struct1,
      struct small_rep_info_t struct2,
      struct small_rep_info_t struct3)
+#else
+void print_struct_rep( struct1, struct2, struct3)
+     struct small_rep_info_t struct1;
+     struct small_rep_info_t struct2;
+     struct small_rep_info_t struct3;
+#endif
 {
 
 
@@ -656,12 +849,21 @@ void print_struct_rep(
  * IN struct small_rep_info_t  struct3
  * IN struct small_rep_info_t  struct4
  ****************************************************************/
+#ifdef PROTOTYPES
 void sum_struct_print (
      int seed,
      struct small_rep_info_t struct1,
      struct small_rep_info_t struct2, 
      struct small_rep_info_t struct3,
      struct small_rep_info_t struct4)
+#else
+void sum_struct_print ( seed, struct1, struct2, struct3, struct4) 
+     int seed;
+     struct small_rep_info_t struct1;
+     struct small_rep_info_t struct2; 
+     struct small_rep_info_t struct3; 
+     struct small_rep_info_t struct4; 
+#endif
 {
      int sum;
 
@@ -676,6 +878,7 @@ void sum_struct_print (
  * All of the small structures of odd sizes (40 bits, 8bits, etc.)
  * are pushed onto the stack.
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_small_structs (
      struct small_rep_info_t  struct1,
      struct small_rep_info_t  struct2,
@@ -692,6 +895,25 @@ void print_small_structs (
      struct two_floats_t      f1,
      struct two_floats_t      f2,
      struct two_floats_t      f3)
+#else
+void print_small_structs ( struct1, struct2, struct3,  struct4, flags, 
+flags_combo, three_char, five_char, int_char_combo, d1, d2,d3,f1,f2,f3)
+     struct small_rep_info_t  struct1;
+     struct small_rep_info_t  struct2;
+     struct small_rep_info_t  struct3;
+     struct small_rep_info_t  struct4;
+     struct bit_flags_t       flags;
+     struct bit_flags_combo_t flags_combo;
+     struct three_char_t      three_char;
+     struct five_char_t       five_char;
+     struct int_char_combo_t  int_char_combo;
+     struct one_double_t      d1;
+     struct one_double_t      d2;
+     struct one_double_t      d3;
+     struct two_floats_t      f1;
+     struct two_floats_t      f2;
+     struct two_floats_t      f3;
+#endif
 {
    print_bit_flags(flags);
    print_bit_flags_combo(flags_combo);
@@ -717,6 +939,7 @@ void print_small_structs (
  * may force more space to be pushed onto the stack as part of the callers
  * frame.
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_long_arg_list (
      double a,
      double b,
@@ -739,8 +962,34 @@ void print_long_arg_list (
      struct two_floats_t      f1,
      struct two_floats_t      f2,
      struct two_floats_t      f3)
+#else
+void print_long_arg_list ( a, b, c, d, e, f, struct1, struct2, struct3, 
+struct4, flags, flags_combo, three_char, five_char, int_char_combo, d1,d2,d3,
+f1, f2, f3 )
+     double a;
+     double b;
+     int c;
+     int d;
+     int e;
+     int f;
+     struct small_rep_info_t  struct1;
+     struct small_rep_info_t  struct2;
+     struct small_rep_info_t  struct3;
+     struct small_rep_info_t  struct4;
+     struct bit_flags_t       flags;
+     struct bit_flags_combo_t flags_combo;
+     struct three_char_t      three_char;
+     struct five_char_t       five_char;
+     struct int_char_combo_t  int_char_combo;
+     struct one_double_t      d1;
+     struct one_double_t      d2;
+     struct one_double_t      d3;
+     struct two_floats_t      f1;
+     struct two_floats_t      f2;
+     struct two_floats_t      f3;
+#endif
 {
-    printf("double : %f\n", a);	/* -step2- */
+    printf("double : %f\n", a);
     printf("double : %f\n", b);
     printf("int : %d\n", c);
     printf("int : %d\n", d);
@@ -752,7 +1001,12 @@ void print_long_arg_list (
 }
 
 
+#ifdef PROTOTYPES
 void print_one_large_struct (struct array_rep_info_t linked_list1)
+#else
+void print_one_large_struct( linked_list1 )
+     struct array_rep_info_t linked_list1;
+#endif
 {
 
  /* printf("Contents of linked list1: \n\n");
@@ -773,10 +1027,17 @@ void print_one_large_struct (struct array_rep_info_t linked_list1)
  * IN struct array_rep_info_t linked_list2
  * IN struct array_rep_info_t linked_list3
  ****************************************************************/
+#ifdef PROTOTYPES
 void print_array_rep(
      struct array_rep_info_t linked_list1,
      struct array_rep_info_t linked_list2,
      struct array_rep_info_t linked_list3)
+#else
+void print_array_rep( linked_list1, linked_list2, linked_list3 )
+     struct array_rep_info_t linked_list1;
+     struct array_rep_info_t linked_list2;
+     struct array_rep_info_t linked_list3;
+#endif
 {
 
   int index;
@@ -822,12 +1083,21 @@ void print_array_rep(
  * IN struct array_rep_info_t linked_list3
  * IN struct array_rep_info_t linked_list4
  ****************************************************************/
+#ifdef PROTOTYPES
 void sum_array_print (
      int seed,
      struct array_rep_info_t linked_list1,
      struct array_rep_info_t linked_list2,
      struct array_rep_info_t linked_list3,
      struct array_rep_info_t linked_list4)
+#else
+void sum_array_print ( seed, linked_list1, linked_list2, linked_list3,linked_list4)
+     int seed;
+     struct array_rep_info_t linked_list1;
+     struct array_rep_info_t linked_list2;
+     struct array_rep_info_t linked_list3;
+     struct array_rep_info_t linked_list4;
+#endif
 {
      int index;
      int sum;
@@ -851,9 +1121,15 @@ void sum_array_print (
  * IN struct array_rep_info_t *linked_list
  * IN int    seed
  ****************************************************************/
+#ifdef PROTOTYPES
 void init_array_rep(
      struct array_rep_info_t *linked_list,
      int    seed)
+#else
+void init_array_rep( linked_list, seed )
+     struct array_rep_info_t *linked_list;
+     int    seed;
+#endif
 {
 
   int index;
@@ -914,8 +1190,6 @@ int main ()  {
    static struct two_floats_t      *f2;
    static struct two_floats_t      *f3;
 
-  gdb_unbuffer_output ();
-
   /* Initialize arrays
    */
   for (index = 0; index < 120; index++) {
@@ -932,18 +1206,18 @@ int main ()  {
       float_array[index] = index/7.02;
   }
 
-  for (index = 0; index < 50; index++) { /* -tbreak1- */
+  for (index = 0; index < 50; index++) {
       integer_array[index] = -index;
   }
 
   /* Print arrays
    */
   print_char_array(char_array);
-  print_double_array(double_array); /* -tbreak2- */
+  print_double_array(double_array);
   print_float_array(float_array);
   print_student_id_shirt_color(student_id, my_shirt); 
   print_int_array(integer_array);
-  print_all_arrays(integer_array, char_array, float_array, double_array); /* -tbreak3- */
+  print_all_arrays(integer_array, char_array, float_array, double_array);
 
   /* Allocate space for large structures 
    */
@@ -959,12 +1233,12 @@ int main ()  {
   init_array_rep(list3, 5);
   init_array_rep(list4, 10);
   printf("HELLO WORLD\n");
-  printf("BYE BYE FOR NOW\n");	/* -tbreak4- */
-  printf("VERY GREEN GRASS\n");	/* -next2- */
+  printf("BYE BYE FOR NOW\n");
+  printf("VERY GREEN GRASS\n");
 
   /* Print large structures 
    */
-  sum_array_print(10, *list1, *list2, *list3, *list4); /* -tbreak5- */
+  sum_array_print(10, *list1, *list2, *list3, *list4);
   print_array_rep(*list1, *list2, *list3);
   print_one_large_struct(*list1);
 
@@ -1004,12 +1278,12 @@ int main ()  {
    */
   a = 22.25;
   b = 33.375;
-  c = 0;			/* -tbreak6- */
+  c = 0;
   d = -25;
   e = 100;
   f = 2345;
 
-  print_long_arg_list ( a, b, c, d, e, f, *struct1, *struct2, *struct3, *struct4, /* -tbreak7- */
+  print_long_arg_list ( a, b, c, d, e, f, *struct1, *struct2, *struct3, *struct4, 
 			*flags, *flags_combo, *three_char, *five_char, *int_char_combo,
 			*d1, *d2, *d3, *f1, *f2, *f3);
 
@@ -1023,18 +1297,18 @@ int main ()  {
   init_two_floats ( f3, -2.345, 1.0); 
   init_bit_flags(flags, (unsigned)1, (unsigned)0, (unsigned)1, 
 		 (unsigned)0, (unsigned)1, (unsigned)0 ); 
-  init_bit_flags_combo(flags_combo, (unsigned)1, (unsigned)0, 'y', /* -tbreak8- */
+  init_bit_flags_combo(flags_combo, (unsigned)1, (unsigned)0, 'y',
 				     (unsigned)1, (unsigned)0, 'n',
 				     (unsigned)1, (unsigned)0 ); 
   init_three_chars(three_char, 'x', 'y', 'z');
   init_five_chars(five_char, 'h', 'e', 'l', 'l', 'o');
-  init_int_char_combo(int_char_combo, 13, '!'); /* -tbreak9- */
+  init_int_char_combo(int_char_combo, 13, '!');
   init_struct_rep(struct1, 10);
   init_struct_rep(struct2, 20);
   init_struct_rep(struct3, 30);
   init_struct_rep(struct4, 40);
 
-  compute_with_small_structs(35); /* -tbreak10- */
+  compute_with_small_structs(35);
   loop_count();
   printf("HELLO WORLD\n");
   printf("BYE BYE FOR NOW\n");

@@ -1,37 +1,47 @@
-#   Copyright 1998-2020 Free Software Foundation, Inc.
+#   Copyright 1998 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Michael Snyder (msnyder@cygnus.com)
 
-load_lib "trace-support.exp"
+load_lib "trace-support.exp";
 
+if $tracelevel then {
+    strace $tracelevel
+}
+
+set prms_id 0
+set bug_id 0
 
 gdb_exit
 gdb_start
 
-standard_testfile actions.c
-
-if ![gdb_trace_common_supports_arch] {
-    unsupported "no trace-common.h support for arch"
-    return -1
-}
-
-if { [gdb_compile "$srcdir/$subdir/$srcfile" $binfile \
-	  executable {debug nowarnings}] != "" } {
-    untested "failed to compile"
-    return -1
+if [istarget "m68k-*-elf"] then {
+    set srcfile gdb_c_test.c
+    set binfile [board_info target d490_binfile];
+} else {
+    set testfile "actions"
+    set srcfile ${testfile}.c
+    set binfile $objdir/$subdir/$testfile
+    if { [gdb_compile "$srcdir/$subdir/$srcfile" $binfile \
+	    executable {debug additional_flags=-w}] != "" } {
+	gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+    }
 }
 gdb_reinitialize_dir $srcdir/$subdir
 
@@ -45,91 +55,45 @@ gdb_file_cmd $binfile
 #
 
 gdb_delete_tracepoints
-set c_test_num [gdb_gettpnum gdb_c_test]
-set asm_test_num [gdb_gettpnum gdb_asm_test]
+set c_test_num [gdb_gettpnum gdb_c_test];
+set asm_test_num [gdb_gettpnum gdb_asm_test];
 if { $c_test_num <= 0 || $asm_test_num <= 0 } then {
     fail "setting tracepoints"
-    return
+    return;
 }
 
 # 2.1 info tracepoints (all)
 gdb_test "info tracepoints" \
-    "Num     Type\[ \]+Disp Enb Address\[ \]+What.*
-\[0-9\]+\[\t \]+tracepoint     keep y.* in gdb_c_test at .*$srcfile:\[0-9\]+.
-\[\t \]+not installed on target.
-\[0-9\]+\[\t \]+tracepoint     keep y.* in gdb_asm_test at .*$srcfile:\[0-9\]+.
-\[\t \]+not installed on target." \
+    "Num Enb Address\[ \]+PassC StepC What.*$c_test_num\[\t \]+y\[\t \]+0x\[0-9a-fA-F\]+.*in gdb_c_test.*$asm_test_num\[\t \]+y\[\t \]+0x\[0-9a-fA-F\]+.*gdb_asm_test.*" \
     "2.1: info tracepoints (all)"
 
 # 2.2 info tracepoint (specific)
 gdb_test "info tracepoint $c_test_num" \
-    "Num     Type\[ \]+Disp Enb Address\[ \]+What.*
-\[0-9\]+\[\t \]+tracepoint     keep y.* in gdb_c_test at .*$srcfile:\[0-9\]+.
-\[\t \]+not installed on target." \
+    "$c_test_num\[\t \]+y\[\t \]+0x\[0-9a-fA-F\]+.*in gdb_c_test.*" \
     "2.2a: info tracepoint $c_test_num (gdb_c_test)"
 
 gdb_test "info tracepoint $asm_test_num" \
-    "Num     Type\[ \]+Disp Enb Address\[ \]+What.*
-\[0-9\]+\[\t \]+tracepoint     keep y.* in gdb_asm_test at .*$srcfile:\[0-9\]+.
-\[\t \]+not installed on target." \
+    "$asm_test_num\[\t \]+y\[\t \]+0x\[0-9a-fA-F\]+.*gdb_asm_test.*" \
     "2.2b: info tracepoint $asm_test_num (gdb_asm_test)"
 
 # 2.3 info tracepoint (invalid tracepoint number)
 gdb_test "info tracepoint [expr $c_test_num + $asm_test_num]" \
-    "No tracepoint matching '[expr $c_test_num + $asm_test_num]'." \
+    "No tracepoint number [expr $c_test_num + $asm_test_num]." \
     "2.3: info tracepoint (invalid tracepoint number)"
 
 # 2.4 info tracepoints (list of numbers)
-gdb_test_multiple "info tracepoints $c_test_num $asm_test_num " \
-    "2.4: info trace rejects multiple tracepoint numbers" {
-	-re "Num Enb .*$gdb_prompt $" {
-	    fail "2.4: info trace rejects multiple tracepoint numbers"
-	}
-	-re ".*$gdb_prompt $" {
-	    pass "2.4: info trace rejects multiple tracepoint numbers"
-	}
+send_gdb "info tracepoints $c_test_num $asm_test_num \n"
+gdb_expect {
+    -re "Num Enb .*$gdb_prompt $" {
+	fail "2.4: info trace rejects multiple tracepoint numbers"
     }
+    -re ".*$gdb_prompt $" {
+	pass "2.4: info trace rejects multiple tracepoint numbers"
+    }
+}
 
 # 2.5 help info trace
 gdb_test "help info tracepoints" \
-    "Status of specified tracepoints .all tracepoints if no argument.*" \
+    "Status of tracepoints, or tracepoint number NUMBER.*" \
     "2.5: help info tracepoints"
 
-# 2.6 info tracepoints (check trace buffer usage).  We need a live
-# tracing.
-
-# Load the binary to the target too.
-gdb_load $binfile
-
-# Can't use runto_main here, because that would delete the tracepoints
-# created above.
-gdb_breakpoint "main"
-gdb_trace_setactions "collect on tracepoint 1" "1" \
-	"collect gdb_struct1_test" "^$"
-gdb_run_cmd
-if {[gdb_test "" "Breakpoint ${decimal}, main.*"] != 0} {
-    fail "can't run to main"
-    return -1
-}
-
-if { ![gdb_target_supports_trace] } then {
-    unsupported "current target does not support trace"
-    return 1
-}
-
-gdb_breakpoint "end" qualified
-gdb_test_no_output "tstart"
-gdb_test "continue" "Continuing\\.\[ \r\n\]+Breakpoint.*" \
-    "continue to end"
-gdb_test_no_output "tstop"
-gdb_test "tstatus"
-gdb_test "info tracepoints" \
-    "Num     Type\[ \]+Disp Enb Address\[ \]+What.*
-\[0-9\]+\[\t \]+tracepoint     keep y.* in gdb_c_test at .*$srcfile:\[0-9\]+.
-\[\t \]+tracepoint already hit 1 time.
-\[\t \]+trace buffer usage ${decimal} bytes.
-\[\t \]+collect gdb_struct1_test.
-\tinstalled on target.
-\[0-9\]+\[\t \]+tracepoint     keep y.* in gdb_asm_test at .*$srcfile:\[0-9\]+.
-\tinstalled on target." \
-    "2.6: info tracepoints (trace buffer usage)"

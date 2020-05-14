@@ -1,5 +1,7 @@
 \input texinfo
-@c Copyright (C) 1988-2020 Free Software Foundation, Inc.
+@c Copyright 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1998,
+@c 2000, 2001
+@c Free Software Foundation, Inc.
 @setfilename bfdint.info
 
 @settitle BFD Internals
@@ -10,31 +12,6 @@
 @author{Cygnus Solutions}
 @page
 @end iftex
-
-@copying
-This file documents the internals of the BFD library.
-
-Copyright @copyright{} 1988-2020 Free Software Foundation, Inc.
-Contributed by Cygnus Support.
-
-Permission is granted to copy, distribute and/or modify this document
-under the terms of the GNU Free Documentation License, Version 1.1 or
-any later version published by the Free Software Foundation; with the
-Invariant Sections being ``GNU General Public License'' and ``Funding
-Free Software'', the Front-Cover texts being (a) (see below), and with
-the Back-Cover Texts being (b) (see below).  A copy of the license is
-included in the section entitled ``GNU Free Documentation License''.
-
-(a) The FSF's Front-Cover Text is:
-
-     A GNU Manual
-
-(b) The FSF's Back-Cover Text is:
-
-     You have freedom to copy and modify this GNU Manual, like GNU
-     software.  Copies published by the Free Software Foundation raise
-     funds for GNU development.
-@end copying
 
 @node Top
 @top BFD Internals
@@ -212,7 +189,7 @@ and handle it using the special hooks.
 
 In some cases there is also implicit information which BFD can not
 represent.  For example, the MIPS processor distinguishes small and
-large symbols, and requires that all small symbols be within 32K of the
+large symbols, and requires that all small symbls be within 32K of the
 GP register.  This means that the MIPS assembler must be able to mark
 variables as either small or large, and the MIPS linker must know to put
 small symbols within range of the GP register.  Since BFD can not
@@ -253,7 +230,7 @@ Follow the GNU coding standards.
 Avoid global variables.  We ideally want BFD to be fully reentrant, so
 that it can be used in multiple threads.  All uses of global or static
 variables interfere with that.  Initialized constant variables are OK,
-and they should be explicitly marked with @samp{const}.  Instead of global
+and they should be explicitly marked with const.  Instead of global
 variables, use data attached to a BFD or to a linker hash table.
 
 @item
@@ -318,7 +295,7 @@ The target vector starts with a set of constants.
 @table @samp
 @item name
 The name of the target vector.  This is an arbitrary string.  This is
-how the target vector is named in command-line options for tools which
+how the target vector is named in command line options for tools which
 use BFD, such as the @samp{--oformat} linker option.
 
 @item flavour
@@ -336,6 +313,12 @@ COFF.
 ECOFF.
 @item bfd_target_elf_flavour
 ELF.
+@item bfd_target_ieee_flavour
+IEEE-695.
+@item bfd_target_nlm_flavour
+NLM.
+@item bfd_target_oasys_flavour
+OASYS.
 @item bfd_target_tekhex_flavour
 Tektronix hex format.
 @item bfd_target_srec_flavour
@@ -344,8 +327,6 @@ Motorola S-record format.
 Intel hex format.
 @item bfd_target_som_flavour
 SOM (used on HP/UX).
-@item bfd_target_verilog_flavour
-Verilog memory hex dump format.
 @item bfd_target_os9k_flavour
 os9000.
 @item bfd_target_versados_flavour
@@ -713,7 +694,7 @@ information in BFD private data.  This is called via
 @samp{bfd_get_symtab_upper_bound}.  The corresponding field in the
 target vector is named @samp{_bfd_get_symtab_upper_bound}.
 
-@item _canonicalize_symtab
+@item _get_symtab
 Read in the symbol table.  This is called via
 @samp{bfd_canonicalize_symtab}.  The corresponding field in the target
 vector is named @samp{_bfd_canonicalize_symtab}.
@@ -854,7 +835,7 @@ corresponding field in the target vector is named
 
 @item _bfd_get_relocated_section_contents
 Read the contents of a section and apply the relocation information.
-This handles both a final link and a relocatable link; in the latter
+This handles both a final link and a relocateable link; in the latter
 case, it adjust the relocation information as well.  This is called via
 @samp{bfd_get_relocated_section_contents}.  Most targets implement it by
 calling @samp{bfd_generic_get_relocated_section_contents}.
@@ -935,7 +916,7 @@ BFD.  Some files are automatically rebuilt at make time, but only if
 you configure with the @samp{--enable-maintainer-mode} option.  Some
 files live in the object directory---the directory from which you run
 configure---and some live in the source directory.  All files that live
-in the source directory are checked into the git repository.
+in the source directory are checked into the CVS repository.
 
 @table @file
 @item bfd.h
@@ -1092,15 +1073,45 @@ sizes.
 Like @file{elfcode.h}, but for functions that are specific to ELF core
 files.  This is included only by @file{elfcode.h}.
 
+@item elflink.h
+@cindex @file{elflink.h}
+Like @file{elfcode.h}, but for functions used by the ELF linker.  This
+is included only by @file{elfcode.h}.
+
 @item elfxx-target.h
 @cindex @file{elfxx-target.h}
 This file is the source for the generated files @file{elf32-target.h}
 and @file{elf64-target.h}, one of which is included by every ELF target.
 It defines the ELF target vector.
 
+@item freebsd.h
+@cindex @file{freebsd.h}
+Presumably intended to be included by all FreeBSD targets, but in fact
+there is only one such target, @samp{i386-freebsd}.  This defines a
+function used to set the right magic number for FreeBSD, as well as
+various macros, and includes @file{aout-target.h}.
+
 @item netbsd.h
 @cindex @file{netbsd.h}
-Used by all netbsd aout targets.  Several other files include it.
+Like @file{freebsd.h}, except that there are several files which include
+it.
+
+@item nlm-target.h
+@cindex @file{nlm-target.h}
+Defines the target vector for a standard NLM target.
+
+@item nlmcode.h
+@cindex @file{nlmcode.h}
+Like @file{elfcode.h}, but for NLM targets.  This is only included by
+@file{nlm32.c} and @file{nlm64.c}, both of which define the macro
+@samp{ARCH_SIZE} to an appropriate value.  There are no 64 bit NLM
+targets anyhow, so this is sort of useless.
+
+@item nlmswap.h
+@cindex @file{nlmswap.h}
+Like @file{coffswap.h}, but for NLM targets.  This is included by each
+NLM target, but I think it winds up compiling to the exact same code for
+every target, and as such is fairly useless.
 
 @item peicode.h
 @cindex @file{peicode.h}
@@ -1155,9 +1166,10 @@ address of the section contents.
 In general, relocations can be arbitrarily complex.  For example,
 relocations used in dynamic linking systems often require the linker to
 allocate space in a different section and use the offset within that
-section as the value to store.
+section as the value to store.  In the IEEE object file format,
+relocations may involve arbitrary expressions.
 
-When doing a relocatable link, the linker may or may not have to do
+When doing a relocateable link, the linker may or may not have to do
 anything with a relocation, depending upon the definition of the
 relocation.  Simple relocations generally do not require any special
 action.
@@ -1228,9 +1240,9 @@ existing target, you need to do the following:
 @itemize @bullet
 @item
 Make sure you clearly understand what the contents of the section should
-look like after assembly, after a relocatable link, and after a final
+look like after assembly, after a relocateable link, and after a final
 link.  Make sure you clearly understand the operations the linker must
-perform during a relocatable link and during a final link.
+perform during a relocateable link and during a final link.
 
 @item
 Write a howto structure for the relocation.  The howto structure is
@@ -1245,7 +1257,7 @@ call @samp{bfd_install_relocation}, so your howto structure has to be
 able to handle that.  You may need to set the @samp{special_function}
 field to handle assembly correctly.  Be careful to ensure that any code
 you write to handle the assembler will also work correctly when doing a
-relocatable link.  For example, see @samp{bfd_elf_generic_reloc}.
+relocateable link.  For example, see @samp{bfd_elf_generic_reloc}.
 
 @item
 Test the assembler.  Consider the cases of relocation against an
@@ -1259,14 +1271,14 @@ If your target uses the new linker, which is recommended, add any
 required handling to the target specific relocation function.  In simple
 cases this will just involve a call to @samp{_bfd_final_link_relocate}
 or @samp{_bfd_relocate_contents}, depending upon the definition of the
-relocation and whether the link is relocatable or not.
+relocation and whether the link is relocateable or not.
 
 @item
 Test the linker.  Test the case of a final link.  If the relocation can
 overflow, use a linker script to force an overflow and make sure the
-error is reported correctly.  Test a relocatable link, whether the
-symbol is defined or undefined in the relocatable output.  For both the
-final and relocatable link, test the case when the symbol is a common
+error is reported correctly.  Test a relocateable link, whether the
+symbol is defined or undefined in the relocateable output.  For both the
+final and relocateable link, test the case when the symbol is a common
 symbol, when the symbol looked like a common symbol but became a defined
 symbol, when the symbol is defined in a different object file, and when
 the symbol is defined in the same object file.
@@ -1279,7 +1291,7 @@ thing for the relocation.  You may need to set the
 doing a link in which the output object file format is S-records.
 
 @item
-Using the linker to generate relocatable output in a different object
+Using the linker to generate relocateable output in a different object
 file format is impossible in the general case, so you generally don't
 have to worry about that.  The GNU linker makes sure to stop that from
 happening when an input file in a different format has relocations.
@@ -1338,7 +1350,7 @@ howto structure.  Some mechanism would be used to determine which type
 of howto structure was being used by a particular format.
 
 The new howto structure would clearly define the relocation behaviour in
-the case of an assembly, a relocatable link, and a final link.  At
+the case of an assembly, a relocateable link, and a final link.  At
 least one special function would be defined as an escape, and it might
 make sense to define more.
 
@@ -1384,7 +1396,7 @@ constants used by the generic support.
 @subsection ELF sections and segments
 
 The ELF ABI permits a file to have either sections or segments or both.
-Relocatable object files conventionally have only sections.
+Relocateable object files conventionally have only sections.
 Executables conventionally have both.  Core files conventionally have
 only program segments.
 
@@ -1470,7 +1482,8 @@ external data.  @file{elfcode.h} is compiled twice, once via
 @file{elfcode.h} includes functions to swap the ELF structures in and
 out of external form, as well as a few more complex functions.
 
-Linker support is found in @file{elflink.c}.  The
+Linker support is found in @file{elflink.c} and @file{elflink.h}.  The
+latter file is compiled twice, for both 32 and 64 bit support.  The
 linker support is only used if the processor specific file defines
 @samp{elf_backend_relocate_section}, which is required to relocate the
 section contents.  If that macro is not defined, the generic linker code
@@ -1516,7 +1529,7 @@ following:
 Define either @samp{TARGET_BIG_SYM} or @samp{TARGET_LITTLE_SYM}, or
 both, to a unique C name to use for the target vector.  This name should
 appear in the list of target vectors in @file{targets.c}, and will also
-have to appear in @file{config.bfd} and @file{configure.ac}.  Define
+have to appear in @file{config.bfd} and @file{configure.in}.  Define
 @samp{TARGET_BIG_SYM} for a big-endian processor,
 @samp{TARGET_LITTLE_SYM} for a little-endian processor, and define both
 for a bi-endian processor.
@@ -1553,7 +1566,7 @@ relocations.  @samp{Rela} relocations will require more space in object
 files (but not in executables, except when using dynamic linking).
 However, this is outweighed by the simplicity of addend handling when
 using @samp{Rela} relocations.  With @samp{Rel} relocations, the addend
-must be stored in the section contents, which makes relocatable links
+must be stored in the section contents, which makes relocateable links
 more complex.
 
 For example, consider C code like @code{i = a[1000];} where @samp{a} is
@@ -1565,7 +1578,7 @@ relocations, that addend must be stored in the instructions themselves.
 If you are adding support for a RISC chip which uses two or more
 instructions to load an address, then the addend may not fit in a single
 instruction, and will have to be somehow split among the instructions.
-This makes linking awkward, particularly when doing a relocatable link
+This makes linking awkward, particularly when doing a relocateable link
 in which the addend may have to be updated.  It can be done---the MIPS
 ELF support does it---but it should be avoided when possible.
 
@@ -1598,7 +1611,7 @@ called @file{@var{cpu}.h}.  This file should define any target specific
 information which may be needed outside of the BFD code.  In particular
 it should use the @samp{START_RELOC_NUMBERS}, @samp{RELOC_NUMBER},
 @samp{FAKE_RELOC}, @samp{EMPTY_RELOC} and @samp{END_RELOC_NUMBERS}
-macros to create a table mapping the number used to identify a
+macros to create a table mapping the number used to indentify a
 relocation to a name describing that relocation.
 
 While not a BFD component, you probably also want to make the binutils
@@ -1632,7 +1645,7 @@ information, and modify the section contents according to the relocation
 information.  In simple cases, this is little more than a loop over the
 relocations which computes the value of each relocation and calls
 @samp{_bfd_final_link_relocate}.  The function must check for a
-relocatable link, and in that case normally needs to do nothing other
+relocateable link, and in that case normally needs to do nothing other
 than adjust the addend for relocations against a section symbol.
 
 The complex cases generally have to do with dynamic linker support.  GOT
@@ -1737,6 +1750,23 @@ support.
 The processor function hooks and constants are ad hoc and need better
 documentation.
 
+When a linker script uses @samp{SIZEOF_HEADERS}, the ELF backend must
+guess at the number of program segments which will be required, in
+@samp{get_program_header_size}.  This is because the linker calls
+@samp{bfd_sizeof_headers} before it knows all the section addresses and
+sizes.  The ELF backend may later discover, when creating program
+segments, that more program segments are required.  This is currently
+reported as an error in @samp{assign_file_positions_for_segments}.
+
+In practice this makes it difficult to use @samp{SIZEOF_HEADERS} except
+with a carefully defined linker script.  Unfortunately,
+@samp{SIZEOF_HEADERS} is required for fast program loading on a native
+system, since it permits the initial code section to appear on the same
+page as the program segments, saving a page read when the program starts
+running.  Fortunately, native systems permit careful definition of the
+linker script.  Still, ideally it would be possible to use relaxation to
+compute the number of program segments.
+
 @node BFD glossary
 @section BFD glossary
 @cindex glossary for bfd
@@ -1758,7 +1788,7 @@ The implementation within BFD of a particular object file format.  The
 set of functions which appear in a particular target vector.
 
 @item BFD
-The BFD library itself.  Also, each object file, archive, or executable
+The BFD library itself.  Also, each object file, archive, or exectable
 opened by the BFD library has the type @samp{bfd *}, and is sometimes
 referred to as a bfd.
 
@@ -1793,6 +1823,11 @@ information.  Normally produced by a linker.
 @item LMA
 Load Memory Address.  This is the address at which a section will be
 loaded.  Compare with VMA, below.
+
+@item NLM
+NetWare Loadable Module.  Used to describe the format of an object which
+be loaded into NetWare, which is some kind of PC based network server
+program.
 
 @item object file
 A binary file including machine instructions, symbols, and relocation

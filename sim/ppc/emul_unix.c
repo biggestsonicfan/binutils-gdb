@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
     */
 
@@ -195,30 +196,6 @@ struct	unix_rusage {
 };
 
 
-/* File descriptors 0, 1, and 2 should not be closed.  fd_closed[]
-   tracks whether these descriptors have been closed in do_close()
-   below.  */
-
-static int fd_closed[3];
-
-/* Check for some occurrences of bad file descriptors.  We only check
-   whether fd 0, 1, or 2 are "closed".  By "closed" we mean that these
-   descriptors aren't actually closed, but are considered to be closed
-   by this layer.
-
-   Other checks are performed by the underlying OS call.  */
-
-static int
-fdbad (int fd)
-{
-  if (fd >=0 && fd <= 2 && fd_closed[fd])
-    {
-      errno = EBADF;
-      return -1;
-    }
-  return 0;
-}
-
 static void
 do_unix_exit(os_emul_data *emul,
 	     unsigned call,
@@ -256,16 +233,14 @@ do_unix_read(os_emul_data *emul,
   /* check if buffer exists by reading it */
   emul_read_buffer(scratch_buffer, buf, nbytes, processor, cia);
 
-  status = fdbad (d);
   /* read */
-  if (status == 0)
-    status = read (d, scratch_buffer, nbytes);
+  status = read (d, scratch_buffer, nbytes);
 
   emul_write_status(processor, status, errno);
   if (status > 0)
     emul_write_buffer(scratch_buffer, buf, status, processor, cia);
 
-  free(scratch_buffer);
+  zfree(scratch_buffer);
 }
 
 
@@ -292,12 +267,10 @@ do_unix_write(os_emul_data *emul,
   emul_read_buffer(scratch_buffer, buf, nbytes,
 		   processor, cia);
 
-  status = fdbad (d);
   /* write */
-  if (status == 0)
-    status = write(d, scratch_buffer, nbytes);
+  status = write(d, scratch_buffer, nbytes);
   emul_write_status(processor, status, errno);
-  free(scratch_buffer);
+  zfree(scratch_buffer);
 
   flush_stdoutput();
 }
@@ -338,20 +311,7 @@ do_unix_close(os_emul_data *emul,
   if (WITH_TRACE && ppc_trace[trace_os_emul])
     printf_filtered ("%d", d);
 
-  status = fdbad (d);
-  if (status == 0)
-    {
-      /* Do not close stdin, stdout, or stderr. GDB may still need access to
-	 these descriptors.  */
-      if (d == 0 || d == 1 || d == 2)
-	{
-	  fd_closed[d] = 1;
-	  status = 0;
-	}
-      else
-	status = close(d);
-    }
-
+  status = close(d);
   emul_write_status(processor, status, errno);
 }
 
@@ -531,7 +491,7 @@ do_unix_dup(os_emul_data *emul,
 	    unsigned_word cia)
 {
   int oldd = cpu_registers(processor)->gpr[arg0];
-  int status = (fdbad (oldd) < 0) ? -1 : dup(oldd);
+  int status = dup(oldd);
   int err = errno;
 
   if (WITH_TRACE && ppc_trace[trace_os_emul])
@@ -553,7 +513,7 @@ do_unix_dup2(os_emul_data *emul,
 {
   int oldd = cpu_registers(processor)->gpr[arg0];
   int newd = cpu_registers(processor)->gpr[arg0+1];
-  int status = (fdbad (oldd) < 0) ? -1 : dup2(oldd, newd);
+  int status = dup2(oldd, newd);
   int err = errno;
 
   if (WITH_TRACE && ppc_trace[trace_os_emul])
@@ -581,9 +541,7 @@ do_unix_lseek(os_emul_data *emul,
   if (WITH_TRACE && ppc_trace[trace_os_emul])
     printf_filtered ("%d %ld %d", fildes, (long)offset, whence);
 
-  status = fdbad (fildes);
-  if (status == 0)
-    status = lseek(fildes, offset, whence);
+  status = lseek(fildes, offset, whence);
   emul_write_status(processor, (int)status, errno);
 }
 #endif
@@ -772,11 +730,7 @@ do_unix_mkdir(os_emul_data *emul,
   if (WITH_TRACE && ppc_trace[trace_os_emul])
     printf_filtered ("0x%lx [%s], 0%3o", (long)path_addr, path, mode);
 
-#ifdef USE_WIN32API
-  status = mkdir(path);
-#else
   status = mkdir(path, mode);
-#endif
   emul_write_status(processor, status, errno);
 }
 #endif
@@ -993,7 +947,6 @@ emul_unix_create(device *root,
   int elf_binary;
   os_emul_data *data;
   device *vm;
-  char *filename;
 
   /* merge any emulation specific entries into the device tree */
 
@@ -1022,10 +975,8 @@ emul_unix_create(device *root,
 	     (unsigned long)(top_of_stack - stack_size));
   tree_parse(vm, "./nr-bytes 0x%x", stack_size);
 
-  filename = tree_quote_property (bfd_get_filename(image));
   tree_parse(root, "/openprom/vm/map-binary/file-name %s",
-	     filename);
-  free (filename);
+	     bfd_get_filename(image));
 
   /* finish the init */
   tree_parse(root, "/openprom/init/register/pc 0x%lx",
@@ -1075,11 +1026,6 @@ typedef	unsigned32	solaris_nlink_t;
 
 #ifdef HAVE_SYS_STAT_H
 #define	SOLARIS_ST_FSTYPSZ 16		/* array size for file system type name */
-
-/* AIX 7.1 defines st_pad[123] to st_[amc]tim.tv_pad, respectively */
-#undef st_pad1
-#undef st_pad2
-#undef st_pad3
 
 struct solaris_stat {
   solaris_dev_t		st_dev;
@@ -1147,15 +1093,15 @@ convert_to_solaris_stat(unsigned_word addr,
   target.st_mtim.tv_sec  = H2T_4(host->st_mtime);
   target.st_mtim.tv_usec = 0;
 
-  for (i = 0; i < ARRAY_SIZE (target.st_pad1); i++)
+  for (i = 0; i < sizeof (target.st_pad1) / sizeof (target.st_pad1[0]); i++)
     target.st_pad1[i] = 0;
 
-  for (i = 0; i < ARRAY_SIZE (target.st_pad2); i++)
+  for (i = 0; i < sizeof (target.st_pad2) / sizeof (target.st_pad2[0]); i++)
     target.st_pad2[i] = 0;
 
   target.st_pad3 = 0;
 
-  for (i = 0; i < ARRAY_SIZE (target.st_pad4); i++)
+  for (i = 0; i < sizeof (target.st_pad4) / sizeof (target.st_pad4[0]); i++)
     target.st_pad4[i] = 0;
 
   /* For now, just punt and always say it is a ufs file */
@@ -1239,9 +1185,7 @@ do_solaris_fstat(os_emul_data *emul,
   if (WITH_TRACE && ppc_trace[trace_os_emul])
     printf_filtered ("%d, 0x%lx", fildes, (long)stat_pkt);
 
-  status = fdbad (fildes);
-  if (status == 0)
-    status = fstat (fildes, &buf);
+  status = fstat (fildes, &buf);
   if (status == 0)
     convert_to_solaris_stat (stat_pkt, &buf, processor, cia);
 
@@ -1478,10 +1422,6 @@ do_solaris_ioctl(os_emul_data *emul,
 #endif
 #endif
 
-  status = fdbad (fildes);
-  if (status != 0)
-    goto done;
-
   switch (request)
     {
     case 0:					/* make sure we have at least one case */
@@ -1523,7 +1463,6 @@ do_solaris_ioctl(os_emul_data *emul,
 #endif /* HAVE_TERMIOS_STRUCTURE */
     }
 
-done:
   emul_write_status(processor, status, errno);
 
   if (WITH_TRACE && ppc_trace[trace_os_emul])
@@ -1945,11 +1884,11 @@ static char *(solaris_signal_names[]) = {
 
 static emul_syscall emul_solaris_syscalls = {
   solaris_descriptors,
-  ARRAY_SIZE (solaris_descriptors),
+  sizeof(solaris_descriptors) / sizeof(solaris_descriptors[0]),
   solaris_error_names,
-  ARRAY_SIZE (solaris_error_names),
+  sizeof(solaris_error_names) / sizeof(solaris_error_names[0]),
   solaris_signal_names,
-  ARRAY_SIZE (solaris_signal_names),
+  sizeof(solaris_signal_names) / sizeof(solaris_signal_names[0]),
 };
 
 
@@ -1975,9 +1914,7 @@ static void
 emul_solaris_init(os_emul_data *emul_data,
 		  int nr_cpus)
 {
-  fd_closed[0] = 0;
-  fd_closed[1] = 0;
-  fd_closed[2] = 0;
+  /* nothing yet */
 }
 
 static void
@@ -2176,9 +2113,7 @@ do_linux_fstat(os_emul_data *emul,
   if (WITH_TRACE && ppc_trace[trace_os_emul])
     printf_filtered ("%d, 0x%lx", fildes, (long)stat_pkt);
 
-  status = fdbad (fildes);
-  if (status == 0)
-    status = fstat (fildes, &buf);
+  status = fstat (fildes, &buf);
   if (status == 0)
     convert_to_linux_stat (stat_pkt, &buf, processor, cia);
 
@@ -2442,10 +2377,6 @@ do_linux_ioctl(os_emul_data *emul,
 #endif
 #endif
 
-  status = fdbad (fildes);
-  if (status != 0)
-    goto done;
-
   switch (request)
     {
     case 0:					/* make sure we have at least one case */
@@ -2487,7 +2418,6 @@ do_linux_ioctl(os_emul_data *emul,
 #endif /* HAVE_TERMIOS_STRUCTURE */
     }
 
-done:
   emul_write_status(processor, status, errno);
 
   if (WITH_TRACE && ppc_trace[trace_os_emul])
@@ -2824,11 +2754,11 @@ static char *(linux_signal_names[]) = {
 
 static emul_syscall emul_linux_syscalls = {
   linux_descriptors,
-  ARRAY_SIZE (linux_descriptors),
+  sizeof(linux_descriptors) / sizeof(linux_descriptors[0]),
   linux_error_names,
-  ARRAY_SIZE (linux_error_names),
+  sizeof(linux_error_names) / sizeof(linux_error_names[0]),
   linux_signal_names,
-  ARRAY_SIZE (linux_signal_names),
+  sizeof(linux_signal_names) / sizeof(linux_signal_names[0]),
 };
 
 
@@ -2854,9 +2784,7 @@ static void
 emul_linux_init(os_emul_data *emul_data,
 		int nr_cpus)
 {
-  fd_closed[0] = 0;
-  fd_closed[1] = 0;
-  fd_closed[2] = 0;
+  /* nothing yet */
 }
 
 static void

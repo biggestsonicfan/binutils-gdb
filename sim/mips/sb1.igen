@@ -1,38 +1,24 @@
 // -*- C -*-
 
 // Simulator definition for the Broadcom SiByte SB-1 CPU extensions.
-// Copyright (C) 2002-2020 Free Software Foundation, Inc.
-// Contributed by Ed Satterthwaite and Chris Demetriou, of Broadcom
-// Corporation (SiByte).
+// Copyright (C) 2002 Free Software Foundation, Inc.
+// Contributed by Broadcom Corporation (SiByte).
 //
 // This file is part of GDB, the GNU debugger.
 // 
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 3 of the License, or
-// (at your option) any later version.
-//
+// the Free Software Foundation; either version 2, or (at your option)
+// any later version.
+// 
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-// Helper:
-//
-// Check that the SB-1 extension instruction can currently be used, and
-// signal a ReservedInstruction exception if not.
-//
-
-:function:::void:check_sbx:instruction_word insn
-*sb1:
-{
-  if ((SR & status_SBX) == 0)
-    SignalException(ReservedInstruction, insn);
-}
+// 
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 
 //  MDMX ASE Instructions
@@ -165,9 +151,13 @@
 *sb1:
 {
   check_mdmx (SD_, instruction_0);
-  check_sbx (SD_, instruction_0);
-  check_mdmx_fmtsel (SD_, instruction_0, FMTSEL);
-  StoreFPR(VD,fmt_mdmx,MX_AbsDiff(ValueFPR(VS,fmt_mdmx),VT,FMTSEL));
+  if (SR & status_SBX)
+    {
+      check_mdmx_fmtsel (SD_, instruction_0, FMTSEL);
+      StoreFPR(VD,fmt_mdmx,MX_AbsDiff(ValueFPR(VS,fmt_mdmx),VT,FMTSEL));
+    }
+  else
+    SignalException(ReservedInstruction, instruction_0);
 }
 
 
@@ -176,9 +166,13 @@
 *sb1:
 {
   check_mdmx (SD_, instruction_0);
-  check_sbx (SD_, instruction_0);
-  check_mdmx_fmtsel (SD_, instruction_0, FMTSEL);
-  MX_AbsDiffC(ValueFPR(VS,fmt_mdmx),VT,FMTSEL);
+  if (SR & status_SBX)
+    {
+      check_mdmx_fmtsel (SD_, instruction_0, FMTSEL);
+      MX_AbsDiffC(ValueFPR(VS,fmt_mdmx),VT,FMTSEL);
+    }
+  else
+    SignalException(ReservedInstruction, instruction_0);
 }
 
 
@@ -187,57 +181,11 @@
 *sb1:
 {
   check_mdmx (SD_, instruction_0);
-  check_sbx (SD_, instruction_0);
-  check_mdmx_fmtsel (SD_, instruction_0, FMTSEL);
-  StoreFPR(VD,fmt_mdmx,MX_Avg(ValueFPR(VS,fmt_mdmx),VT,FMTSEL));
-}
-
-
-//  Paired-Single Extension Instructions
-//  ------------------------------------
-//
-//  The SB-1 implements several .PS format instructions that are
-//  extensions to the MIPS64 architecture.
-
-010001,10,3.FMT=6,5.FT,5.FS,5.FD,000011:COP1:32,f::DIV.PS
-"div.%s<FMT> f<FD>, f<FS>, f<FT>"
-*sb1:
-{
-  int fmt = FMT;
-  check_fpu (SD_);
-  check_sbx (SD_, instruction_0);
-  StoreFPR (FD, fmt, Divide (ValueFPR (FS, fmt), ValueFPR (FT, fmt), fmt));
-}
-
-
-010001,10,3.FMT=6,00000,5.FS,5.FD,010101:COP1:32,f::RECIP.PS
-"recip.%s<FMT> f<FD>, f<FS>"
-*sb1:
-{
-  int fmt = FMT;
-  check_fpu (SD_);
-  check_sbx (SD_, instruction_0);
-  StoreFPR (FD, fmt, Recip (ValueFPR (FS, fmt), fmt));
-}
-
-
-010001,10,3.FMT=6,00000,5.FS,5.FD,010110:COP1:32,f::RSQRT.PS
-"rsqrt.%s<FMT> f<FD>, f<FS>"
-*sb1:
-{
-  int fmt = FMT;
-  check_fpu (SD_);
-  check_sbx (SD_, instruction_0);
-  StoreFPR (FD, fmt, RSquareRoot (ValueFPR (FS, fmt), fmt));
-}
-
-
-010001,10,3.FMT=6,00000,5.FS,5.FD,000100:COP1:32,f::SQRT.PS
-"sqrt.%s<FMT> f<FD>, f<FS>"
-*sb1:
-{
-  int fmt = FMT;
-  check_fpu (SD_);
-  check_sbx (SD_, instruction_0);
-  StoreFPR (FD, fmt,  (SquareRoot (ValueFPR (FS, fmt), fmt)));
+  if (SR & status_SBX)
+    {
+      check_mdmx_fmtsel (SD_, instruction_0, FMTSEL);
+      StoreFPR(VD,fmt_mdmx,MX_Avg(ValueFPR(VS,fmt_mdmx),VT,FMTSEL));
+    }
+  else
+    SignalException(ReservedInstruction, instruction_0);
 }

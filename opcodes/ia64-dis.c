@@ -1,28 +1,28 @@
 /* ia64-dis.c -- Disassemble ia64 instructions
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright 1998, 1999, 2000 Free Software Foundation, Inc.
    Contributed by David Mosberger-Tang <davidm@hpl.hp.com>
 
-   This file is part of the GNU opcodes library.
+   This file is part of GDB, GAS, and the GNU binutils.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+   GDB, GAS, and the GNU binutils are free software; you can redistribute
+   them and/or modify them under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either version
+   2, or (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   GDB, GAS, and the GNU binutils are distributed in the hope that they
+   will be useful, but WITHOUT ANY WARRANTY; without even the implied
+   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+   the GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "sysdep.h"
 #include <assert.h>
+#include <string.h>
 
-#include "disassemble.h"
+#include "dis-asm.h"
 #include "opcode/ia64.h"
 
 #define NELEMS(a)	((int) (sizeof (a) / sizeof (a[0])))
@@ -68,7 +68,7 @@ unit_to_type (ia64_insn opcode, enum ia64_unit unit)
 int
 print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
 {
-  ia64_insn t0, t1, slot[3], template_val, s_bit, insn;
+  ia64_insn t0, t1, slot[3], template, s_bit, insn;
   int slotnum, j, status, need_comma, retval, slot_multiplier;
   const struct ia64_operand *odesc;
   const struct ia64_opcode *idesc;
@@ -100,20 +100,20 @@ print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
   t0 = bfd_getl64 (bundle);
   t1 = bfd_getl64 (bundle + 8);
   s_bit = t0 & 1;
-  template_val = (t0 >> 1) & 0xf;
+  template = (t0 >> 1) & 0xf;
   slot[0] = (t0 >>  5) & 0x1ffffffffffLL;
   slot[1] = ((t0 >> 46) & 0x3ffff) | ((t1 & 0x7fffff) << 18);
   slot[2] = (t1 >> 23) & 0x1ffffffffffLL;
 
-  tname = ia64_templ_desc[template_val].name;
+  tname = ia64_templ_desc[template].name;
   if (slotnum == 0)
     (*info->fprintf_func) (info->stream, "[%s] ", tname);
   else
-    (*info->fprintf_func) (info->stream, "      ");
+    (*info->fprintf_func) (info->stream, "      ", tname);
 
-  unit = ia64_templ_desc[template_val].exec_unit[slotnum];
+  unit = ia64_templ_desc[template].exec_unit[slotnum];
 
-  if (template_val == 2 && slotnum == 1)
+  if (template == 2 && slotnum == 1)
     {
       /* skip L slot in MLI template: */
       slotnum = 2;
@@ -167,10 +167,10 @@ print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
         }
       else if (odesc - elf64_ia64_operands == IA64_OPND_TGT64)
 	{
-	  /* 60-bit immediate for long branches. */
+	  /* 60-bit immedate for long branches.  */
 	  value = (((insn >> 13) & 0xfffff)
 		   | (((insn >> 36) & 1) << 59)
-		   | (((slot[1] >> 2) & 0x7fffffffffLL) << 20)) << 4;
+		   | (slot[1] << 20)) << 4;
 	}
       else
 	{
@@ -182,7 +182,7 @@ print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
 	    }
 	}
 
-	switch (odesc->op_class)
+	switch (odesc->class)
 	  {
 	  case IA64_OPND_CLASS_CST:
 	    (*info->fprintf_func) (info->stream, "%s", odesc->str);
@@ -201,62 +201,15 @@ print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
 		  case 17:	strcpy (regname, "ar.bsp"); break;
 		  case 18:	strcpy (regname, "ar.bspstore"); break;
 		  case 19:	strcpy (regname, "ar.rnat"); break;
-		  case 21:	strcpy (regname, "ar.fcr"); break;
-		  case 24:	strcpy (regname, "ar.eflag"); break;
-		  case 25:	strcpy (regname, "ar.csd"); break;
-		  case 26:	strcpy (regname, "ar.ssd"); break;
-		  case 27:	strcpy (regname, "ar.cflg"); break;
-		  case 28:	strcpy (regname, "ar.fsr"); break;
-		  case 29:	strcpy (regname, "ar.fir"); break;
-		  case 30:	strcpy (regname, "ar.fdr"); break;
 		  case 32:	strcpy (regname, "ar.ccv"); break;
 		  case 36:	strcpy (regname, "ar.unat"); break;
 		  case 40:	strcpy (regname, "ar.fpsr"); break;
 		  case 44:	strcpy (regname, "ar.itc"); break;
-		  case 45:	strcpy (regname, "ar.ruc"); break;
 		  case 64:	strcpy (regname, "ar.pfs"); break;
 		  case 65:	strcpy (regname, "ar.lc"); break;
 		  case 66:	strcpy (regname, "ar.ec"); break;
 		  default:
 		    sprintf (regname, "ar%u", (unsigned int) value);
-		    break;
-		  }
-		(*info->fprintf_func) (info->stream, "%s", regname);
-	      }
-	    else if (odesc->str[0] == 'c' && odesc->str[1] == 'r')
-	      {
-		switch (value)
-		  {
-		  case 0:       strcpy (regname, "cr.dcr"); break;
-		  case 1:       strcpy (regname, "cr.itm"); break;
-		  case 2:       strcpy (regname, "cr.iva"); break;
-		  case 8:       strcpy (regname, "cr.pta"); break;
-		  case 16:      strcpy (regname, "cr.ipsr"); break;
-		  case 17:      strcpy (regname, "cr.isr"); break;
-		  case 19:      strcpy (regname, "cr.iip"); break;
-		  case 20:      strcpy (regname, "cr.ifa"); break;
-		  case 21:      strcpy (regname, "cr.itir"); break;
-		  case 22:      strcpy (regname, "cr.iipa"); break;
-		  case 23:      strcpy (regname, "cr.ifs"); break;
-		  case 24:      strcpy (regname, "cr.iim"); break;
-		  case 25:      strcpy (regname, "cr.iha"); break;
-		  case 26:      strcpy (regname, "cr.iib0"); break;
-		  case 27:      strcpy (regname, "cr.iib1"); break;
-		  case 64:      strcpy (regname, "cr.lid"); break;
-		  case 65:      strcpy (regname, "cr.ivr"); break;
-		  case 66:      strcpy (regname, "cr.tpr"); break;
-		  case 67:      strcpy (regname, "cr.eoi"); break;
-		  case 68:      strcpy (regname, "cr.irr0"); break;
-		  case 69:      strcpy (regname, "cr.irr1"); break;
-		  case 70:      strcpy (regname, "cr.irr2"); break;
-		  case 71:      strcpy (regname, "cr.irr3"); break;
-		  case 72:      strcpy (regname, "cr.itv"); break;
-		  case 73:      strcpy (regname, "cr.pmv"); break;
-		  case 74:      strcpy (regname, "cr.cmcv"); break;
-		  case 80:      strcpy (regname, "cr.lrr0"); break;
-		  case 81:      strcpy (regname, "cr.lrr1"); break;
-		  default:
-		    sprintf (regname, "cr%u", (unsigned int) value);
 		    break;
 		  }
 		(*info->fprintf_func) (info->stream, "%s", regname);
@@ -284,11 +237,11 @@ print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
 	    if (str)
 	      (*info->fprintf_func) (info->stream, "%s", str);
 	    else if (odesc->flags & IA64_OPND_FLAG_DECIMAL_SIGNED)
-	      (*info->fprintf_func) (info->stream, "%lld", (long long) value);
+	      (*info->fprintf_func) (info->stream, "%lld", value);
 	    else if (odesc->flags & IA64_OPND_FLAG_DECIMAL_UNSIGNED)
-	      (*info->fprintf_func) (info->stream, "%llu", (long long) value);
+	      (*info->fprintf_func) (info->stream, "%llu", value);
 	    else
-	      (*info->fprintf_func) (info->stream, "0x%llx", (long long) value);
+	      (*info->fprintf_func) (info->stream, "0x%llx", value);
 	    break;
 
 	  case IA64_OPND_CLASS_REL:
@@ -303,7 +256,7 @@ print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
 	  need_comma = 0;
 	}
     }
-  if (slotnum + 1 == ia64_templ_desc[template_val].group_boundary
+  if (slotnum + 1 == ia64_templ_desc[template].group_boundary 
       || ((slotnum == 2) && s_bit))
     (*info->fprintf_func) (info->stream, ";;");
 
@@ -315,6 +268,6 @@ print_insn_ia64 (bfd_vma memaddr, struct disassemble_info *info)
   return retval;
 
  decoding_failed:
-  (*info->fprintf_func) (info->stream, "      data8 %#011llx", (long long) insn);
+  (*info->fprintf_func) (info->stream, "      data8 %#011llx", insn);
   goto failed;
 }

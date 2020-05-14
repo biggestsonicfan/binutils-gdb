@@ -1,12 +1,11 @@
 /* Memory attributes support, for GDB.
-
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright 2001 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,20 +14,18 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef MEMATTR_H
 #define MEMATTR_H
 
 enum mem_access_mode
 {
-  MEM_NONE,                     /* Memory that is not physically present.  */
   MEM_RW,			/* read/write */
   MEM_RO,			/* read only */
-  MEM_WO,			/* write only */
-
-  /* Read/write, but special steps are required to write to it.  */
-  MEM_FLASH
+  MEM_WO			/* write only */
 };
 
 enum mem_access_width
@@ -48,85 +45,47 @@ enum mem_access_width
    the mem_region structure.
 
    FIXME: It would be useful if there was a mechanism for targets to
-   add their own attributes.  For example, the number of wait states.  */
+   add their own attributes.  For example, the number of wait states. */
  
 struct mem_attrib 
 {
-  static mem_attrib unknown ()
-  {
-    mem_attrib attrib;
-
-    attrib.mode = MEM_NONE;
-
-    return attrib;
-  }
-
   /* read/write, read-only, or write-only */
-  enum mem_access_mode mode = MEM_RW;
+  enum mem_access_mode mode;
 
-  enum mem_access_width width = MEM_WIDTH_UNSPECIFIED;
+  enum mem_access_width width;
 
   /* enables hardware breakpoints */
-  int hwbreak = 0;
+  int hwbreak;
   
   /* enables host-side caching of memory region data */
-  int cache = 0;
+  int cache;
   
-  /* Enables memory verification.  After a write, memory is re-read
-     to verify that the write was successful.  */
-  int verify = 0;
-
-  /* Block size.  Only valid if mode == MEM_FLASH.  */
-  int blocksize = -1;
+  /* enables memory verification.  after a write, memory is re-read
+     to verify that the write was successful. */
+  int verify; 
 };
 
 struct mem_region 
 {
-  /* Create a mem_region with default attributes.  */
-
-  mem_region (CORE_ADDR lo_, CORE_ADDR hi_)
-    : lo (lo_), hi (hi_)
-  {}
-
-  /* Create a mem_region with access mode MODE_, but otherwise default
-     attributes.  */
-
-  mem_region (CORE_ADDR lo_, CORE_ADDR hi_, mem_access_mode mode_)
-    : lo (lo_), hi (hi_)
-  {
-    attrib.mode = mode_;
-  }
-
-  /* Create a mem_region with attributes ATTRIB_.  */
-
-  mem_region (CORE_ADDR lo_, CORE_ADDR hi_, const mem_attrib &attrib_)
-    : lo (lo_), hi (hi_), attrib (attrib_)
-  {}
-
-  bool operator< (const mem_region &other) const
-  {
-    return this->lo < other.lo;
-  }
-
-  /* Lowest address in the region.  */
+  /* FIXME: memory regions are stored in an unsorted singly-linked
+     list.  This probably won't scale to handle hundreds of memory
+     regions --- that many could be needed to describe the allowed
+     access modes for memory mapped i/o device registers. */
+  struct mem_region *next;
+  
   CORE_ADDR lo;
-  /* Address past the highest address of the region. 
-     If 0, upper bound is "infinity".  */
   CORE_ADDR hi;
 
-  /* Item number of this memory region.  */
-  int number = 0;
+  /* Item number of this memory region. */
+  int number;
 
-  /* Status of this memory region (enabled if true, otherwise
-     disabled).  */
-  bool enabled_p = true;
+  /* Status of this memory region (enabled if non-zero, otherwise disabled) */
+  int enabled_p;
 
-  /* Attributes for this region.  */
-  mem_attrib attrib;
+  /* Attributes for this region */
+  struct mem_attrib attrib;
 };
 
-extern struct mem_region *lookup_mem_region (CORE_ADDR);
-
-void invalidate_target_mem_regions (void);
+extern struct mem_region *lookup_mem_region(CORE_ADDR);
 
 #endif	/* MEMATTR_H */

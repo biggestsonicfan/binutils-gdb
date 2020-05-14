@@ -1,9 +1,9 @@
 /* Header file for GDB CLI set and show commands implementation.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -12,55 +12,25 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
-#ifndef CLI_CLI_SETSHOW_H
-#define CLI_CLI_SETSHOW_H
+#if !defined (CLI_SETSHOW_H)
+#define CLI_SETSHOW_H 1
 
-#include <string>
+/* Exported to cli/cli-cmds.c and gdb/top.c */
 
-struct cmd_list_element;
+/* Do a "set" or "show" command.  ARG is NULL if no argument, or the text
+   of the argument, and FROM_TTY is nonzero if this command is being entered
+   directly by the user (i.e. these are just like any other
+   command).  C is the command list element for the command.  */
+extern void do_setshow_command (char *arg, int from_tty,
+				struct cmd_list_element *c);
 
-/* Parse ARG, an option to a boolean variable.
-   Returns 1 for true, 0 for false, and -1 if invalid.  */
-extern int parse_cli_boolean_value (const char *arg);
-
-/* Same as above, but work with a pointer to pointer.  ARG is advanced
-   past a successfully parsed value.  */
-extern int parse_cli_boolean_value (const char **arg);
-
-/* Parse ARG, an option to a var_uinteger or var_zuinteger variable.
-   Either returns the parsed value on success or throws an error.  If
-   EXPRESSION is true, *ARG is parsed as an expression; otherwise, it
-   is parsed with get_ulongest.  It's not possible to parse the
-   integer as an expression when there may be valid input after the
-   integer, such as when parsing command options.  E.g., "print
-   -elements NUMBER -obj --".  In such case, parsing as an expression
-   would parse "-obj --" as part of the expression as well.  */
-extern unsigned int parse_cli_var_uinteger (var_types var_type,
-					    const char **arg,
-					    bool expression);
-
-/* Like parse_cli_var_uinteger, for var_zuinteger_unlimited.  */
-extern int parse_cli_var_zuinteger_unlimited (const char **arg,
-					      bool expression);
-
-/* Parse ARG, an option to a var_enum variable.  ENUM is a
-   null-terminated array of possible values. Either returns the parsed
-   value on success or throws an error.  ARG is advanced past the
-   parsed value.  */
-const char *parse_cli_var_enum (const char **args,
-				const char *const *enums);
-
-extern void do_set_command (const char *arg, int from_tty,
-			    struct cmd_list_element *c);
-extern void do_show_command (const char *arg, int from_tty,
-			     struct cmd_list_element *c);
-
-/* Get a string version of C's current value.  */
-extern std::string get_setshow_command_value_string (const cmd_list_element *c);
+/* Exported to cli/cli-cmds.c and gdb/top.c, language.c and valprint.c */
 
 extern void cmd_show_list (struct cmd_list_element *list, int from_tty,
-			   const char *prefix);
+			   char *prefix);
 
-#endif /* CLI_CLI_SETSHOW_H */
+#endif /* !defined (CLI_SETSHOW_H) */

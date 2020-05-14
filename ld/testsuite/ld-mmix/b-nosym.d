@@ -11,8 +11,5 @@
 
 .*:     file format mmo
 
-SYMBOL TABLE:
-no symbols
-
 Contents of section \.text:
  0000 e3fd0001 e3fd0004                    .*

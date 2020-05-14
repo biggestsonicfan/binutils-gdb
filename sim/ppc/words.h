@@ -4,7 +4,7 @@
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Library General Public License
-   as published by the Free Software Foundation; either version 3 of
+   as published by the Free Software Foundation; either version 2 of
    the License, or (at your option) any later version.
  
    This library is distributed in the hope that it will be useful, but
@@ -13,7 +13,8 @@
    Library General Public License for more details.
  
    You should have received a copy of the GNU Library General Public
-   License along with this library; if not, see <http://www.gnu.org/licenses/>.
+   License along with this library; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
    --
 
@@ -43,22 +44,18 @@
 */
 
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 /* bit based */
 typedef char natural8;
 typedef short natural16;
-typedef int natural32;
+typedef long natural32;
 
 typedef signed char signed8;
 typedef signed short signed16;
-typedef signed int signed32;
+typedef signed long signed32;
 
 typedef unsigned char unsigned8;
 typedef unsigned short unsigned16;
-typedef unsigned int unsigned32;
+typedef unsigned long unsigned32;
 
 #ifdef __GNUC__
 typedef long long natural64;

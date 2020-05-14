@@ -1,7 +1,7 @@
 #objdump: -r
 #name: alpha elf-reloc-1
 
-.*:     file format elf64-alpha.*
+.*:     file format elf64-alpha
 
 RELOCATION RECORDS FOR \[\.text\]:
 OFFSET           TYPE              VALUE 
@@ -16,6 +16,6 @@ OFFSET           TYPE              VALUE
 0*000001c GPRELHIGH         d
 0*0000020 GPRELLOW          e
 0*0000024 GPDISP            \.text\+0x0*0000008
-0*0000030 GPDISP            \.text-0x0*0000008
+0*0000030 GPDISP            \.text\+0xf*ffffff8
 
 

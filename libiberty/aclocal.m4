@@ -1,11 +1,3 @@
-sinclude(../config/acx.m4)
-sinclude(../config/cet.m4)
-sinclude(../config/enable.m4)
-sinclude(../config/no-executables.m4)
-sinclude(../config/override.m4)
-sinclude(../config/picflag.m4)
-sinclude(../config/warnings.m4)
-
 dnl See whether strncmp reads past the end of its string parameters.
 dnl On some versions of SunOS4 at least, strncmp reads a word at a time
 dnl but erroneously reads past the end of strings.  This can cause
@@ -74,10 +66,10 @@ main ()
   exit (0);
 }
 ], ac_cv_func_strncmp_works=yes, ac_cv_func_strncmp_works=no,
-  ac_cv_func_strncmp_works=yes)
+  ac_cv_func_strncmp_works=no)
 rm -f core core.* *.core])
 if test $ac_cv_func_strncmp_works = no ; then
-  AC_LIBOBJ([strncmp])
+  LIBOBJS="$LIBOBJS strncmp.o"
 fi
 ])
 
@@ -95,34 +87,56 @@ then AC_DEFINE(NEED_DECLARATION_ERRNO, 1,
 fi
 ])
 
-dnl See whether we need a declaration for a function.
-AC_DEFUN(libiberty_NEED_DECLARATION,
-[AC_MSG_CHECKING([whether $1 must be declared])
-AC_CACHE_VAL(libiberty_cv_decl_needed_$1,
-[AC_TRY_COMPILE([
-#include "confdefs.h"
-#include <stdio.h>
-#ifdef HAVE_STRING_H
-#include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
-#ifdef HAVE_STDLIB_H
-#include <stdlib.h>
-#endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif],
-[char *(*pfn) = (char *(*)) $1],
-libiberty_cv_decl_needed_$1=no, libiberty_cv_decl_needed_$1=yes)])
-AC_MSG_RESULT($libiberty_cv_decl_needed_$1)
-if test $libiberty_cv_decl_needed_$1 = yes; then
-  AC_DEFINE([NEED_DECLARATION_]translit($1, [a-z], [A-Z]), 1,
-            [Define if $1 is not declared in system header files.])
+# FIXME: We temporarily define our own version of AC_PROG_CC.  This is
+# copied from autoconf 2.12, but does not call AC_PROG_CC_WORKS.  We
+# are probably using a cross compiler, which will not be able to fully
+# link an executable.  This should really be fixed in autoconf
+# itself.
+
+AC_DEFUN(LIB_AC_PROG_CC,
+[AC_BEFORE([$0], [AC_PROG_CPP])dnl
+AC_PROVIDE([AC_PROG_CC])
+AC_CHECK_PROG(CC, gcc, gcc)
+if test -z "$CC"; then
+  AC_CHECK_PROG(CC, cc, cc, , , /usr/ucb/cc)
+  test -z "$CC" && AC_MSG_ERROR([no acceptable cc found in \$PATH])
 fi
-])dnl
+
+AC_PROG_CC_GNU
+
+if test $ac_cv_prog_gcc = yes; then
+  GCC=yes
+  ac_libiberty_warn_cflags='-W -Wall -Wtraditional -pedantic'
+dnl Check whether -g works, even if CFLAGS is set, in case the package
+dnl plays around with CFLAGS (such as to build both debugging and
+dnl normal versions of a library), tasteless as that idea is.
+  ac_test_CFLAGS="${CFLAGS+set}"
+  ac_save_CFLAGS="$CFLAGS"
+  CFLAGS=
+  AC_PROG_CC_G
+  if test "$ac_test_CFLAGS" = set; then
+    CFLAGS="$ac_save_CFLAGS"
+  elif test $ac_cv_prog_cc_g = yes; then
+    CFLAGS="-g -O2"
+  else
+    CFLAGS="-O2"
+  fi
+else
+  GCC=
+  ac_libiberty_warn_cflags=
+  test "${CFLAGS+set}" = set || CFLAGS="-g"
+fi
+AC_SUBST(ac_libiberty_warn_cflags)
+])
+
+# Work around a bug in autoheader.  This can go away when we switch to
+# autoconf >2.50.  The use of define instead of AC_DEFUN is
+# deliberate.
+define(AC_DEFINE_NOAUTOHEADER,
+[cat >> confdefs.h <<\EOF
+[#define] $1 ifelse($#, 2, [$2], $#, 3, [$2], 1)
+EOF
+])
 
 # We always want a C version of alloca() compiled into libiberty,
 # because native-compiler support for the real alloca is so !@#$%

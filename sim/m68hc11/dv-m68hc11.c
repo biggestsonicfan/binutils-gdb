@@ -1,20 +1,21 @@
 /*  dv-m68hc11.c -- CPU 68HC11&68HC12 as a device.
-    Copyright (C) 1999-2020 Free Software Foundation, Inc.
+    Copyright (C) 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
     Written by Stephane Carrez (stcarrez@nerim.fr)
     (From a driver model Contributed by Cygnus Solutions.)
     
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+    
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+    
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
     
     */
 
@@ -323,8 +324,8 @@ attach_m68hc11_regs (struct hw *me,
   if (hw_find_property (me, "use_bank") != NULL)
     hw_attach_address (hw_parent (me), 0,
                        exec_map,
-                       cpu->bank_start,
-                       cpu->bank_end - cpu->bank_start,
+                       0x08000,
+                       0x04000,
                        me);
 
   cpu_mode = "expanded";
@@ -496,7 +497,7 @@ m68hc11cpu_port_event (struct hw *me,
 {
   struct m68hc11cpu *controller = hw_data (me);
   SIM_DESC sd;
-  sim_cpu *cpu;
+  sim_cpu* cpu;
   
   sd  = hw_system (me);
   cpu = STATE_CPU (sd, 0);
@@ -807,15 +808,13 @@ m68hc11_option_handler (SIM_DESC sd, sim_cpu *cpu,
                                "      %d       %d    %35.35s\n",
                                osc->name, freq,
                                cur_value, next_value,
-                               cycle_to_string (cpu, t,
-                                                PRINT_TIME | PRINT_CYCLE));
+                               cycle_to_string (cpu, t));
               else
                 sim_io_printf (sd, " %4.4s  %8.8s hz "
                                "      %d       %d    %35.35s\n",
                                osc->name, freq,
                                cur_value, next_value,
-                               cycle_to_string (cpu, t,
-                                                PRINT_TIME | PRINT_CYCLE));
+                               cycle_to_string (cpu, t));
             }
         }
       break;      
@@ -844,7 +843,7 @@ m68hc11cpu_io_read_buffer (struct hw *me,
   sd  = hw_system (me);
   cpu = STATE_CPU (sd, 0);
 
-  if (base >= cpu->bank_start && base < cpu->bank_end)
+  if (base >= 0x8000 && base < 0xc000)
     {
       address_word virt_addr = phys_to_virt (cpu, base);
       if (virt_addr != base)
@@ -865,7 +864,7 @@ m68hc11cpu_io_read_buffer (struct hw *me,
 	break;
 
       memcpy (dest, &cpu->ios[base], 1);
-      dest = (char*) dest + 1;
+      dest++;
       base++;
       byte++;
       nr_bytes--;
@@ -1092,7 +1091,7 @@ m68hc11cpu_io_write_buffer (struct hw *me,
   sd = hw_system (me); 
   cpu = STATE_CPU (sd, 0);  
 
-  if (base >= cpu->bank_start && base < cpu->bank_end)
+  if (base >= 0x8000 && base < 0xc000)
     {
       address_word virt_addr = phys_to_virt (cpu, base);
       if (virt_addr != base)
@@ -1114,7 +1113,7 @@ m68hc11cpu_io_write_buffer (struct hw *me,
 
       val = *((uint8*) source);
       m68hc11cpu_io_write (me, cpu, base, val);
-      source = (char*) source + 1;
+      source++;
       base++;
       byte++;
       nr_bytes--;

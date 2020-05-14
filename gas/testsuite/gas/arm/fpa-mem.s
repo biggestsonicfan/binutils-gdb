@@ -24,9 +24,3 @@ F:
 	sfm	f0, 4, [r0]
 	sfmfd	f0, 4, [r0]
 	sfmea	f0, 4, [r0]
-	
-	# Test mnemonic that is ambiguous between infix and suffic
-	# condition codes
-	stfpls	f0, [r0]
-	.syntax unified
-	stfpls	f0, [r0]

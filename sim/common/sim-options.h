@@ -1,21 +1,22 @@
 /* Header file for simulator argument handling.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef SIM_OPTIONS_H
 #define SIM_OPTIONS_H
@@ -33,10 +34,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
    argument, NULL if optional and missing; arg#5 is nonzero if a
    command is being interpreted. */
 
-typedef SIM_RC (OPTION_HANDLER) (SIM_DESC, sim_cpu *, int, char *, int);
+typedef SIM_RC (OPTION_HANDLER) PARAMS ((SIM_DESC, sim_cpu *, int, char *, int));
 
 /* Declare option handlers with a macro so it's usable on k&r systems.  */
-#define DECLARE_OPTION_HANDLER(fn) SIM_RC fn (SIM_DESC, sim_cpu *, int, char *, int)
+#define DECLARE_OPTION_HANDLER(fn) SIM_RC fn PARAMS ((SIM_DESC, sim_cpu *, int, char *, int))
 
 typedef struct {
 
@@ -129,20 +130,20 @@ typedef struct option_list {
 /* Add a set of options to the simulator.
    CPU is the cpu the options apply to or NULL for all cpus.
    TABLE is an array of OPTIONS terminated by a NULL `opt.name' entry.  */
-SIM_RC sim_add_option_table (SIM_DESC sd, sim_cpu *cpu, const OPTION *table);
+SIM_RC sim_add_option_table PARAMS ((SIM_DESC sd, sim_cpu *cpu, const OPTION *table));
 
 /* Install handler for the standard options.  */
 MODULE_INSTALL_FN standard_install;
 
 /* Called by sim_open to parse the arguments.  */
-SIM_RC sim_parse_args (SIM_DESC sd, char * const *argv);
+SIM_RC sim_parse_args PARAMS ((SIM_DESC sd, char **argv));
 
 /* Print help messages for the options.  IS_COMMAND is non-zero when
    this function is called from the command line interpreter. */
-void sim_print_help (SIM_DESC sd, int is_command);
+void sim_print_help PARAMS ((SIM_DESC sd, int is_command));
 
 /* Try to parse the command as if it is an option, Only fail when
    totally unsuccessful */
-SIM_RC sim_args_command (SIM_DESC sd, const char *cmd);
+SIM_RC sim_args_command PARAMS ((SIM_DESC sd, char *cmd));
 
 #endif /* SIM_OPTIONS_H */

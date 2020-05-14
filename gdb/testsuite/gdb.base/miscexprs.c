@@ -33,12 +33,17 @@ main ()
 
   ibig.i[100] = 5;
   cbig.c[0] = '\0';
-  cbig.c[99] = 'A';
+  cbig.c[100] = 'A';
   fbig.f[100] = 11.99999;
   dbig.d[202] = 9.99999999;
   sbig.s[90] = 255;
   lbig.l[333] = 999999999;
     
+#ifdef usestubs
+  set_debug_traps ();
+  breakpoint ();
+#endif
+
   marker1 ();
   return 0;
 }

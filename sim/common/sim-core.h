@@ -1,23 +1,22 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
 #ifndef SIM_CORE_H
@@ -57,7 +56,11 @@ struct _sim_core_mapping {
   void *free_buffer;
   void *buffer;
   /* callback map */
+#if (WITH_HW)
   struct hw *device;
+#else
+  device *device;
+#endif
   /* tracing */
   int trace;
   /* growth */
@@ -89,7 +92,7 @@ struct _sim_core {
 
 typedef struct _sim_cpu_core {
   sim_core_common common;
-  address_word byte_xor[WITH_XOR_ENDIAN + 1]; /* +1 to avoid zero-sized array */
+  address_word xor[WITH_XOR_ENDIAN + 1]; /* +1 to avoid zero-sized array */
 } sim_cpu_core;
 
 
@@ -115,9 +118,10 @@ extern SIM_RC sim_core_install (SIM_DESC sd);
    translated into ADDRESS_SPACE:OFFSET before being passed to the
    client device.
 
-   MODULO - Specifies that accesses to the region [ADDR .. ADDR+NR_BYTES)
-   should be mapped onto the sub region [ADDR .. ADDR+MODULO).  The modulo
-   value must be a power of two.
+   MODULO - when the simulator has been configured WITH_MODULO support
+   and is greater than zero, specifies that accesses to the region
+   [ADDR .. ADDR+NR_BYTES) should be mapped onto the sub region [ADDR
+   .. ADDR+MODULO).  The modulo value must be a power of two.
 
    DEVICE - When non NULL, indicates that this is a callback memory
    space and specified device's memory callback handler should be
@@ -140,7 +144,11 @@ extern void sim_core_attach
  address_word addr,
  address_word nr_bytes,
  unsigned modulo,
+#if (WITH_HW)
  struct hw *client,
+#else
+ device *client,
+#endif
  void *optional_buffer);
 
 
@@ -232,14 +240,6 @@ extern unsigned sim_core_xor_write_buffer
  unsigned nr_bytes);
 
 
-/* Translate an address based on a map.  */
-
-extern void *sim_core_trans_addr
-(SIM_DESC sd,
- sim_cpu *cpu,
- unsigned map,
- address_word addr);
-
 
 /* Fixed sized, processor oriented, read/write.
 
@@ -277,7 +277,7 @@ DECLARE_SIM_CORE_WRITE_N(aligned,4,4)
 DECLARE_SIM_CORE_WRITE_N(aligned,8,8)
 DECLARE_SIM_CORE_WRITE_N(aligned,16,16)
 
-#define sim_core_write_unaligned_1 sim_core_write_aligned_1
+#define sim_core_write_unaligned_1 sim_core_write_aligned_1 
 DECLARE_SIM_CORE_WRITE_N(unaligned,2,2)
 DECLARE_SIM_CORE_WRITE_N(unaligned,4,4)
 DECLARE_SIM_CORE_WRITE_N(unaligned,8,8)
@@ -338,5 +338,15 @@ DECLARE_SIM_CORE_READ_N(misaligned,7,8)
 #define sim_core_read_word XCONCAT2(sim_core_read_,WITH_TARGET_WORD_BITSIZE)
 
 #undef DECLARE_SIM_CORE_READ_N
+
+
+#if (WITH_DEVICES)
+/* TODO: create sim/common/device.h */
+/* These are defined with each particular cpu.  */
+void device_error (device *me, char* message, ...);
+int device_io_read_buffer(device *me, void *dest, int space, address_word addr, unsigned nr_bytes, SIM_DESC sd, sim_cpu *processor, sim_cia cia);
+int device_io_write_buffer(device *me, const void *source, int space, address_word addr, unsigned nr_bytes, SIM_DESC sd, sim_cpu *processor, sim_cia cia);
+#endif
+
 
 #endif

@@ -1,7 +1,7 @@
 #source: expdyn1.s
 #source: expdref1.s --pic
 #source: comref1.s --pic
-#as: --no-underscore --em=criself
+#as: --no-underscore
 #ld: -m crislinux
 #readelf: -l
 
@@ -15,5 +15,5 @@ There are 2 program headers, .*
   LOAD [0-9a-fx ]+ RW  0x2000
 #...
    00     \.text[ ]*
-   01     \.got \.data \.bss[ ]*
+   01     \.data \.got \.bss[ ]*
 #pass

@@ -1,24 +1,24 @@
 /* Serial port emulation using sockets.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* FIXME: will obviously need to evolve.
    - connectionless sockets might be more appropriate.  */
 
-#include "config.h"
 #include "sim-main.h"
 
 #ifdef HAVE_STRING_H
@@ -56,10 +56,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "dv-sockser.h"
 
-#ifndef HAVE_SOCKLEN_T
-typedef int socklen_t;
-#endif
-
 /* Get definitions for both O_NONBLOCK and O_NDELAY.  */
 
 #ifndef O_NDELAY
@@ -105,8 +101,8 @@ static const OPTION sockser_options[] =
 {
   { { "sockser-addr", required_argument, NULL, OPTION_ADDR },
       '\0', "SOCKET ADDRESS", "Set serial emulation socket address",
-      sockser_option_handler, NULL },
-  { { NULL, no_argument, NULL, 0 }, '\0', NULL, NULL, NULL, NULL }
+      sockser_option_handler },
+  { { NULL, no_argument, NULL, 0 }, '\0', NULL, NULL, NULL }
 };
 
 static SIM_RC
@@ -167,7 +163,7 @@ dv_sockser_init (SIM_DESC sd)
     }
 
   sockser_listen_fd = socket (PF_INET, SOCK_STREAM, 0);
-  if (sockser_listen_fd == -1)
+  if (sockser_listen_fd < 0)
     {
       sim_io_eprintf (sd, "sockser init: unable to get socket: %s\n",
 		      strerror (errno));
@@ -175,12 +171,12 @@ dv_sockser_init (SIM_DESC sd)
     }
 
   sockaddr.sin_family = PF_INET;
-  sockaddr.sin_port = htons (port);
+  sockaddr.sin_port = htons(port);
   memcpy (&sockaddr.sin_addr.s_addr, hostent->h_addr,
 	  sizeof (struct in_addr));
 
   tmp = 1;
-  if (setsockopt (sockser_listen_fd, SOL_SOCKET, SO_REUSEADDR, (void*)& tmp, sizeof (tmp)) < 0)
+  if (setsockopt (sockser_listen_fd, SOL_SOCKET, SO_REUSEADDR, (void*)& tmp, sizeof(tmp)) < 0)
     {
       sim_io_eprintf (sd, "sockser init: unable to set SO_REUSEADDR: %s\n",
 		      strerror (errno));
@@ -248,7 +244,7 @@ connected_p (SIM_DESC sd)
   struct timeval tv;
   fd_set readfds;
   struct sockaddr sockaddr;
-  socklen_t addrlen;
+  int addrlen;
 
   if (sockser_listen_fd == -1)
     return 0;
@@ -275,7 +271,7 @@ connected_p (SIM_DESC sd)
 
   addrlen = sizeof (sockaddr);
   sockser_fd = accept (sockser_listen_fd, &sockaddr, &addrlen);
-  if (sockser_fd == -1)
+  if (sockser_fd < 0)
     return 0;
 
   /* Set non-blocking i/o.  */
@@ -299,8 +295,7 @@ dv_sockser_status (SIM_DESC sd)
   fd_set readfds,writefds;
 
   /* status to return if the socket isn't set up, or select fails */
-  status = DV_SOCKSER_INPUT_EMPTY | DV_SOCKSER_OUTPUT_EMPTY |
-	   DV_SOCKSER_DISCONNECTED;
+  status = DV_SOCKSER_INPUT_EMPTY | DV_SOCKSER_OUTPUT_EMPTY;
 
   if (! connected_p (sd))
     return status;
@@ -347,14 +342,13 @@ dv_sockser_status (SIM_DESC sd)
 }
 
 int
-dv_sockser_write_buffer (SIM_DESC sd, const unsigned char *buffer,
-			 unsigned nr_bytes)
+dv_sockser_write (SIM_DESC sd, unsigned char c)
 {
   int n;
 
   if (! connected_p (sd))
     return -1;
-  n = write (sockser_fd, buffer, nr_bytes);
+  n = write (sockser_fd, &c, 1);
   if (n == -1)
     {
       if (errno == EPIPE)
@@ -364,15 +358,9 @@ dv_sockser_write_buffer (SIM_DESC sd, const unsigned char *buffer,
 	}
       return -1;
     }
-  if (n != nr_bytes)
+  if (n != 1)
     return -1;
-  return nr_bytes;
-}
-
-int
-dv_sockser_write (SIM_DESC sd, unsigned char c)
-{
-  return dv_sockser_write_buffer (sd, &c, 1);
+  return 1;
 }
 
 int

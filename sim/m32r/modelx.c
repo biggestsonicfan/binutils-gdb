@@ -2,22 +2,23 @@
 
 THIS FILE IS MACHINE GENERATED WITH CGEN.
 
-Copyright 1996-2020 Free Software Foundation, Inc.
+Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
 
 This file is part of the GNU simulators.
 
-   This file is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License along
-   with this program; if not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 */
 
@@ -1822,7 +1823,7 @@ model_m32rx_neg (SIM_CPU *current_cpu, void *sem_arg)
 static int
 model_m32rx_nop (SIM_CPU *current_cpu, void *sem_arg)
 {
-#define FLD(f) abuf->fields.sfmt_empty.f
+#define FLD(f) abuf->fields.fmt_empty.f
   const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
   const IDESC * UNUSED idesc = abuf->idesc;
   int cycles = 0;
@@ -1900,7 +1901,7 @@ model_m32rx_rach_dsi (SIM_CPU *current_cpu, void *sem_arg)
 static int
 model_m32rx_rte (SIM_CPU *current_cpu, void *sem_arg)
 {
-#define FLD(f) abuf->fields.sfmt_empty.f
+#define FLD(f) abuf->fields.fmt_empty.f
   const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
   const IDESC * UNUSED idesc = abuf->idesc;
   int cycles = 0;
@@ -2315,70 +2316,6 @@ model_m32rx_st_plus (SIM_CPU *current_cpu, void *sem_arg)
 }
 
 static int
-model_m32rx_sth_plus (SIM_CPU *current_cpu, void *sem_arg)
-{
-#define FLD(f) abuf->fields.sfmt_st_plus.f
-  const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
-  const IDESC * UNUSED idesc = abuf->idesc;
-  int cycles = 0;
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_src1 = 0;
-    INT in_src2 = 0;
-    in_src1 = FLD (in_src1);
-    in_src2 = FLD (in_src2);
-    referenced |= 1 << 0;
-    referenced |= 1 << 1;
-    cycles += m32rxf_model_m32rx_u_store (current_cpu, idesc, 0, referenced, in_src1, in_src2);
-  }
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_sr = -1;
-    INT in_dr = -1;
-    INT out_dr = -1;
-    in_dr = FLD (in_src2);
-    out_dr = FLD (out_src2);
-    cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 1, referenced, in_sr, in_dr, out_dr);
-  }
-  return cycles;
-#undef FLD
-}
-
-static int
-model_m32rx_stb_plus (SIM_CPU *current_cpu, void *sem_arg)
-{
-#define FLD(f) abuf->fields.sfmt_st_plus.f
-  const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
-  const IDESC * UNUSED idesc = abuf->idesc;
-  int cycles = 0;
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_src1 = 0;
-    INT in_src2 = 0;
-    in_src1 = FLD (in_src1);
-    in_src2 = FLD (in_src2);
-    referenced |= 1 << 0;
-    referenced |= 1 << 1;
-    cycles += m32rxf_model_m32rx_u_store (current_cpu, idesc, 0, referenced, in_src1, in_src2);
-  }
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_sr = -1;
-    INT in_dr = -1;
-    INT out_dr = -1;
-    in_dr = FLD (in_src2);
-    out_dr = FLD (out_src2);
-    cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 1, referenced, in_sr, in_dr, out_dr);
-  }
-  return cycles;
-#undef FLD
-}
-
-static int
 model_m32rx_st_minus (SIM_CPU *current_cpu, void *sem_arg)
 {
 #define FLD(f) abuf->fields.sfmt_st_plus.f
@@ -2614,7 +2551,7 @@ model_m32rx_pcmpbz (SIM_CPU *current_cpu, void *sem_arg)
 static int
 model_m32rx_sadd (SIM_CPU *current_cpu, void *sem_arg)
 {
-#define FLD(f) abuf->fields.sfmt_empty.f
+#define FLD(f) abuf->fields.fmt_empty.f
   const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
   const IDESC * UNUSED idesc = abuf->idesc;
   int cycles = 0;
@@ -2720,7 +2657,7 @@ model_m32rx_maclh1 (SIM_CPU *current_cpu, void *sem_arg)
 static int
 model_m32rx_sc (SIM_CPU *current_cpu, void *sem_arg)
 {
-#define FLD(f) abuf->fields.sfmt_empty.f
+#define FLD(f) abuf->fields.fmt_empty.f
   const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
   const IDESC * UNUSED idesc = abuf->idesc;
   int cycles = 0;
@@ -2739,7 +2676,7 @@ model_m32rx_sc (SIM_CPU *current_cpu, void *sem_arg)
 static int
 model_m32rx_snc (SIM_CPU *current_cpu, void *sem_arg)
 {
-#define FLD(f) abuf->fields.sfmt_empty.f
+#define FLD(f) abuf->fields.fmt_empty.f
   const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
   const IDESC * UNUSED idesc = abuf->idesc;
   int cycles = 0;
@@ -2749,107 +2686,6 @@ model_m32rx_snc (SIM_CPU *current_cpu, void *sem_arg)
     INT in_sr = -1;
     INT in_dr = -1;
     INT out_dr = -1;
-    cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 0, referenced, in_sr, in_dr, out_dr);
-  }
-  return cycles;
-#undef FLD
-}
-
-static int
-model_m32rx_clrpsw (SIM_CPU *current_cpu, void *sem_arg)
-{
-#define FLD(f) abuf->fields.sfmt_clrpsw.f
-  const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
-  const IDESC * UNUSED idesc = abuf->idesc;
-  int cycles = 0;
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_sr = -1;
-    INT in_dr = -1;
-    INT out_dr = -1;
-    cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 0, referenced, in_sr, in_dr, out_dr);
-  }
-  return cycles;
-#undef FLD
-}
-
-static int
-model_m32rx_setpsw (SIM_CPU *current_cpu, void *sem_arg)
-{
-#define FLD(f) abuf->fields.sfmt_clrpsw.f
-  const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
-  const IDESC * UNUSED idesc = abuf->idesc;
-  int cycles = 0;
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_sr = -1;
-    INT in_dr = -1;
-    INT out_dr = -1;
-    cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 0, referenced, in_sr, in_dr, out_dr);
-  }
-  return cycles;
-#undef FLD
-}
-
-static int
-model_m32rx_bset (SIM_CPU *current_cpu, void *sem_arg)
-{
-#define FLD(f) abuf->fields.sfmt_bset.f
-  const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
-  const IDESC * UNUSED idesc = abuf->idesc;
-  int cycles = 0;
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_sr = -1;
-    INT in_dr = -1;
-    INT out_dr = -1;
-    in_sr = FLD (in_sr);
-    referenced |= 1 << 0;
-    cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 0, referenced, in_sr, in_dr, out_dr);
-  }
-  return cycles;
-#undef FLD
-}
-
-static int
-model_m32rx_bclr (SIM_CPU *current_cpu, void *sem_arg)
-{
-#define FLD(f) abuf->fields.sfmt_bset.f
-  const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
-  const IDESC * UNUSED idesc = abuf->idesc;
-  int cycles = 0;
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_sr = -1;
-    INT in_dr = -1;
-    INT out_dr = -1;
-    in_sr = FLD (in_sr);
-    referenced |= 1 << 0;
-    cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 0, referenced, in_sr, in_dr, out_dr);
-  }
-  return cycles;
-#undef FLD
-}
-
-static int
-model_m32rx_btst (SIM_CPU *current_cpu, void *sem_arg)
-{
-#define FLD(f) abuf->fields.sfmt_bset.f
-  const ARGBUF * UNUSED abuf = SEM_ARGBUF ((SEM_ARG) sem_arg);
-  const IDESC * UNUSED idesc = abuf->idesc;
-  int cycles = 0;
-  {
-    int referenced = 0;
-    int UNUSED insn_referenced = abuf->written;
-    INT in_sr = -1;
-    INT in_dr = -1;
-    INT out_dr = -1;
-    in_sr = FLD (in_sr);
-    referenced |= 1 << 0;
     cycles += m32rxf_model_m32rx_u_exec (current_cpu, idesc, 0, referenced, in_sr, in_dr, out_dr);
   }
   return cycles;
@@ -2970,8 +2806,6 @@ static const INSN_TIMING m32rx_timing[] = {
   { M32RXF_INSN_STH, model_m32rx_sth, { { (int) UNIT_M32RX_U_STORE, 1, 1 } } },
   { M32RXF_INSN_STH_D, model_m32rx_sth_d, { { (int) UNIT_M32RX_U_STORE, 1, 2 } } },
   { M32RXF_INSN_ST_PLUS, model_m32rx_st_plus, { { (int) UNIT_M32RX_U_STORE, 1, 1 }, { (int) UNIT_M32RX_U_EXEC, 1, 0 } } },
-  { M32RXF_INSN_STH_PLUS, model_m32rx_sth_plus, { { (int) UNIT_M32RX_U_STORE, 1, 1 }, { (int) UNIT_M32RX_U_EXEC, 1, 0 } } },
-  { M32RXF_INSN_STB_PLUS, model_m32rx_stb_plus, { { (int) UNIT_M32RX_U_STORE, 1, 1 }, { (int) UNIT_M32RX_U_EXEC, 1, 0 } } },
   { M32RXF_INSN_ST_MINUS, model_m32rx_st_minus, { { (int) UNIT_M32RX_U_STORE, 1, 1 }, { (int) UNIT_M32RX_U_EXEC, 1, 0 } } },
   { M32RXF_INSN_SUB, model_m32rx_sub, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
   { M32RXF_INSN_SUBV, model_m32rx_subv, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
@@ -2989,11 +2823,6 @@ static const INSN_TIMING m32rx_timing[] = {
   { M32RXF_INSN_MACLH1, model_m32rx_maclh1, { { (int) UNIT_M32RX_U_MAC, 1, 1 } } },
   { M32RXF_INSN_SC, model_m32rx_sc, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
   { M32RXF_INSN_SNC, model_m32rx_snc, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
-  { M32RXF_INSN_CLRPSW, model_m32rx_clrpsw, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
-  { M32RXF_INSN_SETPSW, model_m32rx_setpsw, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
-  { M32RXF_INSN_BSET, model_m32rx_bset, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
-  { M32RXF_INSN_BCLR, model_m32rx_bclr, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
-  { M32RXF_INSN_BTST, model_m32rx_btst, { { (int) UNIT_M32RX_U_EXEC, 1, 1 } } },
 };
 
 #endif /* WITH_PROFILE_MODEL_P */
@@ -3010,7 +2839,7 @@ m32rx_model_init (SIM_CPU *cpu)
 #define TIMING_DATA(td) 0
 #endif
 
-static const SIM_MODEL m32rx_models[] =
+static const MODEL m32rx_models[] =
 {
   { "m32rx", & m32rx_mach, MODEL_M32RX, TIMING_DATA (& m32rx_timing[0]), m32rx_model_init },
   { 0 }
@@ -3018,7 +2847,7 @@ static const SIM_MODEL m32rx_models[] =
 
 /* The properties of this cpu's implementation.  */
 
-static const SIM_MACH_IMP_PROPERTIES m32rxf_imp_properties =
+static const MACH_IMP_PROPERTIES m32rxf_imp_properties =
 {
   sizeof (SIM_CPU),
 #if WITH_SCACHE
@@ -3050,7 +2879,7 @@ m32rx_init_cpu (SIM_CPU *cpu)
   CPU_PC_FETCH (cpu) = m32rxf_h_pc_get;
   CPU_PC_STORE (cpu) = m32rxf_h_pc_set;
   CPU_GET_IDATA (cpu) = m32rxf_get_idata;
-  CPU_MAX_INSNS (cpu) = M32RXF_INSN__MAX;
+  CPU_MAX_INSNS (cpu) = M32RXF_INSN_SNC + 1;
   CPU_INSN_NAME (cpu) = cgen_insn_name;
   CPU_FULL_ENGINE_FN (cpu) = m32rxf_engine_run_full;
 #if WITH_FAST
@@ -3060,7 +2889,7 @@ m32rx_init_cpu (SIM_CPU *cpu)
 #endif
 }
 
-const SIM_MACH m32rx_mach =
+const MACH m32rx_mach =
 {
   "m32rx", "m32rx", MACH_M32RX,
   32, 32, & m32rx_models[0], & m32rxf_imp_properties,

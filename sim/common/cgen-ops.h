@@ -1,21 +1,22 @@
 /* Semantics ops support for CGEN-based simulators.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999, 2002 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of the GNU Simulators.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 */
 
@@ -24,10 +25,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <assert.h>
 
-/* TODO: This should get moved into sim-inline.h.  */
 #if defined (__GNUC__) && ! defined (SEMOPS_DEFINE_INLINE)
 #define SEMOPS_DEFINE_INLINE
-#define SEMOPS_INLINE EXTERN_INLINE
+#define SEMOPS_INLINE extern inline
 #else
 #define SEMOPS_INLINE
 #endif
@@ -59,9 +59,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define GTUBI(x, y) ((BI) (x) > (BI) (y))
 #define GEUBI(x, y) ((BI) (x) >= (BI) (y))
 
-#define ADDQI(x, y) ((QI) ((UQI) (x) + (UQI) (y)))
-#define SUBQI(x, y) ((QI) ((UQI) (x) - (UQI) (y)))
-#define MULQI(x, y) ((QI) ((UQI) (x) * (UQI) (y)))
+#define ADDQI(x, y) ((x) + (y))
+#define SUBQI(x, y) ((x) - (y))
+#define MULQI(x, y) ((x) * (y))
 #define DIVQI(x, y) ((QI) (x) / (QI) (y))
 #define UDIVQI(x, y) ((UQI) (x) / (UQI) (y))
 #define MODQI(x, y) ((QI) (x) % (QI) (y))
@@ -74,10 +74,10 @@ extern QI ROLQI (QI, int);
 #define ANDQI(x, y) ((x) & (y))
 #define ORQI(x, y) ((x) | (y))
 #define XORQI(x, y) ((x) ^ (y))
-#define NEGQI(x) ((QI) (- (UQI) (x)))
+#define NEGQI(x) (- (x))
 #define NOTQI(x) (! (QI) (x))
 #define INVQI(x) (~ (x))
-#define ABSQI(x) ((QI) ((QI) (x) < 0 ? -(UQI) (x) : (UQI) (x)))
+#define ABSQI(x) ((x) < 0 ? -(x) : (x))
 #define EQQI(x, y) ((QI) (x) == (QI) (y))
 #define NEQI(x, y) ((QI) (x) != (QI) (y))
 #define LTQI(x, y) ((QI) (x) < (QI) (y))
@@ -89,9 +89,9 @@ extern QI ROLQI (QI, int);
 #define GTUQI(x, y) ((UQI) (x) > (UQI) (y))
 #define GEUQI(x, y) ((UQI) (x) >= (UQI) (y))
 
-#define ADDHI(x, y) ((HI) ((UHI) (x) + (UHI) (y)))
-#define SUBHI(x, y) ((HI) ((UHI) (x) - (UHI) (y)))
-#define MULHI(x, y) ((HI) ((UHI) (x) * (UHI) (y)))
+#define ADDHI(x, y) ((x) + (y))
+#define SUBHI(x, y) ((x) - (y))
+#define MULHI(x, y) ((x) * (y))
 #define DIVHI(x, y) ((HI) (x) / (HI) (y))
 #define UDIVHI(x, y) ((UHI) (x) / (UHI) (y))
 #define MODHI(x, y) ((HI) (x) % (HI) (y))
@@ -104,10 +104,10 @@ extern HI ROLHI (HI, int);
 #define ANDHI(x, y) ((x) & (y))
 #define ORHI(x, y) ((x) | (y))
 #define XORHI(x, y) ((x) ^ (y))
-#define NEGHI(x) ((HI) (- (UHI) (x)))
+#define NEGHI(x) (- (x))
 #define NOTHI(x) (! (HI) (x))
 #define INVHI(x) (~ (x))
-#define ABSHI(x) ((HI) ((HI) (x) < 0 ? -(UHI) (x) : (UHI) (x)))
+#define ABSHI(x) ((x) < 0 ? -(x) : (x))
 #define EQHI(x, y) ((HI) (x) == (HI) (y))
 #define NEHI(x, y) ((HI) (x) != (HI) (y))
 #define LTHI(x, y) ((HI) (x) < (HI) (y))
@@ -119,9 +119,9 @@ extern HI ROLHI (HI, int);
 #define GTUHI(x, y) ((UHI) (x) > (UHI) (y))
 #define GEUHI(x, y) ((UHI) (x) >= (UHI) (y))
 
-#define ADDSI(x, y) ((SI) ((USI) (x) + (USI) (y)))
-#define SUBSI(x, y) ((SI) ((USI) (x) - (USI) (y)))
-#define MULSI(x, y) ((SI) ((USI) (x) * (USI) (y)))
+#define ADDSI(x, y) ((x) + (y))
+#define SUBSI(x, y) ((x) - (y))
+#define MULSI(x, y) ((x) * (y))
 #define DIVSI(x, y) ((SI) (x) / (SI) (y))
 #define UDIVSI(x, y) ((USI) (x) / (USI) (y))
 #define MODSI(x, y) ((SI) (x) % (SI) (y))
@@ -134,10 +134,10 @@ extern SI ROLSI (SI, int);
 #define ANDSI(x, y) ((x) & (y))
 #define ORSI(x, y) ((x) | (y))
 #define XORSI(x, y) ((x) ^ (y))
-#define NEGSI(x) ((SI) (- (USI) (x)))
+#define NEGSI(x) (- (x))
 #define NOTSI(x) (! (SI) (x))
 #define INVSI(x) (~ (x))
-#define ABSSI(x) ((SI) ((SI) (x) < 0 ? -(USI) (x) : (USI) (x)))
+#define ABSSI(x) ((x) < 0 ? -(x) : (x))
 #define EQSI(x, y) ((SI) (x) == (SI) (y))
 #define NESI(x, y) ((SI) (x) != (SI) (y))
 #define LTSI(x, y) ((SI) (x) < (SI) (y))
@@ -179,9 +179,9 @@ extern int LEUDI (UDI, UDI);
 extern int GTUDI (UDI, UDI);
 extern int GEUDI (UDI, UDI);
 #else /* ! DI_FN_SUPPORT */
-#define ADDDI(x, y) ((DI) ((UDI) (x) + (UDI) (y)))
-#define SUBDI(x, y) ((DI) ((UDI) (x) - (UDI) (y)))
-#define MULDI(x, y) ((DI) ((UDI) (x) * (UDI) (y)))
+#define ADDDI(x, y) ((x) + (y))
+#define SUBDI(x, y) ((x) - (y))
+#define MULDI(x, y) ((x) * (y))
 #define DIVDI(x, y) ((DI) (x) / (DI) (y))
 #define UDIVDI(x, y) ((UDI) (x) / (UDI) (y))
 #define MODDI(x, y) ((DI) (x) % (DI) (y))
@@ -194,10 +194,10 @@ extern DI ROLDI (DI, int);
 #define ANDDI(x, y) ((x) & (y))
 #define ORDI(x, y) ((x) | (y))
 #define XORDI(x, y) ((x) ^ (y))
-#define NEGDI(x) ((DI) (- (UDI) (x)))
+#define NEGDI(x) (- (x))
 #define NOTDI(x) (! (DI) (x))
 #define INVDI(x) (~ (x))
-#define ABSDI(x) ((DI) ((DI) (x) < 0 ? -(UDI) (x) : (UDI) (x)))
+#define ABSDI(x) ((x) < 0 ? -(x) : (x))
 #define EQDI(x, y) ((DI) (x) == (DI) (y))
 #define NEDI(x, y) ((DI) (x) != (DI) (y))
 #define LTDI(x, y) ((DI) (x) < (DI) (y))
@@ -404,10 +404,7 @@ SUBWORDXFSI (XF in, int word)
   /* Note: typedef struct { SI parts[3]; } XF; */
   union { XF in; SI out[3]; } x;
   x.in = in;
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_BIG)
-    return x.out[word];
-  else
-    return x.out[2 - word];
+  return x.out[word];
 }
 
 SEMOPS_INLINE SI
@@ -416,23 +413,23 @@ SUBWORDTFSI (TF in, int word)
   /* Note: typedef struct { SI parts[4]; } TF; */
   union { TF in; SI out[4]; } x;
   x.in = in;
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_BIG)
-    return x.out[word];
-  else
-    return x.out[3 - word];
+  return x.out[word];
 }
 
 SEMOPS_INLINE DI
 JOINSIDI (SI x0, SI x1)
 {
-  return MAKEDI (x0, x1);
+  if (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
+    return MAKEDI (x0, x1);
+  else
+    return MAKEDI (x1, x0);
 }
 
 SEMOPS_INLINE DF
 JOINSIDF (SI x0, SI x1)
 {
   union { SI in[2]; DF out; } x;
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_BIG)
+  if (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
     x.in[0] = x0, x.in[1] = x1;
   else
     x.in[1] = x0, x.in[0] = x1;
@@ -443,7 +440,7 @@ SEMOPS_INLINE XF
 JOINSIXF (SI x0, SI x1, SI x2)
 {
   union { SI in[3]; XF out; } x;
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_BIG)
+  if (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
     x.in[0] = x0, x.in[1] = x1, x.in[2] = x2;
   else
     x.in[2] = x0, x.in[1] = x1, x.in[0] = x2;
@@ -454,7 +451,7 @@ SEMOPS_INLINE TF
 JOINSITF (SI x0, SI x1, SI x2, SI x3)
 {
   union { SI in[4]; TF out; } x;
-  if (HOST_BYTE_ORDER == BFD_ENDIAN_BIG)
+  if (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
     x.in[0] = x0, x.in[1] = x1, x.in[2] = x2, x.in[3] = x3;
   else
     x.in[3] = x0, x.in[2] = x1, x.in[1] = x2, x.in[0] = x3;
@@ -631,54 +628,6 @@ SUBOFQI (QI a, QI b, BI c)
   return res;
 }
 
-SEMOPS_INLINE BI
-MUL2OFSI (SI a, SI b)
-{
-  DI tmp = MULDI (EXTSIDI (a), EXTSIDI (b));
-  BI res = tmp < -0x80000000LL || tmp > 0x7fffffffLL;
-  return res;
-}
-
-SEMOPS_INLINE BI
-MUL1OFSI (USI a, USI b)
-{
-  UDI tmp = MULDI (ZEXTSIDI (a), ZEXTSIDI (b));
-  BI res = (tmp > 0xFFFFFFFFULL);
-  return res;
-}
-
-SEMOPS_INLINE BI
-ADDCFDI (DI a, DI b, BI c)
-{
-  DI tmp = ADDDI (a, ADDDI (b, c));
-  BI res = ((UDI) tmp < (UDI) a) || (c && tmp == a);
-  return res;
-}
-
-SEMOPS_INLINE BI
-ADDOFDI (DI a, DI b, BI c)
-{
-  DI tmp = ADDDI (a, ADDDI (b, c));
-  BI res = (((a < 0) == (b < 0))
-	    && ((a < 0) != (tmp < 0)));
-  return res;
-}
-
-SEMOPS_INLINE BI
-SUBCFDI (DI a, DI b, BI c)
-{
-  BI res = ((UDI) a < (UDI) b) || (c && a == b);
-  return res;
-}
-
-SEMOPS_INLINE BI
-SUBOFDI (DI a, DI b, BI c)
-{
-  DI tmp = SUBDI (a, ADDSI (b, c));
-  BI res = (((a < 0) != (b < 0))
-	    && ((a < 0) != (tmp < 0)));
-  return res;
-}
 #else
 
 SI ADDCSI (SI, SI, BI);
@@ -699,12 +648,6 @@ UBI ADDOFQI (QI, QI, BI);
 QI SUBCQI (QI, QI, BI);
 UBI SUBCFQI (QI, QI, BI);
 UBI SUBOFQI (QI, QI, BI);
-BI MUL1OFSI (SI a, SI b);
-BI MUL2OFSI (SI a, SI b);
-BI ADDCFDI (DI a, DI b, BI c);
-BI ADDOFDI (DI a, DI b, BI c);
-BI SUBCFDI (DI a, DI b, BI c);
-BI SUBOFDI (DI a, DI b, BI c);
 
 #endif
 

@@ -2,9 +2,14 @@
    particularly deep about the functionality nor names in here.
    */
 
+#ifdef PROTOTYPES
 static int square (int x)
+#else
+static int square (x)
+  int  x;
+#endif
 {
-  return x*x;			/* out-of-func */
+  return x*x;
 }
 
 
@@ -13,7 +18,7 @@ int main ()
   int i = 99;
 
   i++;
-  i = square (i);		/* bp-on-call */
-  i--;				/* bp-on-non-call */
+  i = square (i);
+  i--;
   return 0;
 }

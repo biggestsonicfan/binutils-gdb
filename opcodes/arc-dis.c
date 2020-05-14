@@ -1,1500 +1,1246 @@
 /* Instruction printing code for the ARC.
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright 1994, 1995, 1997, 1998, 2000, 2001, 2002
+   Free Software Foundation, Inc.
+   Contributed by Doug Evans (dje@cygnus.com).
 
-   Contributed by Claudiu Zissulescu (claziss@synopsys.com)
-
-   This file is part of libopcodes.
-
-   This library is free software; you can redistribute it and/or modify
+   This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "sysdep.h"
-#include <stdio.h>
-#include <assert.h>
+#include "ansidecl.h"
+#include "libiberty.h"
 #include "dis-asm.h"
 #include "opcode/arc.h"
-#include "elf/arc.h"
-#include "arc-dis.h"
-#include "arc-ext.h"
 #include "elf-bfd.h"
-#include "libiberty.h"
+#include "elf/arc.h"
+#include <string.h>
 #include "opintl.h"
 
-/* Structure used to iterate over, and extract the values for, operands of
-   an opcode.  */
+#include <stdarg.h>
+#include "arc-dis.h"
+#include "arc-ext.h"
 
-struct arc_operand_iterator
-{
-  /* The complete instruction value to extract operands from.  */
-  unsigned long long insn;
-
-  /* The LIMM if this is being tracked separately.  This field is only
-     valid if we find the LIMM operand in the operand list.  */
-  unsigned limm;
-
-  /* The opcode this iterator is operating on.  */
-  const struct arc_opcode *opcode;
-
-  /* The index into the opcodes operand index list.  */
-  const unsigned char *opidx;
-};
-
-/* A private data used by ARC decoder.  */
-struct arc_disassemble_info
-{
-  /* The current disassembled arc opcode.  */
-  const struct arc_opcode *opcode;
-
-  /* Instruction length w/o limm field.  */
-  unsigned insn_len;
-
-  /* TRUE if we have limm.  */
-  bfd_boolean limm_p;
-
-  /* LIMM value, if exists.  */
-  unsigned limm;
-
-  /* Condition code, if exists.  */
-  unsigned condition_code;
-
-  /* Writeback mode.  */
-  unsigned writeback_mode;
-
-  /* Number of operands.  */
-  unsigned operands_count;
-
-  struct arc_insn_operand operands[MAX_INSN_ARGS];
-};
-
-/* Globals variables.  */
-
-static const char * const regnames[64] =
-{
-  "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-  "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-  "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-  "r24", "r25", "gp", "fp", "sp", "ilink", "r30", "blink",
-
-  "r32", "r33", "r34", "r35", "r36", "r37", "r38", "r39",
-  "r40", "r41", "r42", "r43", "r44", "r45", "r46", "r47",
-  "r48", "r49", "r50", "r51", "r52", "r53", "r54", "r55",
-  "r56", "r57", "r58", "r59", "lp_count", "reserved", "LIMM", "pcl"
-};
-
-static const char * const addrtypenames[ARC_NUM_ADDRTYPES] =
-{
-  "bd", "jid", "lbd", "mbd", "sd", "sm", "xa", "xd",
-  "cd", "cbd", "cjid", "clbd", "cm", "csd", "cxa", "cxd"
-};
-
-static int addrtypenames_max = ARC_NUM_ADDRTYPES - 1;
-
-static const char * const addrtypeunknown = "unknown";
-
-/* This structure keeps track which instruction class(es)
-   should be ignored durring disassembling.  */
-
-typedef struct skipclass
-{
-  insn_class_t     insn_class;
-  insn_subclass_t  subclass;
-  struct skipclass *nxt;
-} skipclass_t, *linkclass;
-
-/* Intial classes of instructions to be consider first when
-   disassembling.  */
-static linkclass decodelist = NULL;
-
-/* ISA mask value enforced via disassembler info options.  ARC_OPCODE_NONE
-   value means that no CPU is enforced.  */
-
-static unsigned enforced_isa_mask = ARC_OPCODE_NONE;
-
-/* True if we want to print using only hex numbers.  */
-static bfd_boolean print_hex = FALSE;
-
-/* Macros section.  */
-
-#ifdef DEBUG
-# define pr_debug(fmt, args...) fprintf (stderr, fmt, ##args)
-#else
-# define pr_debug(fmt, args...)
+#ifndef dbg
+#define dbg (0)
 #endif
 
-#define ARRANGE_ENDIAN(info, buf)					\
-  (info->endian == BFD_ENDIAN_LITTLE ? bfd_getm32 (bfd_getl32 (buf))	\
-   : bfd_getb32 (buf))
+#define BIT(word,n)	((word) & (1 << n))
+#define BITS(word,s,e)  (((word) << (31 - e)) >> (s + (31 - e)))
+#define OPCODE(word)	(BITS ((word), 27, 31))
+#define FIELDA(word)	(BITS ((word), 21, 26))
+#define FIELDB(word)	(BITS ((word), 15, 20))
+#define FIELDC(word)	(BITS ((word),  9, 14))
 
-#define BITS(word,s,e)  (((word) >> (s)) & ((1ull << ((e) - (s)) << 1) - 1))
-#define OPCODE_32BIT_INSN(word)	(BITS ((word), 27, 31))
+/* FIELD D is signed in all of its uses, so we make sure argument is
+   treated as signed for bit shifting purposes:  */
+#define FIELDD(word)	(BITS (((signed int)word), 0, 8))
 
-/* Functions implementation.  */
+#define PUT_NEXT_WORD_IN(a)						\
+  do									\
+    {									\
+      if (is_limm == 1 && !NEXT_WORD (1))				\
+        mwerror (state, _("Illegal limm reference in last instruction!\n")); \
+      a = state->words[1];						\
+    }									\
+  while (0)
 
-/* Initialize private data.  */
-static bfd_boolean
-init_arc_disasm_info (struct disassemble_info *info)
+#define CHECK_FLAG_COND_NULLIFY()				\
+  do								\
+    {								\
+      if (is_shimm == 0)					\
+        {							\
+          flag = BIT (state->words[0], 8);			\
+          state->nullifyMode = BITS (state->words[0], 5, 6);	\
+          cond = BITS (state->words[0], 0, 4);			\
+        }							\
+    }								\
+  while (0)
+
+#define CHECK_COND()				\
+  do						\
+    {						\
+      if (is_shimm == 0)			\
+        cond = BITS (state->words[0], 0, 4);	\
+    }						\
+  while (0)
+
+#define CHECK_FIELD(field)			\
+  do						\
+    {						\
+      if (field == 62)				\
+        {					\
+          is_limm++;				\
+	  field##isReg = 0;			\
+	  PUT_NEXT_WORD_IN (field);		\
+	  limm_value = field;			\
+	}					\
+      else if (field > 60)			\
+        {					\
+	  field##isReg = 0;			\
+	  is_shimm++;				\
+	  flag = (field == 61);			\
+	  field = FIELDD (state->words[0]);	\
+	}					\
+    }						\
+  while (0)
+
+#define CHECK_FIELD_A()				\
+  do						\
+    {						\
+      fieldA = FIELDA (state->words[0]);	\
+      if (fieldA > 60)				\
+        {					\
+	  fieldAisReg = 0;			\
+	  fieldA = 0;				\
+	}					\
+    }						\
+  while (0)
+
+#define CHECK_FIELD_B()				\
+  do						\
+    {						\
+      fieldB = FIELDB (state->words[0]);	\
+      CHECK_FIELD (fieldB);			\
+    }						\
+  while (0)
+
+#define CHECK_FIELD_C()				\
+  do						\
+    {						\
+      fieldC = FIELDC (state->words[0]);	\
+      CHECK_FIELD (fieldC);			\
+    }						\
+  while (0)
+
+#define IS_SMALL(x) (((field##x) < 256) && ((field##x) > -257))
+#define IS_REG(x)   (field##x##isReg)
+#define WRITE_FORMAT_LB_Rx_RB(x)     WRITE_FORMAT(x,"[","]","","")
+#define WRITE_FORMAT_x_COMMA_LB(x)   WRITE_FORMAT(x,"",",[","",",[")
+#define WRITE_FORMAT_COMMA_x_RB(x)   WRITE_FORMAT(x,",","]",",","]")
+#define WRITE_FORMAT_x_RB(x)         WRITE_FORMAT(x,"","]","","]")
+#define WRITE_FORMAT_COMMA_x(x)      WRITE_FORMAT(x,",","",",","")
+#define WRITE_FORMAT_x_COMMA(x)      WRITE_FORMAT(x,"",",","",",")
+#define WRITE_FORMAT_x(x)            WRITE_FORMAT(x,"","","","")
+#define WRITE_FORMAT(x,cb1,ca1,cb,ca) strcat (formatString,		\
+				     (IS_REG (x) ? cb1"%r"ca1 :		\
+				      usesAuxReg ? cb"%a"ca :		\
+				      IS_SMALL (x) ? cb"%d"ca : cb"%h"ca))
+#define WRITE_FORMAT_RB()	strcat (formatString, "]")
+#define WRITE_COMMENT(str)	(state->comm[state->commNum++] = (str))
+#define WRITE_NOP_COMMENT()	if (!fieldAisReg && !flag) WRITE_COMMENT ("nop");
+
+#define NEXT_WORD(x)	(offset += 4, state->words[x])
+
+#define add_target(x)	(state->targets[state->tcnt++] = (x))
+
+static char comment_prefix[] = "\t; ";
+
+static const char *core_reg_name PARAMS ((struct arcDisState *, int));
+static const char *aux_reg_name PARAMS ((struct arcDisState *, int));
+static const char *cond_code_name PARAMS ((struct arcDisState *, int));
+static const char *instruction_name
+  PARAMS ((struct arcDisState *, int, int, int *));
+static void mwerror PARAMS ((struct arcDisState *, const char *));
+static const char *post_address PARAMS ((struct arcDisState *, int));
+static void write_comments_
+  PARAMS ((struct arcDisState *, int, int, long int));
+static void write_instr_name_
+  PARAMS ((struct arcDisState *, const char *, int, int, int, int, int, int));
+static int dsmOneArcInst PARAMS ((bfd_vma, struct arcDisState *));
+static const char *_coreRegName PARAMS ((void *, int));
+static int decodeInstr PARAMS ((bfd_vma, disassemble_info *));
+
+static const char *
+core_reg_name (state, val)
+     struct arcDisState * state;
+     int                  val;
 {
-  struct arc_disassemble_info *arc_infop
-    = calloc (sizeof (*arc_infop), 1);
-
-  if (arc_infop == NULL)
-    return FALSE;
-
-  info->private_data = arc_infop;
-  return TRUE;
+  if (state->coreRegName)
+    return (*state->coreRegName)(state->_this, val);
+  return 0;
 }
 
-/* Add a new element to the decode list.  */
+static const char *
+aux_reg_name (state, val)
+     struct arcDisState * state;
+     int                  val;
+{
+  if (state->auxRegName)
+    return (*state->auxRegName)(state->_this, val);
+  return 0;
+}
+
+static const char *
+cond_code_name (state, val)
+     struct arcDisState * state;
+     int                  val;
+{
+  if (state->condCodeName)
+    return (*state->condCodeName)(state->_this, val);
+  return 0;
+}
+
+static const char *
+instruction_name (state, op1, op2, flags)
+     struct arcDisState * state;
+     int    op1;
+     int    op2;
+     int *  flags;
+{
+  if (state->instName)
+    return (*state->instName)(state->_this, op1, op2, flags);
+  return 0;
+}
 
 static void
-add_to_decodelist (insn_class_t     insn_class,
-		   insn_subclass_t  subclass)
+mwerror (state, msg)
+     struct arcDisState * state;
+     const char * msg;
 {
-  linkclass t = (linkclass) xmalloc (sizeof (skipclass_t));
-
-  t->insn_class = insn_class;
-  t->subclass = subclass;
-  t->nxt = decodelist;
-  decodelist = t;
+  if (state->err != 0)
+    (*state->err)(state->_this, (msg));
 }
 
-/* Return TRUE if we need to skip the opcode from being
-   disassembled.  */
-
-static bfd_boolean
-skip_this_opcode (const struct arc_opcode *opcode)
+static const char *
+post_address (state, addr)
+     struct arcDisState * state;
+     int addr;
 {
-  linkclass t = decodelist;
+  static char id[3 * ARRAY_SIZE (state->addresses)];
+  int j, i = state->acnt;
 
-  /* Check opcode for major 0x06, return if it is not in.  */
-  if (arc_opcode_len (opcode) == 4
-      && (OPCODE_32BIT_INSN (opcode->opcode) != 0x06
-	  /* Can be an APEX extensions.  */
-	  && OPCODE_32BIT_INSN (opcode->opcode) != 0x07))
-    return FALSE;
-
-  /* or not a known truble class.  */
-  switch (opcode->insn_class)
+  if (i < ((int) ARRAY_SIZE (state->addresses)))
     {
-    case FLOAT:
-    case DSP:
-    case ARITH:
-    case MPY:
-      break;
-    default:
-      return FALSE;
+      state->addresses[i] = addr;
+      ++state->acnt;
+      j = i*3;
+      id[j+0] = '@';
+      id[j+1] = '0'+i;
+      id[j+2] = 0;
+
+      return id + j;
     }
-
-  while (t != NULL)
-    {
-      if ((t->insn_class == opcode->insn_class)
-	  && (t->subclass == opcode->subclass))
-	return FALSE;
-      t = t->nxt;
-    }
-
-  return TRUE;
+  return "";
 }
 
-static bfd_vma
-bfd_getm32 (unsigned int data)
+static void my_sprintf PARAMS ((struct arcDisState *, char *, const char *,
+				...));
+
+static void
+my_sprintf VPARAMS ((struct arcDisState *state, char *buf, const char *format,
+		     ...))
 {
-  bfd_vma value = 0;
+  char *bp;
+  const char *p;
+  int size, leading_zero, regMap[2];
+  long auxNum;
 
-  value = ((data & 0xff00) | (data & 0xff)) << 16;
-  value |= ((data & 0xff0000) | (data & 0xff000000)) >> 16;
-  return value;
-}
+  VA_OPEN (ap, format);
+  VA_FIXEDARG (ap, struct arcDisState *, state);
+  VA_FIXEDARG (ap, char *, buf);
+  VA_FIXEDARG (ap, const char *, format);
 
-static bfd_boolean
-special_flag_p (const char *opname,
-		const char *flgname)
-{
-  const struct arc_flag_special *flg_spec;
-  unsigned i, j, flgidx;
+  bp = buf;
+  *bp = 0;
+  p = format;
+  auxNum = -1;
+  regMap[0] = 0;
+  regMap[1] = 0;
 
-  for (i = 0; i < arc_num_flag_special; i++)
-    {
-      flg_spec = &arc_flag_special_cases[i];
-
-      if (strcmp (opname, flg_spec->name))
-	continue;
-
-      /* Found potential special case instruction.  */
-      for (j=0;; ++j)
-	{
-	  flgidx = flg_spec->flags[j];
-	  if (flgidx == 0)
-	    break; /* End of the array.  */
-
-	  if (strcmp (flgname, arc_flag_operands[flgidx].name) == 0)
-	    return TRUE;
-	}
-    }
-  return FALSE;
-}
-
-/* Find opcode from ARC_TABLE given the instruction described by INSN and
-   INSNLEN.  The ISA_MASK restricts the possible matches in ARC_TABLE.  */
-
-static const struct arc_opcode *
-find_format_from_table (struct disassemble_info *info,
-			const struct arc_opcode *arc_table,
-                        unsigned long long insn,
-			unsigned int insn_len,
-                        unsigned isa_mask,
-			bfd_boolean *has_limm,
-			bfd_boolean overlaps)
-{
-  unsigned int i = 0;
-  const struct arc_opcode *opcode = NULL;
-  const struct arc_opcode *t_op = NULL;
-  const unsigned char *opidx;
-  const unsigned char *flgidx;
-  bfd_boolean warn_p = FALSE;
-
-  do
-    {
-      bfd_boolean invalid = FALSE;
-
-      opcode = &arc_table[i++];
-
-      if (!(opcode->cpu & isa_mask))
-	continue;
-
-      if (arc_opcode_len (opcode) != (int) insn_len)
-	continue;
-
-      if ((insn & opcode->mask) != opcode->opcode)
-	continue;
-
-      *has_limm = FALSE;
-
-      /* Possible candidate, check the operands.  */
-      for (opidx = opcode->operands; *opidx; opidx++)
-	{
-	  int value, limmind;
-	  const struct arc_operand *operand = &arc_operands[*opidx];
-
-	  if (operand->flags & ARC_OPERAND_FAKE)
-	    continue;
-
-	  if (operand->extract)
-	    value = (*operand->extract) (insn, &invalid);
-	  else
-	    value = (insn >> operand->shift) & ((1ull << operand->bits) - 1);
-
-	  /* Check for LIMM indicator.  If it is there, then make sure
-	     we pick the right format.  */
-	  limmind = (isa_mask & ARC_OPCODE_ARCV2) ? 0x1E : 0x3E;
-	  if (operand->flags & ARC_OPERAND_IR
-	      && !(operand->flags & ARC_OPERAND_LIMM))
+  while (1)
+    switch (*p++)
+      {
+      case 0:
+	goto DOCOMM; /* (return)  */
+      default:
+	*bp++ = p[-1];
+	break;
+      case '%':
+	size = 0;
+	leading_zero = 0;
+      RETRY: ;
+	switch (*p++)
+	  {
+	  case '0':
+	  case '1':
+	  case '2':
+	  case '3':
+	  case '4':
+	  case '5':
+	  case '6':
+	  case '7':
+	  case '8':
+	  case '9':
 	    {
-	      if ((value == 0x3E && insn_len == 4)
-		  || (value == limmind && insn_len == 2))
+	      /* size.  */
+	      size = p[-1] - '0';
+	      if (size == 0)
+		leading_zero = 1; /* e.g. %08x  */
+	      while (*p >= '0' && *p <= '9')
 		{
-		  invalid = TRUE;
+		  size = size * 10 + *p - '0';
+		  p++;
+		}
+	      goto RETRY;
+	    }
+#define inc_bp() bp = bp + strlen (bp)
+
+	  case 'h':
+	    {
+	      unsigned u = va_arg (ap, int);
+
+	      /* Hex.  We can change the format to 0x%08x in
+		 one place, here, if we wish.
+		 We add underscores for easy reading.  */
+	      if (u > 65536)
+		sprintf (bp, "0x%x_%04x", u >> 16, u & 0xffff);
+	      else
+		sprintf (bp, "0x%x", u);
+	      inc_bp ();
+	    }
+	    break;
+	  case 'X': case 'x':
+	    {
+	      int val = va_arg (ap, int);
+
+	      if (size != 0)
+		if (leading_zero)
+		  sprintf (bp, "%0*x", size, val);
+		else
+		  sprintf (bp, "%*x", size, val);
+	      else
+		sprintf (bp, "%x", val);
+	      inc_bp ();
+	    }
+	    break;
+	  case 'd':
+	    {
+	      int val = va_arg (ap, int);
+
+	      if (size != 0)
+		sprintf (bp, "%*d", size, val);
+	      else
+		sprintf (bp, "%d", val);
+	      inc_bp ();
+	    }
+	    break;
+	  case 'r':
+	    {
+	      /* Register.  */
+	      int val = va_arg (ap, int);
+
+#define REG2NAME(num, name) case num: sprintf (bp, ""name); \
+  regMap[(num < 32) ? 0 : 1] |= 1 << (num - ((num < 32) ? 0 : 32)); break;
+
+	      switch (val)
+		{
+		  REG2NAME (26, "gp");
+		  REG2NAME (27, "fp");
+		  REG2NAME (28, "sp");
+		  REG2NAME (29, "ilink1");
+		  REG2NAME (30, "ilink2");
+		  REG2NAME (31, "blink");
+		  REG2NAME (60, "lp_count");
+		default:
+		  {
+		    const char * ext;
+
+		    ext = core_reg_name (state, val);
+		    if (ext)
+		      sprintf (bp, "%s", ext);
+		    else
+		      sprintf (bp,"r%d",val);
+		  }
 		  break;
 		}
-	    }
+	      inc_bp ();
+	    } break;
 
-	  if (operand->flags & ARC_OPERAND_LIMM
-	      && !(operand->flags & ARC_OPERAND_DUPLICATE))
-	    *has_limm = TRUE;
-	}
-
-      /* Check the flags.  */
-      for (flgidx = opcode->flags; *flgidx; flgidx++)
-	{
-	  /* Get a valid flag class.  */
-	  const struct arc_flag_class *cl_flags = &arc_flag_classes[*flgidx];
-	  const unsigned *flgopridx;
-	  int foundA = 0, foundB = 0;
-	  unsigned int value;
-
-	  /* Check first the extensions.  */
-	  if (cl_flags->flag_class & F_CLASS_EXTEND)
+	  case 'a':
 	    {
-	      value = (insn & 0x1F);
-	      if (arcExtMap_condCodeName (value))
-		continue;
+	      /* Aux Register.  */
+	      int val = va_arg (ap, int);
+
+#define AUXREG2NAME(num, name) case num: sprintf (bp,name); break;
+
+	      switch (val)
+		{
+		  AUXREG2NAME (0x0, "status");
+		  AUXREG2NAME (0x1, "semaphore");
+		  AUXREG2NAME (0x2, "lp_start");
+		  AUXREG2NAME (0x3, "lp_end");
+		  AUXREG2NAME (0x4, "identity");
+		  AUXREG2NAME (0x5, "debug");
+		default:
+		  {
+		    const char *ext;
+
+		    ext = aux_reg_name (state, val);
+		    if (ext)
+		      sprintf (bp, "%s", ext);
+		    else
+		      my_sprintf (state, bp, "%h", val);
+		  }
+		  break;
+		}
+	      inc_bp ();
 	    }
+	    break;
 
-	  /* Check for the implicit flags.  */
-	  if (cl_flags->flag_class & F_CLASS_IMPLICIT)
-	    continue;
-
-	  for (flgopridx = cl_flags->flags; *flgopridx; ++flgopridx)
+	  case 's':
 	    {
-	      const struct arc_flag_operand *flg_operand =
-		&arc_flag_operands[*flgopridx];
-
-	      value = (insn >> flg_operand->shift)
-		& ((1 << flg_operand->bits) - 1);
-	      if (value == flg_operand->code)
-		foundA = 1;
-	      if (value)
-		foundB = 1;
+	      sprintf (bp, "%s", va_arg (ap, char *));
+	      inc_bp ();
 	    }
+	    break;
 
-	  if (!foundA && foundB)
-	    {
-	      invalid = TRUE;
-	      break;
-	    }
-	}
+	  default:
+	    fprintf (stderr, "?? format %c\n", p[-1]);
+	    break;
+	  }
+      }
 
-      if (invalid)
-	continue;
-
-      if (insn_len == 4
-	  && overlaps)
-	{
-	  warn_p = TRUE;
-	  t_op = opcode;
-	  if (skip_this_opcode (opcode))
-	    continue;
-	}
-
-      /* The instruction is valid.  */
-      return opcode;
-    }
-  while (opcode->mask);
-
-  if (warn_p)
-    {
-      info->fprintf_func (info->stream,
-			  _("\nWarning: disassembly may be wrong due to "
-			    "guessed opcode class choice.\n"
-			    "Use -M<class[,class]> to select the correct "
-			    "opcode class(es).\n\t\t\t\t"));
-      return t_op;
-    }
-
-  return NULL;
-}
-
-/* Find opcode for INSN, trying various different sources.  The instruction
-   length in INSN_LEN will be updated if the instruction requires a LIMM
-   extension.
-
-   A pointer to the opcode is placed into OPCODE_RESULT, and ITER is
-   initialised, ready to iterate over the operands of the found opcode.  If
-   the found opcode requires a LIMM then the LIMM value will be loaded into a
-   field of ITER.
-
-   This function returns TRUE in almost all cases, FALSE is reserved to
-   indicate an error (failing to find an opcode is not an error) a returned
-   result of FALSE would indicate that the disassembler can't continue.
-
-   If no matching opcode is found then the returned result will be TRUE, the
-   value placed into OPCODE_RESULT will be NULL, ITER will be undefined, and
-   INSN_LEN will be unchanged.
-
-   If a matching opcode is found, then the returned result will be TRUE, the
-   opcode pointer is placed into OPCODE_RESULT, INSN_LEN will be increased by
-   4 if the instruction requires a LIMM, and the LIMM value will have been
-   loaded into a field of ITER.  Finally, ITER will have been initialised so
-   that calls to OPERAND_ITERATOR_NEXT will iterate over the opcode's
-   operands.  */
-
-static bfd_boolean
-find_format (bfd_vma                       memaddr,
-	     unsigned long long            insn,
-	     unsigned int *                insn_len,
-             unsigned                      isa_mask,
-	     struct disassemble_info *     info,
-             const struct arc_opcode **    opcode_result,
-             struct arc_operand_iterator * iter)
-{
-  const struct arc_opcode *opcode = NULL;
-  bfd_boolean needs_limm = FALSE;
-  const extInstruction_t *einsn, *i;
-  unsigned limm = 0;
-  struct arc_disassemble_info *arc_infop = info->private_data;
-
-  /* First, try the extension instructions.  */
-  if (*insn_len == 4)
-    {
-      einsn = arcExtMap_insn (OPCODE_32BIT_INSN (insn), insn);
-      for (i = einsn; (i != NULL) && (opcode == NULL); i = i->next)
-	{
-	  const char *errmsg = NULL;
-
-	  opcode = arcExtMap_genOpcode (i, isa_mask, &errmsg);
-	  if (opcode == NULL)
-	    {
-	      (*info->fprintf_func) (info->stream,
-				     _("An error occured while generating the "
-				       "extension instruction operations"));
-	      *opcode_result = NULL;
-	      return FALSE;
-	    }
-
-	  opcode = find_format_from_table (info, opcode, insn, *insn_len,
-					   isa_mask, &needs_limm, FALSE);
-	}
-    }
-
-  /* Then, try finding the first match in the opcode table.  */
-  if (opcode == NULL)
-    opcode = find_format_from_table (info, arc_opcodes, insn, *insn_len,
-				     isa_mask, &needs_limm, TRUE);
-
-  if (opcode != NULL && needs_limm)
-    {
-      bfd_byte buffer[4];
-      int status;
-
-      status = (*info->read_memory_func) (memaddr + *insn_len, buffer,
-                                          4, info);
-      if (status != 0)
-        {
-          opcode = NULL;
-        }
-      else
-        {
-          limm = ARRANGE_ENDIAN (info, buffer);
-          *insn_len += 4;
-        }
-    }
-
-  if (opcode != NULL)
-    {
-      iter->insn = insn;
-      iter->limm = limm;
-      iter->opcode = opcode;
-      iter->opidx = opcode->operands;
-    }
-
-  *opcode_result = opcode;
-
-  /* Update private data.  */
-  arc_infop->opcode = opcode;
-  arc_infop->limm = limm;
-  arc_infop->limm_p = needs_limm;
-
-  return TRUE;
+ DOCOMM: *bp = 0;
+  VA_CLOSE (ap);
 }
 
 static void
-print_flags (const struct arc_opcode *opcode,
-	     unsigned long long *insn,
-	     struct disassemble_info *info)
+write_comments_(state, shimm, is_limm, limm_value)
+     struct arcDisState * state;
+     int shimm;
+     int is_limm;
+     long limm_value;
 {
-  const unsigned char *flgidx;
-  unsigned int value;
-  struct arc_disassemble_info *arc_infop = info->private_data;
-
-  /* Now extract and print the flags.  */
-  for (flgidx = opcode->flags; *flgidx; flgidx++)
+  if (state->commentBuffer != 0)
     {
-      /* Get a valid flag class.  */
-      const struct arc_flag_class *cl_flags = &arc_flag_classes[*flgidx];
-      const unsigned *flgopridx;
+      int i;
 
-      /* Check first the extensions.  */
-      if (cl_flags->flag_class & F_CLASS_EXTEND)
+      if (is_limm)
 	{
-	  const char *name;
-	  value = (insn[0] & 0x1F);
+	  const char *name = post_address (state, limm_value + shimm);
 
-	  name = arcExtMap_condCodeName (value);
-	  if (name)
-	    {
-	      (*info->fprintf_func) (info->stream, ".%s", name);
-	      continue;
-	    }
+	  if (*name != 0)
+	    WRITE_COMMENT (name);
 	}
-
-      for (flgopridx = cl_flags->flags; *flgopridx; ++flgopridx)
+      for (i = 0; i < state->commNum; i++)
 	{
-	  const struct arc_flag_operand *flg_operand =
-	    &arc_flag_operands[*flgopridx];
-
-	  /* Implicit flags are only used for the insn decoder.  */
-	  if (cl_flags->flag_class & F_CLASS_IMPLICIT)
-	    {
-	      if (cl_flags->flag_class & F_CLASS_COND)
-		arc_infop->condition_code = flg_operand->code;
-	      else if (cl_flags->flag_class & F_CLASS_WB)
-		arc_infop->writeback_mode = flg_operand->code;
-	      else if (cl_flags->flag_class & F_CLASS_ZZ)
-		info->data_size = flg_operand->code;
-	      continue;
-	    }
-
-	  if (!flg_operand->favail)
-	    continue;
-
-	  value = (insn[0] >> flg_operand->shift)
-	    & ((1 << flg_operand->bits) - 1);
-	  if (value == flg_operand->code)
-	    {
-	       /* FIXME!: print correctly nt/t flag.  */
-	      if (!special_flag_p (opcode->name, flg_operand->name))
-		(*info->fprintf_func) (info->stream, ".");
-	      else if (info->insn_type == dis_dref)
-		{
-		  switch (flg_operand->name[0])
-		    {
-		    case 'b':
-		      info->data_size = 1;
-		      break;
-		    case 'h':
-		    case 'w':
-		      info->data_size = 2;
-		      break;
-		    default:
-		      info->data_size = 4;
-		      break;
-		    }
-		}
-	      if (flg_operand->name[0] == 'd'
-		  && flg_operand->name[1] == 0)
-		info->branch_delay_insns = 1;
-
-	      /* Check if it is a conditional flag.  */
-	      if (cl_flags->flag_class & F_CLASS_COND)
-		{
-		  if (info->insn_type == dis_jsr)
-		    info->insn_type = dis_condjsr;
-		  else if (info->insn_type == dis_branch)
-		    info->insn_type = dis_condbranch;
-		  arc_infop->condition_code = flg_operand->code;
-		}
-
-	      /* Check for the write back modes.  */
-	      if (cl_flags->flag_class & F_CLASS_WB)
-		arc_infop->writeback_mode = flg_operand->code;
-
-	      (*info->fprintf_func) (info->stream, "%s", flg_operand->name);
-	    }
+	  if (i == 0)
+	    strcpy (state->commentBuffer, comment_prefix);
+	  else
+	    strcat (state->commentBuffer, ", ");
+	  strncat (state->commentBuffer, state->comm[i],
+		   sizeof (state->commentBuffer));
 	}
     }
 }
 
-static const char *
-get_auxreg (const struct arc_opcode *opcode,
-	    int value,
-	    unsigned isa_mask)
-{
-  const char *name;
-  unsigned int i;
-  const struct arc_aux_reg *auxr = &arc_aux_regs[0];
+#define write_comments2(x) write_comments_(state, x, is_limm, limm_value)
+#define write_comments() write_comments2(0)
 
-  if (opcode->insn_class != AUXREG)
-    return NULL;
-
-  name = arcExtMap_auxRegName (value);
-  if (name)
-    return name;
-
-  for (i = 0; i < arc_num_aux_regs; i++, auxr++)
-    {
-      if (!(auxr->cpu & isa_mask))
-	continue;
-
-      if (auxr->subclass != NONE)
-	return NULL;
-
-      if (auxr->address == value)
-	return auxr->name;
-    }
-  return NULL;
-}
-
-/* Convert a value representing an address type to a string used to refer to
-   the address type in assembly code.  */
-
-static const char *
-get_addrtype (int value)
-{
-  if (value < 0 || value > addrtypenames_max)
-    return addrtypeunknown;
-
-  return addrtypenames[value];
-}
-
-/* Calculate the instruction length for an instruction starting with MSB
-   and LSB, the most and least significant byte.  The ISA_MASK is used to
-   filter the instructions considered to only those that are part of the
-   current architecture.
-
-   The instruction lengths are calculated from the ARC_OPCODE table, and
-   cached for later use.  */
-
-static unsigned int
-arc_insn_length (bfd_byte msb, bfd_byte lsb, struct disassemble_info *info)
-{
-  bfd_byte major_opcode = msb >> 3;
-
-  switch (info->mach)
-    {
-    case bfd_mach_arc_arc700:
-      /* The nps400 extension set requires this special casing of the
-	 instruction length calculation.  Right now this is not causing any
-	 problems as none of the known extensions overlap in opcode space,
-	 but, if they ever do then we might need to start carrying
-	 information around in the elf about which extensions are in use.  */
-      if (major_opcode == 0xb)
-        {
-          bfd_byte minor_opcode = lsb & 0x1f;
-
-	  if (minor_opcode < 4)
-	    return 6;
-	  else if (minor_opcode == 0x10 || minor_opcode == 0x11)
-	    return 8;
-        }
-      if (major_opcode == 0xa)
-        {
-          return 8;
-        }
-      /* Fall through.  */
-    case bfd_mach_arc_arc600:
-      return (major_opcode > 0xb) ? 2 : 4;
-      break;
-
-    case bfd_mach_arc_arcv2:
-      return (major_opcode > 0x7) ? 2 : 4;
-      break;
-
-    default:
-      return 0;
-    }
-}
-
-/* Extract and return the value of OPERAND from the instruction whose value
-   is held in the array INSN.  */
-
-static int
-extract_operand_value (const struct arc_operand *operand,
-		       unsigned long long insn,
-		       unsigned limm)
-{
-  int value;
-
-  /* Read the limm operand, if required.  */
-  if (operand->flags & ARC_OPERAND_LIMM)
-    /* The second part of the instruction value will have been loaded as
-       part of the find_format call made earlier.  */
-    value = limm;
-  else
-    {
-      if (operand->extract)
-        value = (*operand->extract) (insn, (int *) NULL);
-      else
-        {
-          if (operand->flags & ARC_OPERAND_ALIGNED32)
-            {
-              value = (insn >> operand->shift)
-                & ((1 << (operand->bits - 2)) - 1);
-              value = value << 2;
-            }
-          else
-            {
-              value = (insn >> operand->shift) & ((1 << operand->bits) - 1);
-            }
-          if (operand->flags & ARC_OPERAND_SIGNED)
-            {
-              int signbit = 1 << (operand->bits - 1);
-              value = (value ^ signbit) - signbit;
-            }
-        }
-    }
-
-  return value;
-}
-
-/* Find the next operand, and the operands value from ITER.  Return TRUE if
-   there is another operand, otherwise return FALSE.  If there is an
-   operand returned then the operand is placed into OPERAND, and the value
-   into VALUE.  If there is no operand returned then OPERAND and VALUE are
-   unchanged.  */
-
-static bfd_boolean
-operand_iterator_next (struct arc_operand_iterator *iter,
-                       const struct arc_operand **operand,
-                       int *value)
-{
-  if (*iter->opidx == 0)
-    {
-      *operand = NULL;
-      return FALSE;
-    }
-
-  *operand = &arc_operands[*iter->opidx];
-  *value = extract_operand_value (*operand, iter->insn, iter->limm);
-  iter->opidx++;
-
-  return TRUE;
-}
-
-/* Helper for parsing the options.  */
-
-static void
-parse_option (const char *option)
-{
-  if (disassembler_options_cmp (option, "dsp") == 0)
-    add_to_decodelist (DSP, NONE);
-
-  else if (disassembler_options_cmp (option, "spfp") == 0)
-    add_to_decodelist (FLOAT, SPX);
-
-  else if (disassembler_options_cmp (option, "dpfp") == 0)
-    add_to_decodelist (FLOAT, DPX);
-
-  else if (disassembler_options_cmp (option, "quarkse_em") == 0)
-    {
-      add_to_decodelist (FLOAT, DPX);
-      add_to_decodelist (FLOAT, SPX);
-      add_to_decodelist (FLOAT, QUARKSE1);
-      add_to_decodelist (FLOAT, QUARKSE2);
-    }
-
-  else if (disassembler_options_cmp (option, "fpuda") == 0)
-    add_to_decodelist (FLOAT, DPA);
-
-  else if (disassembler_options_cmp (option, "nps400") == 0)
-    {
-      add_to_decodelist (ACL, NPS400);
-      add_to_decodelist (ARITH, NPS400);
-      add_to_decodelist (BITOP, NPS400);
-      add_to_decodelist (BMU, NPS400);
-      add_to_decodelist (CONTROL, NPS400);
-      add_to_decodelist (DMA, NPS400);
-      add_to_decodelist (DPI, NPS400);
-      add_to_decodelist (MEMORY, NPS400);
-      add_to_decodelist (MISC, NPS400);
-      add_to_decodelist (NET, NPS400);
-      add_to_decodelist (PMU, NPS400);
-      add_to_decodelist (PROTOCOL_DECODE, NPS400);
-      add_to_decodelist (ULTRAIP, NPS400);
-    }
-
-  else if (disassembler_options_cmp (option, "fpus") == 0)
-    {
-      add_to_decodelist (FLOAT, SP);
-      add_to_decodelist (FLOAT, CVT);
-    }
-
-  else if (disassembler_options_cmp (option, "fpud") == 0)
-    {
-      add_to_decodelist (FLOAT, DP);
-      add_to_decodelist (FLOAT, CVT);
-    }
-  else if (CONST_STRNEQ (option, "hex"))
-    print_hex = TRUE;
-  else
-    /* xgettext:c-format */
-    opcodes_error_handler (_("unrecognised disassembler option: %s"), option);
-}
-
-#define ARC_CPU_TYPE_A6xx(NAME,EXTRA)			\
-  { #NAME, ARC_OPCODE_ARC600, "ARC600" }
-#define ARC_CPU_TYPE_A7xx(NAME,EXTRA)			\
-  { #NAME, ARC_OPCODE_ARC700, "ARC700" }
-#define ARC_CPU_TYPE_AV2EM(NAME,EXTRA)			\
-  { #NAME,  ARC_OPCODE_ARCv2EM, "ARC EM" }
-#define ARC_CPU_TYPE_AV2HS(NAME,EXTRA)			\
-  { #NAME,  ARC_OPCODE_ARCv2HS, "ARC HS" }
-#define ARC_CPU_TYPE_NONE				\
-  { 0, 0, 0 }
-
-/* A table of CPU names and opcode sets.  */
-static const struct cpu_type
-{
-  const char *name;
-  unsigned flags;
-  const char *isa;
-}
-  cpu_types[] =
-{
-  #include "elf/arc-cpu.def"
+static const char *condName[] = {
+  /* 0..15.  */
+  ""   , "z"  , "nz" , "p"  , "n"  , "c"  , "nc" , "v"  ,
+  "nv" , "gt" , "ge" , "lt" , "le" , "hi" , "ls" , "pnz"
 };
 
-/* Helper for parsing the CPU options.  Accept any of the ARC architectures
-   values.  OPTION should be a value passed to cpu=.  */
-
-static unsigned
-parse_cpu_option (const char *option)
-{
-  int i;
-
-  for (i = 0; cpu_types[i].name; ++i)
-    {
-      if (!disassembler_options_cmp (cpu_types[i].name, option))
-	{
-	  return cpu_types[i].flags;
-	}
-    }
-
-  /* xgettext:c-format */
-  opcodes_error_handler (_("unrecognised disassembler CPU option: %s"), option);
-  return ARC_OPCODE_NONE;
-}
-
-/* Go over the options list and parse it.  */
-
 static void
-parse_disassembler_options (const char *options)
+write_instr_name_(state, instrName, cond, condCodeIsPartOfName, flag, signExtend, addrWriteBack, directMem)
+     struct arcDisState * state;
+     const char * instrName;
+     int cond;
+     int condCodeIsPartOfName;
+     int flag;
+     int signExtend;
+     int addrWriteBack;
+     int directMem;
 {
-  const char *option;
+  strcpy (state->instrBuffer, instrName);
 
-  if (options == NULL)
-    return;
-
-  /* Disassembler might be reused for difference CPU's, and cpu option set for
-     the first one shouldn't be applied to second (which might not have
-     explicit cpu in its options.  Therefore it is required to reset enforced
-     CPU when new options are being parsed.  */
-  enforced_isa_mask = ARC_OPCODE_NONE;
-
-  FOR_EACH_DISASSEMBLER_OPTION (option, options)
+  if (cond > 0)
     {
-      /* A CPU option?  Cannot use STRING_COMMA_LEN because strncmp is also a
-	 preprocessor macro.  */
-      if (strncmp (option, "cpu=", 4) == 0)
-	/* Strip leading `cpu=`.  */
-	enforced_isa_mask = parse_cpu_option (option + 4);
+      const char *cc = 0;
+
+      if (!condCodeIsPartOfName)
+	strcat (state->instrBuffer, ".");
+
+      if (cond < 16)
+	cc = condName[cond];
       else
-	parse_option (option);
+	cc = cond_code_name (state, cond);
+
+      if (!cc)
+	cc = "???";
+
+      strcat (state->instrBuffer, cc);
     }
-}
 
-/* Return the instruction type for an instruction described by OPCODE.  */
+  if (flag)
+    strcat (state->instrBuffer, ".f");
 
-static enum dis_insn_type
-arc_opcode_to_insn_type (const struct arc_opcode *opcode)
-{
-  enum dis_insn_type insn_type;
-
-  switch (opcode->insn_class)
+  switch (state->nullifyMode)
     {
-    case BRANCH:
-    case BBIT0:
-    case BBIT1:
-    case BI:
-    case BIH:
-    case BRCC:
-    case EI:
-    case JLI:
-    case JUMP:
-    case LOOP:
-      if (!strncmp (opcode->name, "bl", 2)
-	  || !strncmp (opcode->name, "jl", 2))
-	{
-	  if (opcode->subclass == COND)
-	    insn_type = dis_condjsr;
-	  else
-	    insn_type = dis_jsr;
-	}
-      else
-	{
-	  if (opcode->subclass == COND)
-	    insn_type = dis_condbranch;
-	  else
-	    insn_type = dis_branch;
-	}
+    case BR_exec_always:
+      strcat (state->instrBuffer, ".d");
       break;
-    case LOAD:
-    case STORE:
-    case MEMORY:
-    case ENTER:
-    case PUSH:
-    case POP:
-      insn_type = dis_dref;
-      break;
-    case LEAVE:
-      insn_type = dis_branch;
-      break;
-    default:
-      insn_type = dis_nonbranch;
+    case BR_exec_when_jump:
+      strcat (state->instrBuffer, ".jd");
       break;
     }
 
-  return insn_type;
+  if (signExtend)
+    strcat (state->instrBuffer, ".x");
+
+  if (addrWriteBack)
+    strcat (state->instrBuffer, ".a");
+
+  if (directMem)
+    strcat (state->instrBuffer, ".di");
 }
 
-/* Disassemble ARC instructions.  */
+#define write_instr_name()						\
+  do									\
+    {									\
+      write_instr_name_(state, instrName,cond, condCodeIsPartOfName,	\
+			flag, signExtend, addrWriteBack, directMem);	\
+      formatString[0] = '\0';						\
+    }									\
+  while (0)
+
+enum {
+  op_LD0 = 0, op_LD1 = 1, op_ST  = 2, op_3   = 3,
+  op_BC  = 4, op_BLC = 5, op_LPC = 6, op_JC  = 7,
+  op_ADD = 8, op_ADC = 9, op_SUB = 10, op_SBC = 11,
+  op_AND = 12, op_OR  = 13, op_BIC = 14, op_XOR = 15
+};
+
+extern disassemble_info tm_print_insn_info;
 
 static int
-print_insn_arc (bfd_vma memaddr,
-		struct disassemble_info *info)
+dsmOneArcInst (addr, state)
+     bfd_vma              addr;
+     struct arcDisState * state;
 {
-  bfd_byte buffer[8];
-  unsigned int highbyte, lowbyte;
-  int status;
-  unsigned int insn_len;
-  unsigned long long insn = 0;
-  unsigned isa_mask = ARC_OPCODE_NONE;
-  const struct arc_opcode *opcode;
-  bfd_boolean need_comma;
-  bfd_boolean open_braket;
-  int size;
-  const struct arc_operand *operand;
-  int value, vpcl;
-  struct arc_operand_iterator iter;
-  struct arc_disassemble_info *arc_infop;
-  bfd_boolean rpcl = FALSE, rset = FALSE;
+  int condCodeIsPartOfName = 0;
+  int decodingClass;
+  const char * instrName;
+  int repeatsOp = 0;
+  int fieldAisReg = 1;
+  int fieldBisReg = 1;
+  int fieldCisReg = 1;
+  int fieldA;
+  int fieldB;
+  int fieldC = 0;
+  int flag = 0;
+  int cond = 0;
+  int is_shimm = 0;
+  int is_limm = 0;
+  long limm_value = 0;
+  int signExtend = 0;
+  int addrWriteBack = 0;
+  int directMem = 0;
+  int is_linked = 0;
+  int offset = 0;
+  int usesAuxReg = 0;
+  int flags;
+  int ignoreFirstOpd;
+  char formatString[60];
 
-  if (info->disassembler_options)
+  state->instructionLen = 4;
+  state->nullifyMode = BR_exec_when_no_jump;
+  state->opWidth = 12;
+  state->isBranch = 0;
+
+  state->_mem_load = 0;
+  state->_ea_present = 0;
+  state->_load_len = 0;
+  state->ea_reg1 = no_reg;
+  state->ea_reg2 = no_reg;
+  state->_offset = 0;
+
+  if (! NEXT_WORD (0))
+    return 0;
+
+  state->_opcode = OPCODE (state->words[0]);
+  instrName = 0;
+  decodingClass = 0; /* default!  */
+  repeatsOp = 0;
+  condCodeIsPartOfName=0;
+  state->commNum = 0;
+  state->tcnt = 0;
+  state->acnt = 0;
+  state->flow = noflow;
+  ignoreFirstOpd = 0;
+
+  if (state->commentBuffer)
+    state->commentBuffer[0] = '\0';
+
+  switch (state->_opcode)
     {
-      parse_disassembler_options (info->disassembler_options);
-
-      /* Avoid repeated parsing of the options.  */
-      info->disassembler_options = NULL;
-    }
-
-  if (info->private_data == NULL && !init_arc_disasm_info (info))
-    return -1;
-
-  memset (&iter, 0, sizeof (iter));
-  highbyte  = ((info->endian == BFD_ENDIAN_LITTLE) ? 1 : 0);
-  lowbyte = ((info->endian == BFD_ENDIAN_LITTLE) ? 0 : 1);
-
-  /* Figure out CPU type, unless it was enforced via disassembler options.  */
-  if (enforced_isa_mask == ARC_OPCODE_NONE)
-    {
-      Elf_Internal_Ehdr *header = NULL;
-
-      if (info->section && info->section->owner)
-	header = elf_elfheader (info->section->owner);
-
-      switch (info->mach)
+    case op_LD0:
+      switch (BITS (state->words[0],1,2))
 	{
-	case bfd_mach_arc_arc700:
-	  isa_mask = ARC_OPCODE_ARC700;
+	case 0:
+	  instrName = "ld";
+	  state->_load_len = 4;
 	  break;
-
-	case bfd_mach_arc_arc600:
-	  isa_mask = ARC_OPCODE_ARC600;
-	  break;
-
-	case bfd_mach_arc_arcv2:
-	default:
-	  isa_mask = ARC_OPCODE_ARCv2EM;
-	  /* TODO: Perhaps remove definition of header since it is only used at
-	     this location.  */
-	  if (header != NULL
-	      && (header->e_flags & EF_ARC_MACH_MSK) == EF_ARC_CPU_ARCV2HS)
-	    isa_mask = ARC_OPCODE_ARCv2HS;
-	  break;
-	}
-    }
-  else
-    isa_mask = enforced_isa_mask;
-
-  if (isa_mask == ARC_OPCODE_ARCv2HS)
-    {
-      /* FPU instructions are not extensions for HS.  */
-      add_to_decodelist (FLOAT, SP);
-      add_to_decodelist (FLOAT, DP);
-      add_to_decodelist (FLOAT, CVT);
-    }
-
-  /* This variable may be set by the instruction decoder.  It suggests
-     the number of bytes objdump should display on a single line.  If
-     the instruction decoder sets this, it should always set it to
-     the same value in order to get reasonable looking output.  */
-  info->bytes_per_line  = 8;
-
-  /* In the next lines, we set two info variables control the way
-     objdump displays the raw data.  For example, if bytes_per_line is
-     8 and bytes_per_chunk is 4, the output will look like this:
-     00:   00000000 00000000
-     with the chunks displayed according to "display_endian".  */
-  if (info->section
-      && !(info->section->flags & SEC_CODE))
-    {
-      /* This is not a CODE section.  */
-      switch (info->section->size)
-	{
 	case 1:
-	case 2:
-	case 4:
-	  size = info->section->size;
-	  break;
-	default:
-	  size = (info->section->size & 0x01) ? 1 : 4;
-	  break;
-	}
-      info->bytes_per_chunk = 1;
-      info->display_endian = info->endian;
-    }
-  else
-    {
-      size = 2;
-      info->bytes_per_chunk = 2;
-      info->display_endian = info->endian;
-    }
-
-  /* Read the insn into a host word.  */
-  status = (*info->read_memory_func) (memaddr, buffer, size, info);
-
-  if (status != 0)
-    {
-      (*info->memory_error_func) (status, memaddr, info);
-      return -1;
-    }
-
-  if (info->section
-      && !(info->section->flags & SEC_CODE))
-    {
-      /* Data section.  */
-      unsigned long data;
-
-      data = bfd_get_bits (buffer, size * 8,
-			   info->display_endian == BFD_ENDIAN_BIG);
-      switch (size)
-	{
-	case 1:
-	  (*info->fprintf_func) (info->stream, ".byte\t0x%02lx", data);
+	  instrName = "ldb";
+	  state->_load_len = 1;
 	  break;
 	case 2:
-	  (*info->fprintf_func) (info->stream, ".short\t0x%04lx", data);
-	  break;
-	case 4:
-	  (*info->fprintf_func) (info->stream, ".word\t0x%08lx", data);
+	  instrName = "ldw";
+	  state->_load_len = 2;
 	  break;
 	default:
-	  return -1;
+	  instrName = "??? (0[3])";
+	  state->flow = invalid_instr;
+	  break;
 	}
-      return size;
+      decodingClass = 5;
+      break;
+
+    case op_LD1:
+      if (BIT (state->words[0],13))
+	{
+	  instrName = "lr";
+	  decodingClass = 10;
+	}
+      else
+	{
+	  switch (BITS (state->words[0],10,11))
+	    {
+	    case 0:
+	      instrName = "ld";
+	      state->_load_len = 4;
+	      break;
+	    case 1:
+	      instrName = "ldb";
+	      state->_load_len = 1;
+	      break;
+	    case 2:
+	      instrName = "ldw";
+	      state->_load_len = 2;
+	      break;
+	    default:
+	      instrName = "??? (1[3])";
+	      state->flow = invalid_instr;
+	      break;
+	    }
+	  decodingClass = 6;
+	}
+      break;
+
+    case op_ST:
+      if (BIT (state->words[0],25))
+	{
+	  instrName = "sr";
+	  decodingClass = 8;
+	}
+      else
+	{
+	  switch (BITS (state->words[0],22,23))
+	    {
+	    case 0:
+	      instrName = "st";
+	      break;
+	    case 1:
+	      instrName = "stb";
+	      break;
+	    case 2:
+	      instrName = "stw";
+	      break;
+	    default:
+	      instrName = "??? (2[3])";
+	      state->flow = invalid_instr;
+	      break;
+	    }
+	  decodingClass = 7;
+	}
+      break;
+
+    case op_3:
+      decodingClass = 1;  /* default for opcode 3...  */
+      switch (FIELDC (state->words[0]))
+	{
+	case  0:
+	  instrName = "flag";
+	  decodingClass = 2;
+	  break;
+	case  1:
+	  instrName = "asr";
+	  break;
+	case  2:
+	  instrName = "lsr";
+	  break;
+	case  3:
+	  instrName = "ror";
+	  break;
+	case  4:
+	  instrName = "rrc";
+	  break;
+	case  5:
+	  instrName = "sexb";
+	  break;
+	case  6:
+	  instrName = "sexw";
+	  break;
+	case  7:
+	  instrName = "extb";
+	  break;
+	case  8:
+	  instrName = "extw";
+	  break;
+	case  0x3f:
+	  {
+	    decodingClass = 9;
+	    switch( FIELDD (state->words[0]) )
+	      {
+	      case 0:
+		instrName = "brk";
+		break;
+	      case 1:
+		instrName = "sleep";
+		break;
+	      case 2:
+		instrName = "swi";
+		break;
+	      default:
+		instrName = "???";
+		state->flow=invalid_instr;
+		break;
+	      }
+	  }
+	  break;
+
+	  /* ARC Extension Library Instructions
+	     NOTE: We assume that extension codes are these instrs.  */
+	default:
+	  instrName = instruction_name (state,
+					state->_opcode,
+					FIELDC (state->words[0]),
+					&flags);
+	  if (!instrName)
+	    {
+	      instrName = "???";
+	      state->flow = invalid_instr;
+	    }
+	  if (flags & IGNORE_FIRST_OPD)
+	    ignoreFirstOpd = 1;
+	  break;
+	}
+      break;
+
+    case op_BC:
+      instrName = "b";
+    case op_BLC:
+      if (!instrName)
+	instrName = "bl";
+    case op_LPC:
+      if (!instrName)
+	instrName = "lp";
+    case op_JC:
+      if (!instrName)
+	{
+	  if (BITS (state->words[0],9,9))
+	    {
+	      instrName = "jl";
+	      is_linked = 1;
+	    }
+	  else
+	    {
+	      instrName = "j";
+	      is_linked = 0;
+	    }
+	}
+      condCodeIsPartOfName = 1;
+      decodingClass = ((state->_opcode == op_JC) ? 4 : 3);
+      state->isBranch = 1;
+      break;
+
+    case op_ADD:
+    case op_ADC:
+    case op_AND:
+      repeatsOp = (FIELDC (state->words[0]) == FIELDB (state->words[0]));
+      decodingClass = 0;
+
+      switch (state->_opcode)
+	{
+	case op_ADD:
+	  instrName = (repeatsOp ? "asl" : "add");
+	  break;
+	case op_ADC:
+	  instrName = (repeatsOp ? "rlc" : "adc");
+	  break;
+	case op_AND:
+	  instrName = (repeatsOp ? "mov" : "and");
+	  break;
+	}
+      break;
+
+    case op_SUB: instrName = "sub";
+      break;
+    case op_SBC: instrName = "sbc";
+      break;
+    case op_OR:  instrName = "or";
+      break;
+    case op_BIC: instrName = "bic";
+      break;
+
+    case op_XOR:
+      if (state->words[0] == 0x7fffffff)
+	{
+	  /* nop encoded as xor -1, -1, -1  */
+	  instrName = "nop";
+	  decodingClass = 9;
+	}
+      else
+	instrName = "xor";
+      break;
+
+    default:
+      instrName = instruction_name (state,state->_opcode,0,&flags);
+      /* if (instrName) printf("FLAGS=0x%x\n", flags);  */
+      if (!instrName)
+	{
+	  instrName = "???";
+	  state->flow=invalid_instr;
+	}
+      if (flags & IGNORE_FIRST_OPD)
+	ignoreFirstOpd = 1;
+      break;
     }
 
-  insn_len = arc_insn_length (buffer[highbyte], buffer[lowbyte], info);
-  pr_debug ("instruction length = %d bytes\n", insn_len);
-  if (insn_len == 0)
-    return -1;
+  fieldAisReg = fieldBisReg = fieldCisReg = 1; /* Assume regs for now.  */
+  flag = cond = is_shimm = is_limm = 0;
+  state->nullifyMode = BR_exec_when_no_jump;	/* 0  */
+  signExtend = addrWriteBack = directMem = 0;
+  usesAuxReg = 0;
 
-  arc_infop = info->private_data;
-  arc_infop->insn_len = insn_len;
-
-  switch (insn_len)
+  switch (decodingClass)
     {
+    case 0:
+      CHECK_FIELD_A ();
+      CHECK_FIELD_B ();
+      if (!repeatsOp)
+	CHECK_FIELD_C ();
+      CHECK_FLAG_COND_NULLIFY ();
+
+      write_instr_name ();
+      if (!ignoreFirstOpd)
+	{
+	  WRITE_FORMAT_x (A);
+	  WRITE_FORMAT_COMMA_x (B);
+	  if (!repeatsOp)
+	    WRITE_FORMAT_COMMA_x (C);
+	  WRITE_NOP_COMMENT ();
+	  my_sprintf (state, state->operandBuffer, formatString,
+		      fieldA, fieldB, fieldC);
+	}
+      else
+	{
+	  WRITE_FORMAT_x (B);
+	  if (!repeatsOp)
+	    WRITE_FORMAT_COMMA_x (C);
+	  my_sprintf (state, state->operandBuffer, formatString,
+		      fieldB, fieldC);
+	}
+      write_comments ();
+      break;
+
+    case 1:
+      CHECK_FIELD_A ();
+      CHECK_FIELD_B ();
+      CHECK_FLAG_COND_NULLIFY ();
+
+      write_instr_name ();
+      if (!ignoreFirstOpd)
+	{
+	  WRITE_FORMAT_x (A);
+	  WRITE_FORMAT_COMMA_x (B);
+	  WRITE_NOP_COMMENT ();
+	  my_sprintf (state, state->operandBuffer, formatString,
+		      fieldA, fieldB);
+	}
+      else
+	{
+	  WRITE_FORMAT_x (B);
+	  my_sprintf (state, state->operandBuffer, formatString, fieldB);
+	}
+      write_comments ();
+      break;
+
     case 2:
-      insn = (buffer[highbyte] << 8) | buffer[lowbyte];
+      CHECK_FIELD_B ();
+      CHECK_FLAG_COND_NULLIFY ();
+      flag = 0; /* this is the FLAG instruction -- it's redundant  */
+
+      write_instr_name ();
+      WRITE_FORMAT_x (B);
+      my_sprintf (state, state->operandBuffer, formatString, fieldB);
+      write_comments ();
+      break;
+
+    case 3:
+      fieldA = BITS (state->words[0],7,26) << 2;
+      fieldA = (fieldA << 10) >> 10; /* make it signed  */
+      fieldA += addr + 4;
+      CHECK_FLAG_COND_NULLIFY ();
+      flag = 0;
+
+      write_instr_name ();
+      /* This address could be a label we know. Convert it.  */
+      if (state->_opcode != op_LPC /* LP  */)
+	{
+	  add_target (fieldA); /* For debugger.  */
+	  state->flow = state->_opcode == op_BLC /* BL  */
+	    ? direct_call
+	    : direct_jump;
+	  /* indirect calls are achieved by "lr blink,[status];
+	     lr dest<- func addr; j [dest]"  */
+	}
+
+      strcat (formatString, "%s"); /* address/label name */
+      my_sprintf (state, state->operandBuffer, formatString,
+		  post_address (state, fieldA));
+      write_comments ();
       break;
 
     case 4:
-      {
-	/* This is a long instruction: Read the remaning 2 bytes.  */
-	status = (*info->read_memory_func) (memaddr + 2, &buffer[2], 2, info);
-	if (status != 0)
-	  {
-	    (*info->memory_error_func) (status, memaddr + 2, info);
-	    return -1;
-	  }
-	insn = (unsigned long long) ARRANGE_ENDIAN (info, buffer);
-      }
+      /* For op_JC -- jump to address specified.
+	 Also covers jump and link--bit 9 of the instr. word
+	 selects whether linked, thus "is_linked" is set above.  */
+      fieldA = 0;
+      CHECK_FIELD_B ();
+      CHECK_FLAG_COND_NULLIFY ();
+
+      if (!fieldBisReg)
+	{
+	  fieldAisReg = 0;
+	  fieldA = (fieldB >> 25) & 0x7F; /* flags */
+	  fieldB = (fieldB & 0xFFFFFF) << 2;
+	  state->flow = is_linked ? direct_call : direct_jump;
+	  add_target (fieldB);
+	  /* screwy JLcc requires .jd mode to execute correctly
+	   * but we pretend it is .nd (no delay slot).  */
+	  if (is_linked && state->nullifyMode == BR_exec_when_jump)
+	    state->nullifyMode = BR_exec_when_no_jump;
+	}
+      else
+	{
+	  state->flow = is_linked ? indirect_call : indirect_jump;
+	  /* We should also treat this as indirect call if NOT linked
+	   * but the preceding instruction was a "lr blink,[status]"
+	   * and we have a delay slot with "add blink,blink,2".
+	   * For now we can't detect such.  */
+	  state->register_for_indirect_jump = fieldB;
+	}
+
+      write_instr_name ();
+      strcat (formatString,
+	      IS_REG (B) ? "[%r]" : "%s"); /* address/label name  */
+      if (fieldA != 0)
+	{
+	  fieldAisReg = 0;
+	  WRITE_FORMAT_COMMA_x (A);
+	}
+      if (IS_REG (B))
+	my_sprintf (state, state->operandBuffer, formatString, fieldB, fieldA);
+      else
+	my_sprintf (state, state->operandBuffer, formatString,
+		    post_address (state, fieldB), fieldA);
+      write_comments ();
+      break;
+
+    case 5:
+      /* LD instruction.
+	 B and C can be regs, or one (both?) can be limm.  */
+      CHECK_FIELD_A ();
+      CHECK_FIELD_B ();
+      CHECK_FIELD_C ();
+      if (dbg)
+	printf ("5:b reg %d %d c reg %d %d  \n",
+		fieldBisReg,fieldB,fieldCisReg,fieldC);
+      state->_offset = 0;
+      state->_ea_present = 1;
+      if (fieldBisReg)
+	state->ea_reg1 = fieldB;
+      else
+	state->_offset += fieldB;
+      if (fieldCisReg)
+	state->ea_reg2 = fieldC;
+      else
+	state->_offset += fieldC;
+      state->_mem_load = 1;
+
+      directMem     = BIT (state->words[0],5);
+      addrWriteBack = BIT (state->words[0],3);
+      signExtend    = BIT (state->words[0],0);
+
+      write_instr_name ();
+      WRITE_FORMAT_x_COMMA_LB(A);
+      if (fieldBisReg || fieldB != 0)
+	WRITE_FORMAT_x_COMMA (B);
+      else
+	fieldB = fieldC;
+
+      WRITE_FORMAT_x_RB (C);
+      my_sprintf (state, state->operandBuffer, formatString,
+		  fieldA, fieldB, fieldC);
+      write_comments ();
       break;
 
     case 6:
-      {
-	status = (*info->read_memory_func) (memaddr + 2, &buffer[2], 4, info);
-	if (status != 0)
-	  {
-	    (*info->memory_error_func) (status, memaddr + 2, info);
-	    return -1;
-	  }
-	insn = (unsigned long long) ARRANGE_ENDIAN (info, &buffer[2]);
-	insn |= ((unsigned long long) buffer[highbyte] << 40)
-	  | ((unsigned long long) buffer[lowbyte] << 32);
-      }
+      /* LD instruction.  */
+      CHECK_FIELD_B ();
+      CHECK_FIELD_A ();
+      fieldC = FIELDD (state->words[0]);
+
+      if (dbg)
+	printf ("6:b reg %d %d c 0x%x  \n",
+		fieldBisReg, fieldB, fieldC);
+      state->_ea_present = 1;
+      state->_offset = fieldC;
+      state->_mem_load = 1;
+      if (fieldBisReg)
+	state->ea_reg1 = fieldB;
+      /* field B is either a shimm (same as fieldC) or limm (different!)
+	 Say ea is not present, so only one of us will do the name lookup.  */
+      else
+	state->_offset += fieldB, state->_ea_present = 0;
+
+      directMem     = BIT (state->words[0],14);
+      addrWriteBack = BIT (state->words[0],12);
+      signExtend    = BIT (state->words[0],9);
+
+      write_instr_name ();
+      WRITE_FORMAT_x_COMMA_LB (A);
+      if (!fieldBisReg)
+	{
+	  fieldB = state->_offset;
+	  WRITE_FORMAT_x_RB (B);
+	}
+      else
+	{
+	  WRITE_FORMAT_x (B);
+	  if (fieldC != 0 && !BIT (state->words[0],13))
+	    {
+	      fieldCisReg = 0;
+	      WRITE_FORMAT_COMMA_x_RB (C);
+	    }
+	  else
+	    WRITE_FORMAT_RB ();
+	}
+      my_sprintf (state, state->operandBuffer, formatString,
+		  fieldA, fieldB, fieldC);
+      write_comments ();
       break;
 
+    case 7:
+      /* ST instruction.  */
+      CHECK_FIELD_B();
+      CHECK_FIELD_C();
+      fieldA = FIELDD(state->words[0]); /* shimm  */
+
+      /* [B,A offset]  */
+      if (dbg) printf("7:b reg %d %x off %x\n",
+		      fieldBisReg,fieldB,fieldA);
+      state->_ea_present = 1;
+      state->_offset = fieldA;
+      if (fieldBisReg)
+	state->ea_reg1 = fieldB;
+      /* field B is either a shimm (same as fieldA) or limm (different!)
+	 Say ea is not present, so only one of us will do the name lookup.
+	 (for is_limm we do the name translation here).  */
+      else
+	state->_offset += fieldB, state->_ea_present = 0;
+
+      directMem     = BIT(state->words[0],26);
+      addrWriteBack = BIT(state->words[0],24);
+
+      write_instr_name();
+      WRITE_FORMAT_x_COMMA_LB(C);
+
+      if (!fieldBisReg)
+	{
+	  fieldB = state->_offset;
+	  WRITE_FORMAT_x_RB(B);
+	}
+      else
+	{
+	  WRITE_FORMAT_x(B);
+	  if (fieldBisReg && fieldA != 0)
+	    {
+	      fieldAisReg = 0;
+	      WRITE_FORMAT_COMMA_x_RB(A);
+	    }
+	  else
+	    WRITE_FORMAT_RB();
+	}
+      my_sprintf (state, state->operandBuffer, formatString,
+		  fieldC, fieldB, fieldA);
+      write_comments2(fieldA);
+      break;
     case 8:
-      {
-	status = (*info->read_memory_func) (memaddr + 2, &buffer[2], 6, info);
-	if (status != 0)
-	  {
-	    (*info->memory_error_func) (status, memaddr + 2, info);
-	    return -1;
-	  }
-	insn =
-	  ((((unsigned long long) ARRANGE_ENDIAN (info, buffer)) << 32)
-	   | ((unsigned long long) ARRANGE_ENDIAN (info, &buffer[4])));
-      }
+      /* SR instruction  */
+      CHECK_FIELD_B();
+      CHECK_FIELD_C();
+
+      write_instr_name();
+      WRITE_FORMAT_x_COMMA_LB(C);
+      /* Try to print B as an aux reg if it is not a core reg.  */
+      usesAuxReg = 1;
+      WRITE_FORMAT_x(B);
+      WRITE_FORMAT_RB();
+      my_sprintf (state, state->operandBuffer, formatString, fieldC, fieldB);
+      write_comments();
+      break;
+
+    case 9:
+      write_instr_name();
+      state->operandBuffer[0] = '\0';
+      break;
+
+    case 10:
+      /* LR instruction */
+      CHECK_FIELD_A();
+      CHECK_FIELD_B();
+
+      write_instr_name();
+      WRITE_FORMAT_x_COMMA_LB(A);
+      /* Try to print B as an aux reg if it is not a core reg. */
+      usesAuxReg = 1;
+      WRITE_FORMAT_x(B);
+      WRITE_FORMAT_RB();
+      my_sprintf (state, state->operandBuffer, formatString, fieldA, fieldB);
+      write_comments();
+      break;
+
+    case 11:
+      CHECK_COND();
+      write_instr_name();
+      state->operandBuffer[0] = '\0';
       break;
 
     default:
-      /* There is no instruction whose length is not 2, 4, 6, or 8.  */
-      return -1;
+      mwerror (state, "Bad decoding class in ARC disassembler");
+      break;
     }
 
-  pr_debug ("instruction value = %llx\n", insn);
-
-  /* Set some defaults for the insn info.  */
-  info->insn_info_valid    = 1;
-  info->branch_delay_insns = 0;
-  info->data_size	   = 4;
-  info->insn_type	   = dis_nonbranch;
-  info->target		   = 0;
-  info->target2		   = 0;
-
-  /* FIXME to be moved in dissasemble_init_for_target.  */
-  info->disassembler_needs_relocs = TRUE;
-
-  /* Find the first match in the opcode table.  */
-  if (!find_format (memaddr, insn, &insn_len, isa_mask, info, &opcode, &iter))
-    return -1;
-
-  if (!opcode)
-    {
-      switch (insn_len)
-	{
-	case 2:
-	  (*info->fprintf_func) (info->stream, ".shor\t%#04llx",
-				 insn & 0xffff);
-	  break;
-
-	case 4:
-	  (*info->fprintf_func) (info->stream, ".word\t%#08llx",
-				 insn & 0xffffffff);
-	  break;
-
-	case 6:
-	  (*info->fprintf_func) (info->stream, ".long\t%#08llx",
-				 insn & 0xffffffff);
-	  (*info->fprintf_func) (info->stream, ".long\t%#04llx",
-				 (insn >> 32) & 0xffff);
-	  break;
-
-	case 8:
-	  (*info->fprintf_func) (info->stream, ".long\t%#08llx",
-				 insn & 0xffffffff);
-	  (*info->fprintf_func) (info->stream, ".long\t%#08llx",
-				 insn >> 32);
-	  break;
-
-	default:
-	  return -1;
-	}
-
-      info->insn_type = dis_noninsn;
-      return insn_len;
-    }
-
-  /* Print the mnemonic.  */
-  (*info->fprintf_func) (info->stream, "%s", opcode->name);
-
-  /* Preselect the insn class.  */
-  info->insn_type = arc_opcode_to_insn_type (opcode);
-
-  pr_debug ("%s: 0x%08llx\n", opcode->name, opcode->opcode);
-
-  print_flags (opcode, &insn, info);
-
-  if (opcode->operands[0] != 0)
-    (*info->fprintf_func) (info->stream, "\t");
-
-  need_comma = FALSE;
-  open_braket = FALSE;
-  arc_infop->operands_count = 0;
-
-  /* Now extract and print the operands.  */
-  operand = NULL;
-  vpcl = 0;
-  while (operand_iterator_next (&iter, &operand, &value))
-    {
-      if (open_braket && (operand->flags & ARC_OPERAND_BRAKET))
-	{
-	  (*info->fprintf_func) (info->stream, "]");
-	  open_braket = FALSE;
-	  continue;
-	}
-
-      /* Only take input from real operands.  */
-      if (ARC_OPERAND_IS_FAKE (operand))
-	continue;
-
-      if ((operand->flags & ARC_OPERAND_IGNORE)
-	  && (operand->flags & ARC_OPERAND_IR)
-	  && value == -1)
-	continue;
-
-      if (operand->flags & ARC_OPERAND_COLON)
-	{
-	  (*info->fprintf_func) (info->stream, ":");
-	  continue;
-	}
-
-      if (need_comma)
-	(*info->fprintf_func) (info->stream, ",");
-
-      if (!open_braket && (operand->flags & ARC_OPERAND_BRAKET))
-	{
-	  (*info->fprintf_func) (info->stream, "[");
-	  open_braket = TRUE;
-	  need_comma = FALSE;
-	  continue;
-	}
-
-      need_comma = TRUE;
-
-      if (operand->flags & ARC_OPERAND_PCREL)
-	{
-	  rpcl = TRUE;
-	  vpcl = value;
-	  rset = TRUE;
-
-	  info->target = (bfd_vma) (memaddr & ~3) + value;
-	}
-      else if (!(operand->flags & ARC_OPERAND_IR))
-	{
-	  vpcl = value;
-	  rset = TRUE;
-	}
-
-      /* Print the operand as directed by the flags.  */
-      if (operand->flags & ARC_OPERAND_IR)
-	{
-	  const char *rname;
-
-	  assert (value >=0 && value < 64);
-	  rname = arcExtMap_coreRegName (value);
-	  if (!rname)
-	    rname = regnames[value];
-	  (*info->fprintf_func) (info->stream, "%s", rname);
-	  if (operand->flags & ARC_OPERAND_TRUNCATE)
-	    {
-	      rname = arcExtMap_coreRegName (value + 1);
-	      if (!rname)
-		rname = regnames[value + 1];
-	      (*info->fprintf_func) (info->stream, "%s", rname);
-	    }
-	  if (value == 63)
-	    rpcl = TRUE;
-	  else
-	    rpcl = FALSE;
-	}
-      else if (operand->flags & ARC_OPERAND_LIMM)
-	{
-	  const char *rname = get_auxreg (opcode, value, isa_mask);
-
-	  if (rname && open_braket)
-	    (*info->fprintf_func) (info->stream, "%s", rname);
-	  else
-	    {
-	      (*info->fprintf_func) (info->stream, "%#x", value);
-	      if (info->insn_type == dis_branch
-		  || info->insn_type == dis_jsr)
-		info->target = (bfd_vma) value;
-	    }
-	}
-      else if (operand->flags & ARC_OPERAND_SIGNED)
-	{
-	  const char *rname = get_auxreg (opcode, value, isa_mask);
-	  if (rname && open_braket)
-	    (*info->fprintf_func) (info->stream, "%s", rname);
-	  else
-	    {
-	      if (print_hex)
-		(*info->fprintf_func) (info->stream, "%#x", value);
-	      else
-		(*info->fprintf_func) (info->stream, "%d", value);
-	    }
-	}
-      else if (operand->flags & ARC_OPERAND_ADDRTYPE)
-	{
-	  const char *addrtype = get_addrtype (value);
-	  (*info->fprintf_func) (info->stream, "%s", addrtype);
-	  /* A colon follow an address type.  */
-	  need_comma = FALSE;
-	}
-      else
-	{
-	  if (operand->flags & ARC_OPERAND_TRUNCATE
-	      && !(operand->flags & ARC_OPERAND_ALIGNED32)
-	      && !(operand->flags & ARC_OPERAND_ALIGNED16)
-	      && value >= 0 && value <= 14)
-	    {
-	      /* Leave/Enter mnemonics.  */
-	      switch (value)
-		{
-		case 0:
-		  need_comma = FALSE;
-		  break;
-		case 1:
-		  (*info->fprintf_func) (info->stream, "r13");
-		  break;
-		default:
-		  (*info->fprintf_func) (info->stream, "r13-%s",
-					 regnames[13 + value - 1]);
-		  break;
-		}
-	      rpcl = FALSE;
-	      rset = FALSE;
-	    }
-	  else
-	    {
-	      const char *rname = get_auxreg (opcode, value, isa_mask);
-	      if (rname && open_braket)
-		(*info->fprintf_func) (info->stream, "%s", rname);
-	      else
-		(*info->fprintf_func) (info->stream, "%#x", value);
-	    }
-	}
-
-      if (operand->flags & ARC_OPERAND_LIMM)
-	{
-	  arc_infop->operands[arc_infop->operands_count].kind
-	    = ARC_OPERAND_KIND_LIMM;
-	  /* It is not important to have exactly the LIMM indicator
-	     here.  */
-	  arc_infop->operands[arc_infop->operands_count].value = 63;
-	}
-      else
-	{
-	  arc_infop->operands[arc_infop->operands_count].value = value;
-	  arc_infop->operands[arc_infop->operands_count].kind
-	    = (operand->flags & ARC_OPERAND_IR
-	       ? ARC_OPERAND_KIND_REG
-	       : ARC_OPERAND_KIND_SHIMM);
-	}
-      arc_infop->operands_count ++;
-    }
-
-  /* Pretty print extra info for pc-relative operands.  */
-  if (rpcl && rset)
-    {
-      if (info->flags & INSN_HAS_RELOC)
-	/* If the instruction has a reloc associated with it, then the
-	   offset field in the instruction will actually be the addend
-	   for the reloc.  (We are using REL type relocs).  In such
-	   cases, we can ignore the pc when computing addresses, since
-	   the addend is not currently pc-relative.  */
-	memaddr = 0;
-
-      (*info->fprintf_func) (info->stream, "\t;");
-      (*info->print_address_func) ((memaddr & ~3) + vpcl, info);
-    }
-
-  return insn_len;
+  state->_cond = cond;
+  return state->instructionLen = offset;
 }
 
+
+/* Returns the name the user specified core extension register.  */
+static const char *
+_coreRegName(arg, regval)
+     void * arg ATTRIBUTE_UNUSED;
+     int regval;
+{
+  return arcExtMap_coreRegName (regval);
+}
+
+/* Returns the name the user specified AUX extension register.  */
+static const char *
+_auxRegName(void *_this ATTRIBUTE_UNUSED, int regval)
+{
+  return arcExtMap_auxRegName(regval);
+}
+
+
+/* Returns the name the user specified condition code name.  */
+static const char *
+_condCodeName(void *_this ATTRIBUTE_UNUSED, int regval)
+{
+  return arcExtMap_condCodeName(regval);
+}
+
+/* Returns the name the user specified extension instruction.  */
+static const char *
+_instName (void *_this ATTRIBUTE_UNUSED, int majop, int minop, int *flags)
+{
+  return arcExtMap_instName(majop, minop, flags);
+}
+
+/* Decode an instruction returning the size of the instruction
+   in bytes or zero if unrecognized.  */
+static int
+decodeInstr (address, info)
+     bfd_vma            address; /* Address of this instruction.  */
+     disassemble_info * info;
+{
+  int status;
+  bfd_byte buffer[4];
+  struct arcDisState s;	/* ARC Disassembler state  */
+  void *stream = info->stream; /* output stream  */
+  fprintf_ftype func = info->fprintf_func;
+  int bytes;
+
+  memset (&s, 0, sizeof(struct arcDisState));
+
+  /* read first instruction  */
+  status = (*info->read_memory_func) (address, buffer, 4, info);
+  if (status != 0)
+    {
+      (*info->memory_error_func) (status, address, info);
+      return 0;
+    }
+  if (info->endian == BFD_ENDIAN_LITTLE)
+    s.words[0] = bfd_getl32(buffer);
+  else
+    s.words[0] = bfd_getb32(buffer);
+  /* always read second word in case of limm  */
+
+  /* we ignore the result since last insn may not have a limm  */
+  status = (*info->read_memory_func) (address + 4, buffer, 4, info);
+  if (info->endian == BFD_ENDIAN_LITTLE)
+    s.words[1] = bfd_getl32(buffer);
+  else
+    s.words[1] = bfd_getb32(buffer);
+
+  s._this = &s;
+  s.coreRegName = _coreRegName;
+  s.auxRegName = _auxRegName;
+  s.condCodeName = _condCodeName;
+  s.instName = _instName;
+
+  /* disassemble  */
+  bytes = dsmOneArcInst(address, (void *)&s);
+
+  /* display the disassembly instruction  */
+  (*func) (stream, "%08x ", s.words[0]);
+  (*func) (stream, "    ");
+
+  (*func) (stream, "%-10s ", s.instrBuffer);
+
+  if (__TRANSLATION_REQUIRED(s))
+    {
+      bfd_vma addr = s.addresses[s.operandBuffer[1] - '0'];
+      (*info->print_address_func) ((bfd_vma) addr, info);
+      (*func) (stream, "\n");
+    }
+  else
+    (*func) (stream, "%s",s.operandBuffer);
+  return s.instructionLen;
+}
+
+/* Return the print_insn function to use.
+   Side effect: load (possibly empty) extension section  */
 
 disassembler_ftype
-arc_get_disassembler (bfd *abfd)
+arc_get_disassembler (void *ptr)
 {
-  /* BFD my be absent, if opcodes is invoked from the debugger that
-     has connected to remote target and doesn't have an ELF file.  */
-  if (abfd != NULL)
-    {
-      /* Read the extension insns and registers, if any.  */
-      build_ARC_extmap (abfd);
-#ifdef DEBUG
-      dump_ARC_extmap ();
-#endif
-    }
-
-  return print_insn_arc;
+  if (ptr)
+    build_ARC_extmap (ptr);
+  return decodeInstr;
 }
-
-void
-print_arc_disassembler_options (FILE *stream)
-{
-  int i;
-
-  fprintf (stream, _("\n\
-The following ARC specific disassembler options are supported for use \n\
-with -M switch (multiple options should be separated by commas):\n"));
-
-  /* cpu=... options.  */
-  for (i = 0; cpu_types[i].name; ++i)
-    {
-      /* As of now all value CPU values are less than 16 characters.  */
-      fprintf (stream, "  cpu=%-16s\tEnforce %s ISA.\n",
-	       cpu_types[i].name, cpu_types[i].isa);
-    }
-
-  fprintf (stream, _("\
-  dsp             Recognize DSP instructions.\n"));
-  fprintf (stream, _("\
-  spfp            Recognize FPX SP instructions.\n"));
-  fprintf (stream, _("\
-  dpfp            Recognize FPX DP instructions.\n"));
-  fprintf (stream, _("\
-  quarkse_em      Recognize FPU QuarkSE-EM instructions.\n"));
-  fprintf (stream, _("\
-  fpuda           Recognize double assist FPU instructions.\n"));
-  fprintf (stream, _("\
-  fpus            Recognize single precision FPU instructions.\n"));
-  fprintf (stream, _("\
-  fpud            Recognize double precision FPU instructions.\n"));
-  fprintf (stream, _("\
-  nps400          Recognize NPS400 instructions.\n"));
-  fprintf (stream, _("\
-  hex             Use only hexadecimal number to print immediates.\n"));
-}
-
-void arc_insn_decode (bfd_vma addr,
-		      struct disassemble_info *info,
-		      disassembler_ftype disasm_func,
-		      struct arc_instruction *insn)
-{
-  const struct arc_opcode *opcode;
-  struct arc_disassemble_info *arc_infop;
-
-  /* Ensure that insn would be in the reset state.  */
-  memset (insn, 0, sizeof (struct arc_instruction));
-
-  /* There was an error when disassembling, for example memory read error.  */
-  if (disasm_func (addr, info) < 0)
-    {
-      insn->valid = FALSE;
-      return;
-    }
-
-  assert (info->private_data != NULL);
-  arc_infop = info->private_data;
-
-  insn->length  = arc_infop->insn_len;;
-  insn->address = addr;
-
-  /* Quick exit if memory at this address is not an instruction.  */
-  if (info->insn_type == dis_noninsn)
-    {
-      insn->valid = FALSE;
-      return;
-    }
-
-  insn->valid = TRUE;
-
-  opcode = (const struct arc_opcode *) arc_infop->opcode;
-  insn->insn_class = opcode->insn_class;
-  insn->limm_value = arc_infop->limm;
-  insn->limm_p     = arc_infop->limm_p;
-
-  insn->is_control_flow = (info->insn_type == dis_branch
-			   || info->insn_type == dis_condbranch
-			   || info->insn_type == dis_jsr
-			   || info->insn_type == dis_condjsr);
-
-  insn->has_delay_slot = info->branch_delay_insns;
-  insn->writeback_mode
-    = (enum arc_ldst_writeback_mode) arc_infop->writeback_mode;
-  insn->data_size_mode = info->data_size;
-  insn->condition_code = arc_infop->condition_code;
-  memcpy (insn->operands, arc_infop->operands,
-	  sizeof (struct arc_insn_operand) * MAX_INSN_ARGS);
-  insn->operands_count = arc_infop->operands_count;
-}
-
-/* Local variables:
-   eval: (c-set-style "gnu")
-   indent-tabs-mode: t
-   End:  */

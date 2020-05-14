@@ -4,13 +4,12 @@
 #objdump: -ts
 #target: sh*-*-elf
 
-.*:     file format elf32-sh.*
+.*:     file format elf32-shl
 
 SYMBOL TABLE:
 #...
 0+10a0 l       .data	0+ d0
 0+1000 l       .text	0+ f
-#...
 0+10a4  w      .data	0+ w0
 #...
 

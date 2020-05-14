@@ -1,21 +1,22 @@
 /* SH5 simulator support code
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
 This file is part of the GNU simulators.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #define WANT_CPU
 #define WANT_CPU_SH64
@@ -459,7 +460,7 @@ sh64_ftrcsq(SIM_CPU *current_cpu, SF frgh)
   return (DF) result;
 }
 
-VOID
+void
 sh64_ftrvs(SIM_CPU *cpu, unsigned g, unsigned h, unsigned f)
 {
   int i, j;
@@ -483,50 +484,20 @@ sh64_ftrvs(SIM_CPU *cpu, unsigned g, unsigned h, unsigned f)
     }
 }
 
-VOID
-sh64_fipr (SIM_CPU *cpu, unsigned m, unsigned n)
+/* Count the number of arguments.  */
+static int
+count_argc (cpu)
+     SIM_CPU *cpu;
 {
-  SF result = sh64_fmuls (cpu, sh64_h_fvc_get (cpu, m), sh64_h_fvc_get (cpu, n));
-  result = sh64_fadds (cpu, result, sh64_fmuls (cpu, sh64_h_frc_get (cpu, m + 1), sh64_h_frc_get (cpu, n + 1)));
-  result = sh64_fadds (cpu, result, sh64_fmuls (cpu, sh64_h_frc_get (cpu, m + 2), sh64_h_frc_get (cpu, n + 2)));
-  result = sh64_fadds (cpu, result, sh64_fmuls (cpu, sh64_h_frc_get (cpu, m + 3), sh64_h_frc_get (cpu, n + 3)));
-  sh64_h_frc_set (cpu, n + 3, result);
-}
+  int i = 0;
 
-SF
-sh64_fiprs (SIM_CPU *cpu, unsigned g, unsigned h)
-{
-  SF temp = sh64_fmuls (cpu, sh64_h_fr_get (cpu, g), sh64_h_fr_get (cpu, h));
-  temp = sh64_fadds (cpu, temp, sh64_fmuls (cpu, sh64_h_fr_get (cpu, g + 1), sh64_h_fr_get (cpu, h + 1)));
-  temp = sh64_fadds (cpu, temp, sh64_fmuls (cpu, sh64_h_fr_get (cpu, g + 2), sh64_h_fr_get (cpu, h + 2)));
-  temp = sh64_fadds (cpu, temp, sh64_fmuls (cpu, sh64_h_fr_get (cpu, g + 3), sh64_h_fr_get (cpu, h + 3)));
-  return temp;
-}
+  if (! STATE_PROG_ARGV (CPU_STATE (cpu)))
+    return -1;
+  
+  while (STATE_PROG_ARGV (CPU_STATE (cpu)) [i] != NULL)
+    ++i;
 
-VOID
-sh64_fldp (SIM_CPU *cpu, PCADDR pc, DI rm, DI rn, unsigned f)
-{
-  sh64_h_fr_set (cpu, f,     GETMEMSF (cpu, pc, rm + rn));
-  sh64_h_fr_set (cpu, f + 1, GETMEMSF (cpu, pc, rm + rn + 4));
-}
-
-VOID
-sh64_fstp (SIM_CPU *cpu, PCADDR pc, DI rm, DI rn, unsigned f)
-{
-  SETMEMSF (cpu, pc, rm + rn,     sh64_h_fr_get (cpu, f));
-  SETMEMSF (cpu, pc, rm + rn + 4, sh64_h_fr_get (cpu, f + 1));
-}
-
-VOID
-sh64_ftrv (SIM_CPU *cpu, UINT ignored)
-{
-  /* TODO: Unimplemented.  */
-}
-
-VOID
-sh64_pref (SIM_CPU *cpu, SI addr)
-{
-  /* TODO: Unimplemented.  */
+  return i;
 }
 
 /* Read a null terminated string from memory, return in a buffer */
@@ -577,7 +548,7 @@ trap_handler (SIM_CPU *current_cpu, int shmedia_abi_p, UQI trapnum, PCADDR pc)
 	    SET_H_GR (ret_reg,
 		      sim_io_write (CPU_STATE (current_cpu),
 				    PARM1, buf, PARM3));
-	    free (buf);
+	    zfree (buf);
 	    break;
 
 	  case SYS_lseek:
@@ -597,7 +568,7 @@ trap_handler (SIM_CPU *current_cpu, int shmedia_abi_p, UQI trapnum, PCADDR pc)
 		      sim_io_read (CPU_STATE (current_cpu),
 				   PARM1, buf, PARM3));
 	    sim_write (CPU_STATE (current_cpu), PARM2, buf, PARM3);
-	    free (buf);
+	    zfree (buf);
 	    break;
 	    
 	  case SYS_open:
@@ -605,7 +576,7 @@ trap_handler (SIM_CPU *current_cpu, int shmedia_abi_p, UQI trapnum, PCADDR pc)
 	    SET_H_GR (ret_reg,
 		      sim_io_open (CPU_STATE (current_cpu),
 				   buf, PARM2));
-	    free (buf);
+	    zfree (buf);
 	    break;
 
 	  case SYS_close:
@@ -618,11 +589,11 @@ trap_handler (SIM_CPU *current_cpu, int shmedia_abi_p, UQI trapnum, PCADDR pc)
 	    break;
 
 	  case SYS_argc:
-	    SET_H_GR (ret_reg, countargv (STATE_PROG_ARGV (CPU_STATE (current_cpu))));
+	    SET_H_GR (ret_reg, count_argc (current_cpu));
 	    break;
 
 	  case SYS_argnlen:
-	    if (PARM1 < countargv (STATE_PROG_ARGV (CPU_STATE (current_cpu))))
+	    if (PARM1 < count_argc (current_cpu))
 	      SET_H_GR (ret_reg,
 			strlen (STATE_PROG_ARGV (CPU_STATE (current_cpu)) [PARM1]));
 	    else
@@ -630,7 +601,7 @@ trap_handler (SIM_CPU *current_cpu, int shmedia_abi_p, UQI trapnum, PCADDR pc)
 	    break;
 
 	  case SYS_argn:
-	    if (PARM1 < countargv (STATE_PROG_ARGV (CPU_STATE (current_cpu))))
+	    if (PARM1 < count_argc (current_cpu))
 	      {
 		/* Include the NULL byte.  */
 		i = strlen (STATE_PROG_ARGV (CPU_STATE (current_cpu)) [PARM1]) + 1;
@@ -715,22 +686,6 @@ sh64_break (SIM_CPU *current_cpu, PCADDR pc)
 {
   SIM_DESC sd = CPU_STATE (current_cpu);
   sim_engine_halt (sd, current_cpu, NULL, pc, sim_stopped, SIM_SIGTRAP);
-}
-
-SI
-sh64_movua (SIM_CPU *current_cpu, PCADDR pc, SI rn)
-{
-  SI v;
-  int i;
-
-  /* Move the data one byte at a time to avoid alignment problems.
-     Be aware of endianness.  */
-  v = 0;
-  for (i = 0; i < 4; ++i)
-    v = (v << 8) | (GETMEMQI (current_cpu, pc, rn + i) & 0xff);
-
-  v = T2H_4 (v);
-  return v;
 }
 
 void
@@ -1014,24 +969,17 @@ sh64_model_init()
   /* Do nothing.  */
 }
 
-static const SIM_MODEL sh_models [] =
+static const MODEL sh_models [] =
 {
-  { "sh2",        & sh2_mach,         MODEL_SH5, NULL, sh64_model_init },
-  { "sh2e",       & sh2e_mach,        MODEL_SH5, NULL, sh64_model_init },
-  { "sh2a",       & sh2a_fpu_mach,    MODEL_SH5, NULL, sh64_model_init },
-  { "sh2a_nofpu", & sh2a_nofpu_mach,  MODEL_SH5, NULL, sh64_model_init },
-  { "sh3",        & sh3_mach,         MODEL_SH5, NULL, sh64_model_init },
-  { "sh3e",       & sh3_mach,         MODEL_SH5, NULL, sh64_model_init },
-  { "sh4",        & sh4_mach,         MODEL_SH5, NULL, sh64_model_init },
-  { "sh4_nofpu",  & sh4_nofpu_mach,   MODEL_SH5, NULL, sh64_model_init },
-  { "sh4a",       & sh4a_mach,        MODEL_SH5, NULL, sh64_model_init },
-  { "sh4a_nofpu", & sh4a_nofpu_mach,  MODEL_SH5, NULL, sh64_model_init },
-  { "sh4al",      & sh4al_mach,       MODEL_SH5, NULL, sh64_model_init },
-  { "sh5",        & sh5_mach,         MODEL_SH5, NULL, sh64_model_init },
+  { "sh2",  & sh2_mach,  MODEL_SH5, NULL, sh64_model_init },
+  { "sh3",  & sh3_mach,  MODEL_SH5, NULL, sh64_model_init },
+  { "sh3e", & sh3_mach,  MODEL_SH5, NULL, sh64_model_init },
+  { "sh4",  & sh4_mach,  MODEL_SH5, NULL, sh64_model_init },
+  { "sh5",  & sh5_mach,  MODEL_SH5, NULL, sh64_model_init },
   { 0 }
 };
 
-static const SIM_MACH_IMP_PROPERTIES sh5_imp_properties =
+static const MACH_IMP_PROPERTIES sh5_imp_properties =
 {
   sizeof (SIM_CPU),
 #if WITH_SCACHE
@@ -1041,7 +989,7 @@ static const SIM_MACH_IMP_PROPERTIES sh5_imp_properties =
 #endif
 };
 
-const SIM_MACH sh2_mach =
+const MACH sh2_mach =
 {
   "sh2", "sh2", MACH_SH5,
   16, 16, &sh_models[0], &sh5_imp_properties,
@@ -1049,90 +997,34 @@ const SIM_MACH sh2_mach =
   sh64_prepare_run
 };
 
-const SIM_MACH sh2e_mach =
+const MACH sh3_mach =
 {
-  "sh2e", "sh2e", MACH_SH5,
+  "sh3", "sh3", MACH_SH5,
   16, 16, &sh_models[1], &sh5_imp_properties,
   shcompact_init_cpu,
   sh64_prepare_run
 };
 
-const SIM_MACH sh2a_fpu_mach =
+const MACH sh3e_mach =
 {
-  "sh2a", "sh2a", MACH_SH5,
+  "sh3e", "sh3e", MACH_SH5,
   16, 16, &sh_models[2], &sh5_imp_properties,
   shcompact_init_cpu,
   sh64_prepare_run
 };
 
-const SIM_MACH sh2a_nofpu_mach =
+const MACH sh4_mach =
 {
-  "sh2a_nofpu", "sh2a_nofpu", MACH_SH5,
+  "sh4", "sh4", MACH_SH5,
   16, 16, &sh_models[3], &sh5_imp_properties,
   shcompact_init_cpu,
   sh64_prepare_run
 };
 
-const SIM_MACH sh3_mach =
-{
-  "sh3", "sh3", MACH_SH5,
-  16, 16, &sh_models[4], &sh5_imp_properties,
-  shcompact_init_cpu,
-  sh64_prepare_run
-};
-
-const SIM_MACH sh3e_mach =
-{
-  "sh3e", "sh3e", MACH_SH5,
-  16, 16, &sh_models[5], &sh5_imp_properties,
-  shcompact_init_cpu,
-  sh64_prepare_run
-};
-
-const SIM_MACH sh4_mach =
-{
-  "sh4", "sh4", MACH_SH5,
-  16, 16, &sh_models[6], &sh5_imp_properties,
-  shcompact_init_cpu,
-  sh64_prepare_run
-};
-
-const SIM_MACH sh4_nofpu_mach =
-{
-  "sh4_nofpu", "sh4_nofpu", MACH_SH5,
-  16, 16, &sh_models[7], &sh5_imp_properties,
-  shcompact_init_cpu,
-  sh64_prepare_run
-};
-
-const SIM_MACH sh4a_mach =
-{
-  "sh4a", "sh4a", MACH_SH5,
-  16, 16, &sh_models[8], &sh5_imp_properties,
-  shcompact_init_cpu,
-  sh64_prepare_run
-};
-
-const SIM_MACH sh4a_nofpu_mach =
-{
-  "sh4a_nofpu", "sh4a_nofpu", MACH_SH5,
-  16, 16, &sh_models[9], &sh5_imp_properties,
-  shcompact_init_cpu,
-  sh64_prepare_run
-};
-
-const SIM_MACH sh4al_mach =
-{
-  "sh4al", "sh4al", MACH_SH5,
-  16, 16, &sh_models[10], &sh5_imp_properties,
-  shcompact_init_cpu,
-  sh64_prepare_run
-};
-
-const SIM_MACH sh5_mach =
+const MACH sh5_mach =
 {
   "sh5", "sh5", MACH_SH5,
-  32, 32, &sh_models[11], &sh5_imp_properties,
+  32, 32, &sh_models[4], &sh5_imp_properties,
   shmedia_init_cpu,
   sh64_prepare_run
 };

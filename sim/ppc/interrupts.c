@@ -1,10 +1,10 @@
 /*  This file is part of the program psim.
 
-    Copyright 1994, 1995, 1996, 1997, 2003 Andrew Cagney
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -521,7 +522,7 @@ external_interrupt(cpu *processor,
 {
   interrupts *ints = cpu_interrupts(processor);
   if (is_asserted) {
-    if (!(ints->pending_interrupts & external_interrupt_pending)) {
+    if (!ints->pending_interrupts & external_interrupt_pending) {
       ints->pending_interrupts |= external_interrupt_pending;
       if (cpu_registers(processor)->msr & msr_external_interrupt_enable)
 	schedule_hardware_interrupt_delivery(processor);

@@ -1,28 +1,26 @@
-/* DO NOT EDIT!  -*- buffer-read-only: t -*- vi:set ro:  */
 /* Assembler interface for targets using CGEN. -*- C -*-
    CGEN: Cpu tools GENerator
 
-   THIS FILE IS MACHINE GENERATED WITH CGEN.
-   - the resultant file is machine generated, cgen-asm.in isn't
+THIS FILE IS MACHINE GENERATED WITH CGEN.
+- the resultant file is machine generated, cgen-asm.in isn't
 
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
 
-   This file is part of libopcodes.
+This file is part of the GNU Binutils and GDB, the GNU debugger.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
-
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* ??? Eventually more and more of this stuff can go to cpu-independent files.
    Keep that in mind.  */
@@ -45,168 +43,46 @@
 #define max(a,b) ((a) > (b) ? (a) : (b))
 
 static const char * parse_insn_normal
-  (CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *);
+     PARAMS ((CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *));
 
 /* -- assembler routines inserted here.  */
 
 /* -- asm.c */
-inline static const char *
-parse_symbolic_address (CGEN_CPU_DESC cd,
-			const char **strp,
-			int opindex,
-			int opinfo,
-			enum cgen_parse_operand_result *resultp,
-			bfd_vma *valuep)
-{
-  enum cgen_parse_operand_result result_type;
-  const char *errmsg = (* cd->parse_operand_fn)
-    (cd, CGEN_PARSE_OPERAND_SYMBOLIC, strp, opindex, opinfo,
-     &result_type, valuep);
-
-  if (errmsg == NULL
-      && result_type != CGEN_PARSE_OPERAND_RESULT_QUEUED)
-    return "symbolic expression required";
-
-  if (resultp)
-    *resultp = result_type;
-
-  return errmsg;
-}
+static const char * parse_ulo16
+  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
+static const char * parse_uslo16
+  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
+static const char * parse_uhi16
+  PARAMS ((CGEN_CPU_DESC, const char **, int, unsigned long *));
+static long parse_register_number
+  PARAMS ((const char **));
+static const char * parse_spr
+  PARAMS ((CGEN_CPU_DESC, const char **, CGEN_KEYWORD *, long *));
+static const char * parse_d12
+  PARAMS ((CGEN_CPU_DESC, const char **, int, long *));
+static const char * parse_s12
+  PARAMS ((CGEN_CPU_DESC, const char **, int, long *));
+static const char * parse_u12
+  PARAMS ((CGEN_CPU_DESC, const char **, int, long *));
 
 static const char *
-parse_ldd_annotation (CGEN_CPU_DESC cd,
-		      const char **strp,
-		      int opindex,
-		      unsigned long *valuep)
+parse_ulo16 (cd, strp, opindex, valuep)
+     CGEN_CPU_DESC cd;
+     const char **strp;
+     int opindex;
+     unsigned long *valuep;
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
   bfd_vma value;
-
-  if (**strp == '#' || **strp == '%')
-    {
-      if (strncasecmp (*strp + 1, "tlsdesc(", 8) == 0)
-	{
-	  *strp += 9;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_TLSDESC_RELAX,
-					   &result_type, &value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  if (valuep)
-	    *valuep = value;
-	  ++*strp;
-	  if (errmsg)
-	    return errmsg;
-	}
-    }
-
-  while (**strp == ' ' || **strp == '\t')
-    ++*strp;
-
-  if (**strp != '@')
-    return "missing `@'";
-
-  ++*strp;
-
-  return NULL;
-}
-
-static const char *
-parse_call_annotation (CGEN_CPU_DESC cd,
-		       const char **strp,
-		       int opindex,
-		       unsigned long *valuep)
-{
-  const char *errmsg;
-  enum cgen_parse_operand_result result_type;
-  bfd_vma value;
-
-  if (**strp == '#' || **strp == '%')
-    {
-      if (strncasecmp (*strp + 1, "gettlsoff(", 10) == 0)
-	{
-	  *strp += 11;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GETTLSOFF_RELAX,
-					   &result_type, &value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  if (valuep)
-	    *valuep = value;
-	  ++*strp;
-	  if (errmsg)
-	    return errmsg;
-	}
-    }
-
-  while (**strp == ' ' || **strp == '\t')
-    ++*strp;
-
-  if (**strp != '@')
-    return "missing `@'";
-
-  ++*strp;
-
-  return NULL;
-}
-
-static const char *
-parse_ld_annotation (CGEN_CPU_DESC cd,
-		     const char **strp,
-		     int opindex,
-		     unsigned long *valuep)
-{
-  const char *errmsg;
-  enum cgen_parse_operand_result result_type;
-  bfd_vma value;
-
-  if (**strp == '#' || **strp == '%')
-    {
-      if (strncasecmp (*strp + 1, "tlsoff(", 7) == 0)
-	{
-	  *strp += 8;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_TLSOFF_RELAX,
-					   &result_type, &value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  if (valuep)
-	    *valuep = value;
-	  ++*strp;
-	  if (errmsg)
-	    return errmsg;
-	}
-    }
-
-  while (**strp == ' ' || **strp == '\t')
-    ++*strp;
-
-  if (**strp != '@')
-    return "missing `@'";
-
-  ++*strp;
-
-  return NULL;
-}
-
-static const char *
-parse_ulo16 (CGEN_CPU_DESC cd,
-	     const char **strp,
-	     int opindex,
-	     unsigned long *valuep)
-{
-  const char *errmsg;
-  enum cgen_parse_operand_result result_type;
-  bfd_vma value;
-
+ 
   if (**strp == '#' || **strp == '%')
     {
       if (strncasecmp (*strp + 1, "lo(", 3) == 0)
 	{
 	  *strp += 4;
 	  errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_LO16,
-				       & result_type, & value);
+				       &result_type, &value);
 	  if (**strp != ')')
 	    return "missing `)'";
 	  ++*strp;
@@ -219,120 +95,39 @@ parse_ulo16 (CGEN_CPU_DESC cd,
       if (strncasecmp (*strp + 1, "gprello(", 8) == 0)
 	{
 	  *strp += 9;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GPRELLO,
-					   & result_type, & value);
+	  errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_GPRELLO,
+				       &result_type, &value);
 	  if (**strp != ')')
 	    return "missing ')'";
 	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotlo(", 6) == 0)
-	{
-	  *strp += 7;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotfuncdesclo(", 14) == 0)
-	{
-	  *strp += 15;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotofflo(", 9) == 0)
-	{
-	  *strp += 10;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotofffuncdesclo(", 17) == 0)
-	{
-	  *strp += 18;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsdesclo(", 13) == 0)
-	{
-	  *strp += 14;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSDESCLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "tlsmofflo(", 10) == 0)
-	{
-	  *strp += 11;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_TLSMOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsofflo(", 12) == 0)
-	{
-	  *strp += 13;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
+	  if (errmsg == NULL
+	      && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
+	    value >>= 16;
 	  *valuep = value;
 	  return errmsg;
 	}
     }
-  return cgen_parse_unsigned_integer (cd, strp, opindex, valuep);
+  return cgen_parse_signed_integer (cd, strp, opindex, valuep);
 }
 
 static const char *
-parse_uslo16 (CGEN_CPU_DESC cd,
-	      const char **strp,
-	      int opindex,
-	      signed long *valuep)
+parse_uslo16 (cd, strp, opindex, valuep)
+     CGEN_CPU_DESC cd;
+     const char **strp;
+     int opindex;
+     unsigned long *valuep;
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
   bfd_vma value;
-
+ 
   if (**strp == '#' || **strp == '%')
     {
       if (strncasecmp (*strp + 1, "lo(", 3) == 0)
 	{
 	  *strp += 4;
 	  errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_LO16,
-				       & result_type, & value);
+				       &result_type, &value);
 	  if (**strp != ')')
 	    return "missing `)'";
 	  ++*strp;
@@ -345,229 +140,59 @@ parse_uslo16 (CGEN_CPU_DESC cd,
       else if (strncasecmp (*strp + 1, "gprello(", 8) == 0)
 	{
 	  *strp += 9;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GPRELLO,
-					   & result_type, & value);
+	  errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_GPRELLO,
+				       &result_type, &value);
 	  if (**strp != ')')
 	    return "missing ')'";
 	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotlo(", 6) == 0)
-	{
-	  *strp += 7;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotfuncdesclo(", 14) == 0)
-	{
-	  *strp += 15;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotofflo(", 9) == 0)
-	{
-	  *strp += 10;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotofffuncdesclo(", 17) == 0)
-	{
-	  *strp += 18;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsdesclo(", 13) == 0)
-	{
-	  *strp += 14;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSDESCLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "tlsmofflo(", 10) == 0)
-	{
-	  *strp += 11;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_TLSMOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsofflo(", 12) == 0)
-	{
-	  *strp += 13;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSOFFLO,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
+	  if (errmsg == NULL
+	      && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
+	    value &= 0xffff;
 	  *valuep = value;
 	  return errmsg;
 	}
     }
-  return cgen_parse_signed_integer (cd, strp, opindex, valuep);
+  return cgen_parse_unsigned_integer (cd, strp, opindex, valuep);
 }
 
 static const char *
-parse_uhi16 (CGEN_CPU_DESC cd,
-	     const char **strp,
-	     int opindex,
-	     unsigned long *valuep)
+parse_uhi16 (cd, strp, opindex, valuep)
+     CGEN_CPU_DESC cd;
+     const char **strp;
+     int opindex;
+     unsigned long *valuep;
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
   bfd_vma value;
-
+ 
   if (**strp == '#' || **strp == '%')
     {
       if (strncasecmp (*strp + 1, "hi(", 3) == 0)
 	{
 	  *strp += 4;
 	  errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_HI16,
-				       & result_type, & value);
+				       &result_type, &value);
 	  if (**strp != ')')
 	    return "missing `)'";
 	  ++*strp;
 	  if (errmsg == NULL
 	      && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
-	    {
- 	      /* If value is wider than 32 bits then be
- 		 careful about how we extract bits 16-31.  */
- 	      if (sizeof (value) > 4)
- 		value &= (((bfd_vma)1 << 16) << 16) - 1;
-
-	      value >>= 16;
-	    }
+	    value >>= 16;
 	  *valuep = value;
 	  return errmsg;
 	}
       else if (strncasecmp (*strp + 1, "gprelhi(", 8) == 0)
 	{
 	  *strp += 9;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GPRELHI,
-					   & result_type, & value);
+	  errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_GPRELHI,
+				       &result_type, &value);
 	  if (**strp != ')')
 	    return "missing ')'";
 	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gothi(", 6) == 0)
-	{
-	  *strp += 7;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTHI,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotfuncdeschi(", 14) == 0)
-	{
-	  *strp += 15;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTHI,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotoffhi(", 9) == 0)
-	{
-	  *strp += 10;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTOFFHI,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotofffuncdeschi(", 17) == 0)
-	{
-	  *strp += 18;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTOFFHI,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsdeschi(", 13) == 0)
-	{
-	  *strp += 14;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSDESCHI,
-					   &result_type, &value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "tlsmoffhi(", 10) == 0)
-	{
-	  *strp += 11;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_TLSMOFFHI,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsoffhi(", 12) == 0)
-	{
-	  *strp += 13;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSOFFHI,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
+	  if (errmsg == NULL
+	      && result_type == CGEN_PARSE_OPERAND_RESULT_NUMBER)
+	    value >>= 16;
 	  *valuep = value;
 	  return errmsg;
 	}
@@ -576,10 +201,10 @@ parse_uhi16 (CGEN_CPU_DESC cd,
 }
 
 static long
-parse_register_number (const char **strp)
+parse_register_number (strp)
+     const char **strp;
 {
   int regno;
-
   if (**strp < '0' || **strp > '9')
     return -1; /* error */
 
@@ -591,10 +216,11 @@ parse_register_number (const char **strp)
 }
 
 static const char *
-parse_spr (CGEN_CPU_DESC cd,
-	   const char **strp,
-	   CGEN_KEYWORD * table,
-	   long *valuep)
+parse_spr (cd, strp, table, valuep)
+     CGEN_CPU_DESC cd;
+     const char **strp;
+     CGEN_KEYWORD * table;
+     long *valuep;
 {
   const char *save_strp;
   long regno;
@@ -605,10 +231,10 @@ parse_spr (CGEN_CPU_DESC cd,
       *strp += 4;
       regno = parse_register_number (strp);
       if (**strp != ']')
-        return _("missing `]'");
+        return "missing `]'";
       ++*strp;
       if (! spr_valid (regno))
-	return _("Special purpose register number is out of range");
+	return "Special purpose register number is out of range";
       *valuep = regno;
       return NULL;
     }
@@ -618,7 +244,7 @@ parse_spr (CGEN_CPU_DESC cd,
   if (regno != -1)
     {
       if (! spr_valid (regno))
-	return _("Special purpose register number is out of range");
+	return "Special purpose register number is out of range";
       *valuep = regno;
       return NULL;
     }
@@ -628,252 +254,52 @@ parse_spr (CGEN_CPU_DESC cd,
 }
 
 static const char *
-parse_d12 (CGEN_CPU_DESC cd,
-	   const char **strp,
-	   int opindex,
-	   long *valuep)
+parse_d12 (cd, strp, opindex, valuep)
+     CGEN_CPU_DESC cd;
+     const char **strp;
+     int opindex;
+     long *valuep;
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
   bfd_vma value;
-
+ 
   /* Check for small data reference.  */
   if (**strp == '#' || **strp == '%')
     {
       if (strncasecmp (*strp + 1, "gprel12(", 8) == 0)
         {
           *strp += 9;
-          errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GPREL12,
-					   & result_type, & value);
+          errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_GPREL12,
+                                       &result_type, &value);
           if (**strp != ')')
             return "missing `)'";
           ++*strp;
           *valuep = value;
           return errmsg;
         }
-      else if (strncasecmp (*strp + 1, "got12(", 6) == 0)
-	{
-	  *strp += 7;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOT12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotfuncdesc12(", 14) == 0)
-	{
-	  *strp += 15;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOT12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotoff12(", 9) == 0)
-	{
-	  *strp += 10;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotofffuncdesc12(", 17) == 0)
-	{
-	  *strp += 18;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsdesc12(", 13) == 0)
-	{
-	  *strp += 14;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSDESC12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "tlsmoff12(", 10) == 0)
-	{
-	  *strp += 11;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_TLSMOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsoff12(", 12) == 0)
-	{
-	  *strp += 13;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
     }
   return cgen_parse_signed_integer (cd, strp, opindex, valuep);
 }
 
 static const char *
-parse_s12 (CGEN_CPU_DESC cd,
-	   const char **strp,
-	   int opindex,
-	   long *valuep)
+parse_s12 (cd, strp, opindex, valuep)
+     CGEN_CPU_DESC cd;
+     const char **strp;
+     int opindex;
+     long *valuep;
 {
   const char *errmsg;
   enum cgen_parse_operand_result result_type;
   bfd_vma value;
-
-  /* Check for small data reference.  */
-  if (**strp == '#' || **strp == '%')
-    {
-      if (strncasecmp (*strp + 1, "gprel12(", 8) == 0)
-	{
-	  *strp += 9;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GPREL12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing `)'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "got12(", 6) == 0)
-	{
-	  *strp += 7;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOT12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotfuncdesc12(", 14) == 0)
-	{
-	  *strp += 15;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOT12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotoff12(", 9) == 0)
-	{
-	  *strp += 10;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gotofffuncdesc12(", 17) == 0)
-	{
-	  *strp += 18;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_FUNCDESC_GOTOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsdesc12(", 13) == 0)
-	{
-	  *strp += 14;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSDESC12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "tlsmoff12(", 10) == 0)
-	{
-	  *strp += 11;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_TLSMOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-      else if (strncasecmp (*strp + 1, "gottlsoff12(", 12) == 0)
-	{
-	  *strp += 13;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GOTTLSOFF12,
-					   & result_type, & value);
-	  if (**strp != ')')
-	    return "missing ')'";
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
-    }
-
-  if (**strp == '#')
-    ++*strp;
-  return cgen_parse_signed_integer (cd, strp, opindex, valuep);
-}
-
-static const char *
-parse_u12 (CGEN_CPU_DESC cd,
-	   const char **strp,
-	   int opindex,
-	   long *valuep)
-{
-  const char *errmsg;
-  enum cgen_parse_operand_result result_type;
-  bfd_vma value;
-
+ 
   /* Check for small data reference.  */
   if ((**strp == '#' || **strp == '%')
       && strncasecmp (*strp + 1, "gprel12(", 8) == 0)
     {
       *strp += 9;
-      errmsg = parse_symbolic_address (cd, strp, opindex,
-				       BFD_RELOC_FRV_GPRELU12,
-				       & result_type, & value);
+      errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_GPREL12,
+                                    &result_type, &value);
       if (**strp != ')')
         return "missing `)'";
       ++*strp;
@@ -889,100 +315,41 @@ parse_u12 (CGEN_CPU_DESC cd,
 }
 
 static const char *
-parse_A (CGEN_CPU_DESC cd,
-	 const char **strp,
-	 int opindex,
-	 unsigned long *valuep,
-	 unsigned long A)
+parse_u12 (cd, strp, opindex, valuep)
+     CGEN_CPU_DESC cd;
+     const char **strp;
+     int opindex;
+     long *valuep;
 {
   const char *errmsg;
-
-  if (**strp == '#')
-    ++*strp;
-
-  errmsg = cgen_parse_unsigned_integer (cd, strp, opindex, valuep);
-  if (errmsg)
-    return errmsg;
-
-  if (*valuep != A)
-    return _("Value of A operand must be 0 or 1");
-
-  return NULL;
-}
-
-static const char *
-parse_A0 (CGEN_CPU_DESC cd,
-	  const char **strp,
-	  int opindex,
-	  unsigned long *valuep)
-{
-  return parse_A (cd, strp, opindex, valuep, 0);
-}
-
-static const char *
-parse_A1 (CGEN_CPU_DESC cd,
-	  const char **strp,
-	  int opindex,
-	  unsigned long *valuep)
-{
-  return parse_A (cd, strp, opindex, valuep, 1);
-}
-
-static const char *
-parse_even_register (CGEN_CPU_DESC  cd,
-		     const char **  strP,
-		     CGEN_KEYWORD * tableP,
-		     long *         valueP)
-{
-  const char * errmsg;
-  const char * saved_star_strP = * strP;
-
-  errmsg = cgen_parse_keyword (cd, strP, tableP, valueP);
-
-  if (errmsg == NULL && ((* valueP) & 1))
-    {
-      errmsg = _("register number must be even");
-      * strP = saved_star_strP;
-    }
-
-  return errmsg;
-}
-
-static const char *
-parse_call_label (CGEN_CPU_DESC cd,
-		  const char **strp,
-		  int opindex,
-		  int opinfo,
-		  enum cgen_parse_operand_result *resultp,
-		  bfd_vma *valuep)
-{
-  const char *errmsg;
+  enum cgen_parse_operand_result result_type;
   bfd_vma value;
-
+ 
   /* Check for small data reference.  */
-  if (opinfo == 0 && (**strp == '#' || **strp == '%'))
+  if ((**strp == '#' || **strp == '%')
+      && strncasecmp (*strp + 1, "gprel12(", 8) == 0)
     {
-      if (strncasecmp (*strp + 1, "gettlsoff(", 10) == 0)
-	{
-	  *strp += 11;
-	  errmsg = parse_symbolic_address (cd, strp, opindex,
-					   BFD_RELOC_FRV_GETTLSOFF,
-					   resultp, &value);
-	  if (**strp != ')')
-	    return _("missing `)'");
-	  ++*strp;
-	  *valuep = value;
-	  return errmsg;
-	}
+      *strp += 9;
+      errmsg = cgen_parse_address (cd, strp, opindex, BFD_RELOC_FRV_GPRELU12,
+                                    &result_type, &value);
+      if (**strp != ')')
+        return "missing `)'";
+      ++*strp;
+      *valuep = value;
+      return errmsg;
     }
-
-  return cgen_parse_address (cd, strp, opindex, opinfo, resultp, valuep);
+  else
+    {
+      if (**strp == '#')
+        ++*strp;
+      return cgen_parse_signed_integer (cd, strp, opindex, valuep);
+    }
 }
 
 /* -- */
 
 const char * frv_cgen_parse_operand
-  (CGEN_CPU_DESC, int, const char **, CGEN_FIELDS *);
+  PARAMS ((CGEN_CPU_DESC, int, const char **, CGEN_FIELDS *));
 
 /* Main entry point for operand parsing.
 
@@ -998,10 +365,11 @@ const char * frv_cgen_parse_operand
    the handlers.  */
 
 const char *
-frv_cgen_parse_operand (CGEN_CPU_DESC cd,
-			   int opindex,
-			   const char ** strp,
-			   CGEN_FIELDS * fields)
+frv_cgen_parse_operand (cd, opindex, strp, fields)
+     CGEN_CPU_DESC cd;
+     int opindex;
+     const char ** strp;
+     CGEN_FIELDS * fields;
 {
   const char * errmsg = NULL;
   /* Used by scalar operands that still need to be parsed.  */
@@ -1009,11 +377,8 @@ frv_cgen_parse_operand (CGEN_CPU_DESC cd,
 
   switch (opindex)
     {
-    case FRV_OPERAND_A0 :
-      errmsg = parse_A0 (cd, strp, FRV_OPERAND_A0, (unsigned long *) (& fields->f_A));
-      break;
-    case FRV_OPERAND_A1 :
-      errmsg = parse_A1 (cd, strp, FRV_OPERAND_A1, (unsigned long *) (& fields->f_A));
+    case FRV_OPERAND_A :
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_A, &fields->f_A);
       break;
     case FRV_OPERAND_ACC40SI :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_acc_names, & fields->f_ACC40Si);
@@ -1037,7 +402,7 @@ frv_cgen_parse_operand (CGEN_CPU_DESC cd,
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_cccr_names, & fields->f_CCi);
       break;
     case FRV_OPERAND_CPRDOUBLEK :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_cpr_names, & fields->f_CPRk);
+      errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_cpr_names, & fields->f_CPRk);
       break;
     case FRV_OPERAND_CPRI :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_cpr_names, & fields->f_CPRi);
@@ -1076,13 +441,13 @@ frv_cgen_parse_operand (CGEN_CPU_DESC cd,
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fccr_names, & fields->f_FCCk);
       break;
     case FRV_OPERAND_FRDOUBLEI :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRi);
+      errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRi);
       break;
     case FRV_OPERAND_FRDOUBLEJ :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRj);
+      errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRj);
       break;
     case FRV_OPERAND_FRDOUBLEK :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRk);
+      errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRk);
       break;
     case FRV_OPERAND_FRI :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRi);
@@ -1090,20 +455,11 @@ frv_cgen_parse_operand (CGEN_CPU_DESC cd,
     case FRV_OPERAND_FRINTI :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRi);
       break;
-    case FRV_OPERAND_FRINTIEVEN :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRi);
-      break;
     case FRV_OPERAND_FRINTJ :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRj);
       break;
-    case FRV_OPERAND_FRINTJEVEN :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRj);
-      break;
     case FRV_OPERAND_FRINTK :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRk);
-      break;
-    case FRV_OPERAND_FRINTKEVEN :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRk);
       break;
     case FRV_OPERAND_FRJ :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRj);
@@ -1118,7 +474,7 @@ frv_cgen_parse_operand (CGEN_CPU_DESC cd,
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_fr_names, & fields->f_FRk);
       break;
     case FRV_OPERAND_GRDOUBLEK :
-      errmsg = parse_even_register (cd, strp, & frv_cgen_opval_gr_names, & fields->f_GRk);
+      errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_gr_names, & fields->f_GRk);
       break;
     case FRV_OPERAND_GRI :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_gr_names, & fields->f_GRi);
@@ -1145,46 +501,28 @@ frv_cgen_parse_operand (CGEN_CPU_DESC cd,
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_iccr_names, & fields->f_ICCi_3);
       break;
     case FRV_OPERAND_LI :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_LI, (unsigned long *) (& fields->f_LI));
-      break;
-    case FRV_OPERAND_LRAD :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_LRAD, (unsigned long *) (& fields->f_LRAD));
-      break;
-    case FRV_OPERAND_LRAE :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_LRAE, (unsigned long *) (& fields->f_LRAE));
-      break;
-    case FRV_OPERAND_LRAS :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_LRAS, (unsigned long *) (& fields->f_LRAS));
-      break;
-    case FRV_OPERAND_TLBPRL :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_TLBPRL, (unsigned long *) (& fields->f_TLBPRL));
-      break;
-    case FRV_OPERAND_TLBPROPX :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_TLBPROPX, (unsigned long *) (& fields->f_TLBPRopx));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_LI, &fields->f_LI);
       break;
     case FRV_OPERAND_AE :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_AE, (unsigned long *) (& fields->f_ae));
-      break;
-    case FRV_OPERAND_CALLANN :
-      errmsg = parse_call_annotation (cd, strp, FRV_OPERAND_CALLANN, (unsigned long *) (& fields->f_reloc_ann));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_AE, &fields->f_ae);
       break;
     case FRV_OPERAND_CCOND :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_CCOND, (unsigned long *) (& fields->f_ccond));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_CCOND, &fields->f_ccond);
       break;
     case FRV_OPERAND_COND :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_COND, (unsigned long *) (& fields->f_cond));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_COND, &fields->f_cond);
       break;
     case FRV_OPERAND_D12 :
-      errmsg = parse_d12 (cd, strp, FRV_OPERAND_D12, (long *) (& fields->f_d12));
+      errmsg = parse_d12 (cd, strp, FRV_OPERAND_D12, &fields->f_d12);
       break;
     case FRV_OPERAND_DEBUG :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_DEBUG, (unsigned long *) (& fields->f_debug));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_DEBUG, &fields->f_debug);
       break;
     case FRV_OPERAND_EIR :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_EIR, (unsigned long *) (& fields->f_eir));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_EIR, &fields->f_eir);
       break;
     case FRV_OPERAND_HINT :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_HINT, (unsigned long *) (& fields->f_hint));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_HINT, &fields->f_hint);
       break;
     case FRV_OPERAND_HINT_NOT_TAKEN :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_h_hint_not_taken, & fields->f_hint);
@@ -1194,96 +532,86 @@ frv_cgen_parse_operand (CGEN_CPU_DESC cd,
       break;
     case FRV_OPERAND_LABEL16 :
       {
-        bfd_vma value = 0;
+        bfd_vma value;
         errmsg = cgen_parse_address (cd, strp, FRV_OPERAND_LABEL16, 0, NULL,  & value);
         fields->f_label16 = value;
       }
       break;
     case FRV_OPERAND_LABEL24 :
       {
-        bfd_vma value = 0;
-        errmsg = parse_call_label (cd, strp, FRV_OPERAND_LABEL24, 0, NULL,  & value);
+        bfd_vma value;
+        errmsg = cgen_parse_address (cd, strp, FRV_OPERAND_LABEL24, 0, NULL,  & value);
         fields->f_label24 = value;
       }
       break;
-    case FRV_OPERAND_LDANN :
-      errmsg = parse_ld_annotation (cd, strp, FRV_OPERAND_LDANN, (unsigned long *) (& fields->f_reloc_ann));
-      break;
-    case FRV_OPERAND_LDDANN :
-      errmsg = parse_ldd_annotation (cd, strp, FRV_OPERAND_LDDANN, (unsigned long *) (& fields->f_reloc_ann));
-      break;
     case FRV_OPERAND_LOCK :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_LOCK, (unsigned long *) (& fields->f_lock));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_LOCK, &fields->f_lock);
       break;
     case FRV_OPERAND_PACK :
       errmsg = cgen_parse_keyword (cd, strp, & frv_cgen_opval_h_pack, & fields->f_pack);
       break;
     case FRV_OPERAND_S10 :
-      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S10, (long *) (& fields->f_s10));
+      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S10, &fields->f_s10);
       break;
     case FRV_OPERAND_S12 :
-      errmsg = parse_s12 (cd, strp, FRV_OPERAND_S12, (long *) (& fields->f_d12));
+      errmsg = parse_s12 (cd, strp, FRV_OPERAND_S12, &fields->f_d12);
       break;
     case FRV_OPERAND_S16 :
-      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S16, (long *) (& fields->f_s16));
+      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S16, &fields->f_s16);
       break;
     case FRV_OPERAND_S5 :
-      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S5, (long *) (& fields->f_s5));
+      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S5, &fields->f_s5);
       break;
     case FRV_OPERAND_S6 :
-      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S6, (long *) (& fields->f_s6));
+      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S6, &fields->f_s6);
       break;
     case FRV_OPERAND_S6_1 :
-      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S6_1, (long *) (& fields->f_s6_1));
+      errmsg = cgen_parse_signed_integer (cd, strp, FRV_OPERAND_S6_1, &fields->f_s6_1);
       break;
     case FRV_OPERAND_SLO16 :
-      errmsg = parse_uslo16 (cd, strp, FRV_OPERAND_SLO16, (long *) (& fields->f_s16));
+      errmsg = parse_uslo16 (cd, strp, FRV_OPERAND_SLO16, &fields->f_s16);
       break;
     case FRV_OPERAND_SPR :
       errmsg = parse_spr (cd, strp, & frv_cgen_opval_spr_names, & fields->f_spr);
       break;
     case FRV_OPERAND_U12 :
-      errmsg = parse_u12 (cd, strp, FRV_OPERAND_U12, (long *) (& fields->f_u12));
+      errmsg = parse_u12 (cd, strp, FRV_OPERAND_U12, &fields->f_u12);
       break;
     case FRV_OPERAND_U16 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_U16, (unsigned long *) (& fields->f_u16));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_U16, &fields->f_u16);
       break;
     case FRV_OPERAND_U6 :
-      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_U6, (unsigned long *) (& fields->f_u6));
+      errmsg = cgen_parse_unsigned_integer (cd, strp, FRV_OPERAND_U6, &fields->f_u6);
       break;
     case FRV_OPERAND_UHI16 :
-      errmsg = parse_uhi16 (cd, strp, FRV_OPERAND_UHI16, (unsigned long *) (& fields->f_u16));
+      errmsg = parse_uhi16 (cd, strp, FRV_OPERAND_UHI16, &fields->f_u16);
       break;
     case FRV_OPERAND_ULO16 :
-      errmsg = parse_ulo16 (cd, strp, FRV_OPERAND_ULO16, (unsigned long *) (& fields->f_u16));
+      errmsg = parse_ulo16 (cd, strp, FRV_OPERAND_ULO16, &fields->f_u16);
       break;
 
     default :
       /* xgettext:c-format */
-      opcodes_error_handler
-	(_("internal error: unrecognized field %d while parsing"),
-	 opindex);
+      fprintf (stderr, _("Unrecognized field %d while parsing.\n"), opindex);
       abort ();
   }
 
   return errmsg;
 }
 
-cgen_parse_fn * const frv_cgen_parse_handlers[] =
+cgen_parse_fn * const frv_cgen_parse_handlers[] = 
 {
   parse_insn_normal,
 };
 
 void
-frv_cgen_init_asm (CGEN_CPU_DESC cd)
+frv_cgen_init_asm (cd)
+     CGEN_CPU_DESC cd;
 {
   frv_cgen_init_opcode_table (cd);
   frv_cgen_init_ibld_table (cd);
   cd->parse_handlers = & frv_cgen_parse_handlers[0];
   cd->parse_operand = frv_cgen_parse_operand;
-#ifdef CGEN_ASM_INIT_HOOK
-CGEN_ASM_INIT_HOOK
-#endif
 }
 
 
@@ -1299,9 +627,10 @@ CGEN_ASM_INIT_HOOK
 
    Returns NULL for success, an error message for failure.  */
 
-char *
-frv_cgen_build_insn_regex (CGEN_INSN *insn)
-{
+char * 
+frv_cgen_build_insn_regex (insn)
+     CGEN_INSN *insn;
+{  
   CGEN_OPCODE *opc = (CGEN_OPCODE *) CGEN_INSN_OPCODE (insn);
   const char *mnem = CGEN_INSN_MNEMONIC (insn);
   char rxbuf[CGEN_MAX_RX_ELEMENTS];
@@ -1340,18 +669,18 @@ frv_cgen_build_insn_regex (CGEN_INSN *insn)
   /* Copy any remaining literals from the syntax string into the rx.  */
   for(; * syn != 0 && rx <= rxbuf + (CGEN_MAX_RX_ELEMENTS - 7 - 4); ++syn)
     {
-      if (CGEN_SYNTAX_CHAR_P (* syn))
+      if (CGEN_SYNTAX_CHAR_P (* syn)) 
 	{
 	  char c = CGEN_SYNTAX_CHAR (* syn);
 
-	  switch (c)
+	  switch (c) 
 	    {
 	      /* Escape any regex metacharacters in the syntax.  */
-	    case '.': case '[': case '\\':
-	    case '*': case '^': case '$':
+	    case '.': case '[': case '\\': 
+	    case '*': case '^': case '$': 
 
 #ifdef CGEN_ESCAPE_EXTENDED_REGEX
-	    case '?': case '{': case '}':
+	    case '?': case '{': case '}': 
 	    case '(': case ')': case '*':
 	    case '|': case '+': case ']':
 #endif
@@ -1381,20 +710,20 @@ frv_cgen_build_insn_regex (CGEN_INSN *insn)
     }
 
   /* Trailing whitespace ok.  */
-  * rx++ = '[';
-  * rx++ = ' ';
-  * rx++ = '\t';
-  * rx++ = ']';
-  * rx++ = '*';
+  * rx++ = '['; 
+  * rx++ = ' '; 
+  * rx++ = '\t'; 
+  * rx++ = ']'; 
+  * rx++ = '*'; 
 
   /* But anchor it after that.  */
-  * rx++ = '$';
+  * rx++ = '$'; 
   * rx = '\0';
 
   CGEN_INSN_RX (insn) = xmalloc (sizeof (regex_t));
   reg_err = regcomp ((regex_t *) CGEN_INSN_RX (insn), rxbuf, REG_NOSUB);
 
-  if (reg_err == 0)
+  if (reg_err == 0) 
     return NULL;
   else
     {
@@ -1423,10 +752,11 @@ frv_cgen_build_insn_regex (CGEN_INSN *insn)
    Returns NULL for success, an error message for failure.  */
 
 static const char *
-parse_insn_normal (CGEN_CPU_DESC cd,
-		   const CGEN_INSN *insn,
-		   const char **strp,
-		   CGEN_FIELDS *fields)
+parse_insn_normal (cd, insn, strp, fields)
+     CGEN_CPU_DESC cd;
+     const CGEN_INSN *insn;
+     const char **strp;
+     CGEN_FIELDS *fields;
 {
   /* ??? Runtime added insns not handled yet.  */
   const CGEN_SYNTAX *syntax = CGEN_INSN_SYNTAX (insn);
@@ -1512,11 +842,9 @@ parse_insn_normal (CGEN_CPU_DESC cd,
 	  continue;
 	}
 
-#ifdef CGEN_MNEMONIC_OPERANDS
-      (void) past_opcode_p;
-#endif
       /* We have an operand of some sort.  */
-      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn), &str, fields);
+      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn),
+					  &str, fields);
       if (errmsg)
 	return errmsg;
 
@@ -1566,11 +894,12 @@ parse_insn_normal (CGEN_CPU_DESC cd,
    mind helps keep the design clean.  */
 
 const CGEN_INSN *
-frv_cgen_assemble_insn (CGEN_CPU_DESC cd,
-			   const char *str,
-			   CGEN_FIELDS *fields,
-			   CGEN_INSN_BYTES_PTR buf,
-			   char **errmsg)
+frv_cgen_assemble_insn (cd, str, fields, buf, errmsg)
+     CGEN_CPU_DESC cd;
+     const char *str;
+     CGEN_FIELDS *fields;
+     CGEN_INSN_BYTES_PTR buf;
+     char **errmsg;
 {
   const char *start;
   CGEN_INSN_LIST *ilist;
@@ -1593,17 +922,17 @@ frv_cgen_assemble_insn (CGEN_CPU_DESC cd,
       const CGEN_INSN *insn = ilist->insn;
       recognized_mnemonic = 1;
 
-#ifdef CGEN_VALIDATE_INSN_SUPPORTED
+#ifdef CGEN_VALIDATE_INSN_SUPPORTED 
       /* Not usually needed as unsupported opcodes
 	 shouldn't be in the hash lists.  */
       /* Is this insn supported by the selected cpu?  */
       if (! frv_cgen_insn_supported (cd, insn))
 	continue;
 #endif
-      /* If the RELAXED attribute is set, this is an insn that shouldn't be
+      /* If the RELAX attribute is set, this is an insn that shouldn't be
 	 chosen immediately.  Instead, it is used during assembler/linker
 	 relaxation if possible.  */
-      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAXED) != 0)
+      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAX) != 0)
 	continue;
 
       str = start;
@@ -1633,41 +962,62 @@ frv_cgen_assemble_insn (CGEN_CPU_DESC cd,
 
   {
     static char errbuf[150];
-    const char *tmp_errmsg;
 #ifdef CGEN_VERBOSE_ASSEMBLER_ERRORS
-#define be_verbose 1
+    const char *tmp_errmsg;
+
+    /* If requesting verbose error messages, use insert_errmsg.
+       Failing that, use parse_errmsg.  */
+    tmp_errmsg = (insert_errmsg ? insert_errmsg :
+		  parse_errmsg ? parse_errmsg :
+		  recognized_mnemonic ?
+		  _("unrecognized form of instruction") :
+		  _("unrecognized instruction"));
+
+    if (strlen (start) > 50)
+      /* xgettext:c-format */
+      sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
+    else 
+      /* xgettext:c-format */
+      sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
 #else
-#define be_verbose 0
+    if (strlen (start) > 50)
+      /* xgettext:c-format */
+      sprintf (errbuf, _("bad instruction `%.50s...'"), start);
+    else 
+      /* xgettext:c-format */
+      sprintf (errbuf, _("bad instruction `%.50s'"), start);
 #endif
-
-    if (be_verbose)
-      {
-	/* If requesting verbose error messages, use insert_errmsg.
-	   Failing that, use parse_errmsg.  */
-	tmp_errmsg = (insert_errmsg ? insert_errmsg :
-		      parse_errmsg ? parse_errmsg :
-		      recognized_mnemonic ?
-		      _("unrecognized form of instruction") :
-		      _("unrecognized instruction"));
-
-	if (strlen (start) > 50)
-	  /* xgettext:c-format */
-	  sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
-	else
-	  /* xgettext:c-format */
-	  sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
-      }
-    else
-      {
-	if (strlen (start) > 50)
-	  /* xgettext:c-format */
-	  sprintf (errbuf, _("bad instruction `%.50s...'"), start);
-	else
-	  /* xgettext:c-format */
-	  sprintf (errbuf, _("bad instruction `%.50s'"), start);
-      }
-
+      
     *errmsg = errbuf;
     return NULL;
   }
 }
+
+#if 0 /* This calls back to GAS which we can't do without care.  */
+
+/* Record each member of OPVALS in the assembler's symbol table.
+   This lets GAS parse registers for us.
+   ??? Interesting idea but not currently used.  */
+
+/* Record each member of OPVALS in the assembler's symbol table.
+   FIXME: Not currently used.  */
+
+void
+frv_cgen_asm_hash_keywords (cd, opvals)
+     CGEN_CPU_DESC cd;
+     CGEN_KEYWORD *opvals;
+{
+  CGEN_KEYWORD_SEARCH search = cgen_keyword_search_init (opvals, NULL);
+  const CGEN_KEYWORD_ENTRY * ke;
+
+  while ((ke = cgen_keyword_search_next (& search)) != NULL)
+    {
+#if 0 /* Unnecessary, should be done in the search routine.  */
+      if (! frv_cgen_opval_supported (ke))
+	continue;
+#endif
+      cgen_asm_record_register (cd, ke->name, ke->value);
+    }
+}
+
+#endif /* 0 */

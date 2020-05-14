@@ -1,5 +1,5 @@
 /* List implementation of a partition of consecutive integers.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002 Free Software Foundation, Inc.
    Contributed by CodeSourcery, LLC.
 
    This file is part of GCC.
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GCC; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 /* This package implements a partition of consecutive integers.  The
    elements are partitioned into classes.  Each class is represented
@@ -45,12 +45,12 @@ extern "C" {
 
 struct partition_elem
 {
-  /* The next element in this class.  Elements in each class form a
-     circular list.  */
-  struct partition_elem* next;
   /* The canonical element that represents the class containing this
      element.  */
   int class_element;
+  /* The next element in this class.  Elements in each class form a
+     circular list.  */
+  struct partition_elem* next;
   /* The number of elements in this class.  Valid only if this is the
      canonical element for its class.  */
   unsigned class_count;
@@ -64,19 +64,18 @@ typedef struct partition_def
   struct partition_elem elements[1];
 } *partition;
 
-extern partition partition_new (int);
-extern void partition_delete (partition);
-extern int partition_union (partition, int, int);
-extern void partition_print (partition,	FILE*);
+extern partition partition_new          PARAMS((int));
+extern void partition_delete            PARAMS((partition));
+extern int partition_union              PARAMS((partition,
+						int,
+						int));
+extern void partition_print             PARAMS((partition,
+						FILE*));
 
 /* Returns the canonical element corresponding to the class containing
    ELEMENT__ in PARTITION__.  */
 
 #define partition_find(partition__, element__) \
     ((partition__)->elements[(element__)].class_element)
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* _PARTITION_H */

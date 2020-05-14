@@ -8,8 +8,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#include "../lib/unbuffer_output.c"
-
 int find_max1(int, ...);
 int find_max2(int, int, ...);
 double find_max_double(int, double, ...);
@@ -25,31 +23,7 @@ float fa,fb,fc,fd;
 double da,db,dc,dd;
 double dmax_val;
 
-#ifdef TEST_COMPLEX
-extern float crealf (float _Complex);
-extern double creal (double _Complex);
-extern long double creall (long double _Complex);
-
-float _Complex fc1 = 1.0F + 1.0iF;
-float _Complex fc2 = 2.0F + 2.0iF;
-float _Complex fc3 = 3.0F + 3.0iF;
-float _Complex fc4 = 4.0F + 4.0iF;
-
-double _Complex dc1 = 1.0 + 1.0i;
-double _Complex dc2 = 2.0 + 2.0i;
-double _Complex dc3 = 3.0 + 3.0i;
-double _Complex dc4 = 4.0 + 4.0i;
-
-long double _Complex ldc1 = 1.0L + 1.0Li;
-long double _Complex ldc2 = 2.0L + 2.0Li;
-long double _Complex ldc3 = 3.0L + 3.0Li;
-long double _Complex ldc4 = 4.0L + 4.0Li;
-
-#endif
-
-int
-test (void)
-{
+int main() {
   c = -1;
   uc = 1;
   s = -2;
@@ -72,13 +46,6 @@ test (void)
   dmax_val = find_max_double(a, db, dc, dd);
   
   return 0;
-}
-
-int
-main (void)
-{
-  gdb_unbuffer_output ();
-  test ();
 }
 
 /* Integer varargs, 1 declared arg */
@@ -142,61 +109,3 @@ double find_max_double(int num_vals, double first_val, ...) {
   return max_val;
 }
 
-
-#ifdef TEST_COMPLEX
-float _Complex
-find_max_float_real (int num_vals, ...)
-{
-  float _Complex max = 0.0F + 0.0iF;
-  float _Complex x;
-  va_list argp;
-  int i;
-
-  va_start(argp, num_vals);
-  for (i = 0; i < num_vals; i++)
-    {
-      x = va_arg (argp, float _Complex);
-      if (crealf (max) < crealf (x)) max = x;
-    }
-
-  return max;
-}
-
-double _Complex
-find_max_double_real (int num_vals, ...)
-{
-  double _Complex max = 0.0 + 0.0i;
-  double _Complex x;
-  va_list argp;
-  int i;
-
-  va_start(argp, num_vals);
-  for (i = 0; i < num_vals; i++)
-    {
-      x = va_arg (argp, double _Complex);
-      if (creal (max) < creal (x)) max = x;
-    }
-
-  return max;
-}
-
-long double _Complex
-find_max_long_double_real (int num_vals, ...)
-{
-  long double _Complex max = 0.0L + 0.0iL;
-  long double _Complex x;
-  va_list argp;
-  int i;
-
-  va_start(argp, num_vals);
-  for (i = 0; i < num_vals; i++)
-    {
-      x = va_arg (argp, long double _Complex);
-      if (creall (max) < creal (x)) max = x;
-    }
-
-  return max;
-}
-
-
-#endif /* TEST_COMPLEX */

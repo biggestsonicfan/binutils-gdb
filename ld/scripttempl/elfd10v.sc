@@ -1,19 +1,13 @@
-# Copyright (C) 2014-2020 Free Software Foundation, Inc.
-#
-# Copying and distribution of this file, with or without modification,
-# are permitted in any medium without royalty provided the copyright
-# notice and this notice are preserved.
-
 test -z "$ENTRY" && ENTRY=_start
 test -z "${BIG_OUTPUT_FORMAT}" && BIG_OUTPUT_FORMAT=${OUTPUT_FORMAT}
 test -z "${LITTLE_OUTPUT_FORMAT}" && LITTLE_OUTPUT_FORMAT=${OUTPUT_FORMAT}
 if [ -z "$MACHINE" ]; then OUTPUT_ARCH=${ARCH}; else OUTPUT_ARCH=${ARCH}:${MACHINE}; fi
 test "$LD_FLAG" = "N" && DATA_ADDR=.
-INTERP=".interp   ${RELOCATING-0} : { *(.interp) }"
-PLT=".plt    ${RELOCATING-0} : { *(.plt) }"
+INTERP=".interp   ${RELOCATING-0} : { *(.interp) 	}"
+PLT=".plt    ${RELOCATING-0} : { *(.plt)	}"
 
 
-CTOR=".ctors ${CONSTRUCTING-0} :
+CTOR=".ctors ${CONSTRUCTING-0} : 
   {
     ${CONSTRUCTING+${CTOR_START}}
     /* gcc uses crtbegin.o to find the start of
@@ -27,14 +21,13 @@ CTOR=".ctors ${CONSTRUCTING-0} :
        is in.  */
 
     KEEP (*crtbegin.o(.ctors))
-    KEEP (*crtbegin?.o(.ctors))
 
     /* We don't want to include the .ctor section from
-       the crtend.o file until after the sorted ctors.
+       from the crtend.o file until after the sorted ctors.
        The .ctor section from the crtend file contains the
        end of ctors marker and it must be last */
 
-    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))
     KEEP (*(SORT(.ctors.*)))
     KEEP (*(.ctors))
     ${CONSTRUCTING+${CTOR_END}}
@@ -44,8 +37,7 @@ DTOR=" .dtors       ${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+${DTOR_START}}
     KEEP (*crtbegin.o(.dtors))
-    KEEP (*crtbegin?.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
     ${CONSTRUCTING+${DTOR_END}}
@@ -61,86 +53,65 @@ else
 fi
 
 cat <<EOF
-/* Copyright (C) 2014-2020 Free Software Foundation, Inc.
-
-   Copying and distribution of this script, with or without modification,
-   are permitted in any medium without royalty provided the copyright
-   notice and this notice are preserved.  */
-
 OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
 	      "${LITTLE_OUTPUT_FORMAT}")
 OUTPUT_ARCH(${OUTPUT_ARCH})
-EOF
-
-test -n "${RELOCATING}" && cat <<EOF
 ENTRY(${ENTRY})
 
-${LIB_SEARCH_DIRS}
-/* Do we need any of these for elf?
-   __DYNAMIC = 0; ${STACKZERO+${STACKZERO}} ${SHLIB_PATH+${SHLIB_PATH}}  */
-${EXECUTABLE_SYMBOLS}
+${RELOCATING+${LIB_SEARCH_DIRS}}
+${RELOCATING+/* Do we need any of these for elf?
+   __DYNAMIC = 0; ${STACKZERO+${STACKZERO}} ${SHLIB_PATH+${SHLIB_PATH}}  */}
+${RELOCATING+${EXECUTABLE_SYMBOLS}}
 
 MEMORY
 {
-  /* These are the values for the D10V-TS3 board.
-     There are other memory regions available on
-     the TS3 (eg ROM, FLASH, etc) but these are not
-     used by this script.  */
-
-  INSN       : org = 0x01000000, len = 256K
-  DATA       : org = 0x02000000, len = 48K
-
-  /* This is a fake memory region at the top of the
-     on-chip RAM, used as the start of the
-     (descending) stack.  */
-
-  STACK      : org = 0x0200BFFC, len = 4
+  UNIFIED : org = 0,         len = 0x1000000
+  INSN    : org = 0x1014000, len = 0x40000
+  DATA    : org = 0x2000004, len = 0x7FFC
+  STACK   : org = 0x200BFFE, len = 4
 }
 
-EOF
-
-cat <<EOF
 SECTIONS
 {
   .text ${RELOCATING+${TEXT_START_ADDR}} :
   {
-    ${RELOCATING+${TEXT_START_SYMBOLS}
-    KEEP (*(SORT_NONE(.init)))
-    KEEP (*(SORT_NONE(.init.*)))
-    KEEP (*(SORT_NONE(.fini)))
-    KEEP (*(SORT_NONE(.fini.*)))}
+    ${RELOCATING+${TEXT_START_SYMBOLS}}
+    KEEP (*(.init))
+    KEEP (*(.init.*))
+    KEEP (*(.fini))
+    KEEP (*(.fini.*))
     *(.text)
-    ${RELOCATING+*(.text.*)}
-    /* .gnu.warning sections are handled specially by elf.em.  */
+    *(.text.*)
+    /* .gnu.warning sections are handled specially by elf32.em.  */
     *(.gnu.warning)
-    ${RELOCATING+*(.gnu.linkonce.t*)
-    _etext = .;
-    PROVIDE (etext = .);}
+    *(.gnu.linkonce.t*)
+    ${RELOCATING+_etext = .;}
+    ${RELOCATING+PROVIDE (etext = .);}
   } ${RELOCATING+ >INSN} =${NOP-0}
 
-  .rodata ${RELOCATING+${READONLY_START_ADDR}} : {
+  .rodata  ${RELOCATING-0} : {
     *(.rodata)
-    ${RELOCATING+*(.gnu.linkonce.r*)
-    *(.rodata.*)}
+    *(.gnu.linkonce.r*)
+    *(.rodata.*)
   } ${RELOCATING+ >DATA}
 
   .rodata1 ${RELOCATING-0} : {
     *(.rodata1)
-    ${RELOCATING+*(.rodata1.*)}
+    *(.rodata1.*)
    } ${RELOCATING+ >DATA}
 
   .data  ${RELOCATING-0} :
   {
     ${RELOCATING+${DATA_START_SYMBOLS}}
     *(.data)
-    ${RELOCATING+*(.data.*)
-    *(.gnu.linkonce.d*)}
+    *(.data.*)
+    *(.gnu.linkonce.d*)
     ${CONSTRUCTING+CONSTRUCTORS}
   } ${RELOCATING+ >DATA}
 
   .data1 ${RELOCATING-0} : {
     *(.data1)
-    ${RELOCATING+*(.data1.*)}
+    *(.data1.*)
   } ${RELOCATING+ >DATA}
 
   ${RELOCATING+${CTOR} >DATA}
@@ -151,20 +122,20 @@ SECTIONS
      we can shorten the on-disk segment size.  */
   .sdata   ${RELOCATING-0} : {
     *(.sdata)
-    ${RELOCATING+*(.sdata.*)}
+    *(.sdata.*)
   } ${RELOCATING+ >DATA}
 
   ${RELOCATING+_edata = .;}
   ${RELOCATING+PROVIDE (edata = .);}
   ${RELOCATING+__bss_start = .;}
-  .sbss    ${RELOCATING-0} : { *(.sbss)${RELOCATING+ *(.scommon)} } ${RELOCATING+ >DATA}
+  .sbss    ${RELOCATING-0} : { *(.sbss) *(.scommon) } ${RELOCATING+ >DATA}
   .bss     ${RELOCATING-0} :
   {
-   ${RELOCATING+*(.dynbss)
-   *(.dynbss.*)}
+   *(.dynbss)
+   *(.dynbss.*)
    *(.bss)
-   ${RELOCATING+*(.bss.*)
-   *(COMMON)}
+   *(.bss.*)
+   *(COMMON)
   } ${RELOCATING+ >DATA}
 
   ${RELOCATING+_end = . ;}
@@ -182,10 +153,35 @@ SECTIONS
 
   .comment 0 : { *(.comment) }
 
-EOF
+  /* DWARF debug sections.
+     Symbols in the DWARF debugging sections are relative to the beginning
+     of the section so we begin them at 0.  */
 
-. $srcdir/scripttempl/DWARF.sc
+  /* DWARF 1 */
+  .debug          0 : { *(.debug) }
+  .line           0 : { *(.line) }
 
-cat <<EOF
+  /* GNU DWARF 1 extensions */
+  .debug_srcinfo  0 : { *(.debug_srcinfo) }
+  .debug_sfnames  0 : { *(.debug_sfnames) }
+
+  /* DWARF 1.1 and DWARF 2 */
+  .debug_aranges  0 : { *(.debug_aranges) }
+  .debug_pubnames 0 : { *(.debug_pubnames) }
+
+  /* DWARF 2 */
+  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
+  .debug_abbrev   0 : { *(.debug_abbrev) }
+  .debug_line     0 : { *(.debug_line) }
+  .debug_frame    0 : { *(.debug_frame) }
+  .debug_str      0 : { *(.debug_str) }
+  .debug_loc      0 : { *(.debug_loc) }
+  .debug_macinfo  0 : { *(.debug_macinfo) }
+
+  /* SGI/MIPS DWARF 2 extensions */
+  .debug_weaknames 0 : { *(.debug_weaknames) }
+  .debug_funcnames 0 : { *(.debug_funcnames) }
+  .debug_typenames 0 : { *(.debug_typenames) }
+  .debug_varnames  0 : { *(.debug_varnames) }
 }
 EOF

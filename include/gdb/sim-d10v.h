@@ -1,24 +1,29 @@
 /* This file defines the interface between the d10v simulator and gdb.
 
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2002 Free Software Foundation, Inc.
 
-   This file is part of GDB.
+This file is part of GDB.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #if !defined (SIM_D10V_H)
 #define SIM_D10V_H
+
+#ifdef __cplusplus
+extern "C" { // }
+#endif
 
 /* GDB interprets addresses as:
 
@@ -48,6 +53,26 @@ enum
     SIM_D10V_MEMORY_DMAP = 0x10000000,
     SIM_D10V_MEMORY_IMAP = 0x11000000
   };
+
+extern unsigned long sim_d10v_translate_dmap_addr
+  (unsigned long offset,
+   int nr_bytes,
+   unsigned long *phys,
+   unsigned long (*dmap_register) (int reg_nr));
+
+extern unsigned long sim_d10v_translate_imap_addr
+  (unsigned long offset,
+   int nr_bytes,
+   unsigned long *phys,
+   unsigned long (*imap_register) (int reg_nr));
+
+extern unsigned long sim_d10v_translate_addr
+  (unsigned long vaddr,
+   int nr_bytes,
+   unsigned long *phys,
+   unsigned long (*dmap_register) (int reg_nr),
+   unsigned long (*imap_register) (int reg_nr));
+
 
 /* The simulator makes use of the following register information. */
 
@@ -106,5 +131,9 @@ enum
   SIM_D10V_NR_DMAP_REGS = 4,
   SIM_D10V_NR_CR_REGS = 16
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

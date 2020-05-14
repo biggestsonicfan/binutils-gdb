@@ -1,10 +1,10 @@
 /*  This file is part of the program psim.
 
-    Copyright 1994, 1995, 1996, 2003, 2004 Andrew Cagney
+    Copyright (C) 1994-1996, Andrew Cagney <cagney@highland.com.au>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -22,7 +23,6 @@
 #define _HW_HTAB_C_
 
 #include "device_table.h"
-#include "device.h"
 
 #include "bfd.h"
 
@@ -217,21 +217,14 @@ htab_decode_hash_table(device *me,
     device_error(parent, "must be a htab device");
   htab_ra = device_find_integer_property(parent, "real-address");
   htab_nr_bytes = device_find_integer_property(parent, "nr-bytes");
-  if (htab_nr_bytes < 0x10000) {
-    device_error(parent, "htab size 0x%x less than 0x1000",
-		 htab_nr_bytes);
-  }
   for (n = htab_nr_bytes; n > 1; n = n / 2) {
     if (n % 2 != 0)
       device_error(parent, "htab size 0x%x not a power of two",
 		   htab_nr_bytes);
   }
   *htaborg = htab_ra;
-  /* Position the HTABMASK ready for use against a hashed address and
-     not ready for insertion into SDR1.HTABMASK.  */
   *htabmask = MASKED32(htab_nr_bytes - 1, 7, 31-6);
-  /* Check that the MASK and ADDRESS do not overlap.  */
-  if ((htab_ra & (*htabmask)) != 0) {
+  if ((htab_ra & INSERTED32(*htabmask, 7, 15)) != 0) {
     device_error(parent, "htaborg 0x%lx not aligned to htabmask 0x%lx",
 		 (unsigned long)*htaborg, (unsigned long)*htabmask);
   }
@@ -391,16 +384,17 @@ htab_sum_binary(bfd *abfd,
 		PTR data)
 {
   htab_binary_sizes *sizes = (htab_binary_sizes*)data;
-  unsigned_word size = bfd_section_size (sec);
-  unsigned_word vma = bfd_section_vma (sec);
-  unsigned_word ra = bfd_section_lma (sec);
+  unsigned_word size = bfd_get_section_size_before_reloc (sec);
+  unsigned_word vma = bfd_get_section_vma (abfd, sec);
+#define bfd_get_section_lma(abfd, sec) ((sec)->lma + 0)
+  unsigned_word ra = bfd_get_section_lma (abfd, sec);
 
   /* skip the section if no memory to allocate */
-  if (! (bfd_section_flags (sec) & SEC_ALLOC))
+  if (! (bfd_get_section_flags(abfd, sec) & SEC_ALLOC))
     return;
 
-  if ((bfd_section_flags (sec) & SEC_CODE)
-      || (bfd_section_flags (sec) & SEC_READONLY)) {
+  if ((bfd_get_section_flags (abfd, sec) & SEC_CODE)
+      || (bfd_get_section_flags (abfd, sec) & SEC_READONLY)) {
     if (sizes->text_bound < vma + size)
       sizes->text_bound = ALIGN_PAGE(vma + size);
     if (sizes->text_base > vma)
@@ -408,8 +402,8 @@ htab_sum_binary(bfd *abfd,
     if (sizes->text_ra > ra)
       sizes->text_ra = FLOOR_PAGE(ra);
   }
-  else if ((bfd_section_flags (sec) & SEC_DATA)
-	   || (bfd_section_flags (sec) & SEC_ALLOC)) {
+  else if ((bfd_get_section_flags (abfd, sec) & SEC_DATA)
+	   || (bfd_get_section_flags (abfd, sec) & SEC_ALLOC)) {
     if (sizes->data_bound < vma + size)
       sizes->data_bound = ALIGN_PAGE(vma + size);
     if (sizes->data_base > vma)
@@ -432,41 +426,41 @@ htab_dma_binary(bfd *abfd,
   device *me = sizes->me;
 
   /* skip the section if no memory to allocate */
-  if (! (bfd_section_flags (sec) & SEC_ALLOC))
+  if (! (bfd_get_section_flags(abfd, sec) & SEC_ALLOC))
     return;
 
   /* check/ignore any sections of size zero */
-  section_size = bfd_section_size (sec);
+  section_size = bfd_get_section_size_before_reloc(sec);
   if (section_size == 0)
     return;
 
   /* if nothing to load, ignore this one */
-  if (! (bfd_section_flags (sec) & SEC_LOAD))
+  if (! (bfd_get_section_flags(abfd, sec) & SEC_LOAD))
     return;
 
   /* find where it is to go */
-  section_vma = bfd_section_vma (sec);
+  section_vma = bfd_get_section_vma(abfd, sec);
   section_ra = 0;
-  if ((bfd_section_flags (sec) & SEC_CODE)
-      || (bfd_section_flags (sec) & SEC_READONLY))
+  if ((bfd_get_section_flags (abfd, sec) & SEC_CODE)
+      || (bfd_get_section_flags (abfd, sec) & SEC_READONLY))
     section_ra = (section_vma - sizes->text_base + sizes->text_ra);
-  else if ((bfd_section_flags (sec) & SEC_DATA))
+  else if ((bfd_get_section_flags (abfd, sec) & SEC_DATA))
     section_ra = (section_vma - sizes->data_base + sizes->data_ra);
   else 
     return; /* just ignore it */
 
   DTRACE(htab,
 	 ("load - name=%-7s vma=0x%.8lx size=%6ld ra=0x%.8lx flags=%3lx(%s%s%s%s%s )\n",
-	  bfd_section_name (sec),
+	  bfd_get_section_name(abfd, sec),
 	  (long)section_vma,
 	  (long)section_size,
 	  (long)section_ra,
-	  (long)bfd_section_flags (sec),
-	  bfd_section_flags (sec) & SEC_LOAD ? " LOAD" : "",
-	  bfd_section_flags (sec) & SEC_CODE ? " CODE" : "",
-	  bfd_section_flags (sec) & SEC_DATA ? " DATA" : "",
-	  bfd_section_flags (sec) & SEC_ALLOC ? " ALLOC" : "",
-	  bfd_section_flags (sec) & SEC_READONLY ? " READONLY" : ""
+	  (long)bfd_get_section_flags(abfd, sec),
+	  bfd_get_section_flags(abfd, sec) & SEC_LOAD ? " LOAD" : "",
+	  bfd_get_section_flags(abfd, sec) & SEC_CODE ? " CODE" : "",
+	  bfd_get_section_flags(abfd, sec) & SEC_DATA ? " DATA" : "",
+	  bfd_get_section_flags(abfd, sec) & SEC_ALLOC ? " ALLOC" : "",
+	  bfd_get_section_flags(abfd, sec) & SEC_READONLY ? " READONLY" : ""
 	  ));
 
   /* dma in the sections data */
@@ -486,7 +480,7 @@ htab_dma_binary(bfd *abfd,
 			      1 /*violate_read_only*/)
       != section_size)
     device_error(me, "broken dma transfer");
-  free(section_init); /* only free if load */
+  zfree(section_init); /* only free if load */
 }
 
 /* create a memory map from a binaries virtual addresses to a copy of
@@ -549,7 +543,7 @@ htab_map_binary(device *me,
   if ((sizes.text_base <= sizes.data_base
        && sizes.text_bound >= sizes.data_bound)
       || (sizes.data_base <= sizes.text_base
-	  && sizes.data_bound >= sizes.text_bound)
+	  && sizes.data_bound >= sizes.data_bound)
       || (sizes.text_bound > sizes.data_base
 	  && sizes.text_bound <= sizes.data_bound)
       || (sizes.text_base >= sizes.data_base

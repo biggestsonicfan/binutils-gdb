@@ -5,8 +5,8 @@
 @center Version 2.1, February 1999
 
 @display
-Copyright @copyright{} 1991-2020 Free Software Foundation, Inc.
-51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA
+Copyright @copyright{} 1991, 1999 Free Software Foundation, Inc.
+59 Temple Place -- Suite 330, Boston, MA 02111-1307, USA
 
 Everyone is permitted to copy and distribute verbatim copies
 of this license document, but changing it is not allowed.
@@ -476,7 +476,12 @@ decision will be guided by the two goals of preserving the free status
 of all derivatives of our free software and of promoting the sharing
 and reuse of software generally.
 
+@iftex
+@heading NO WARRANTY
+@end iftex
+@ifinfo
 @center NO WARRANTY
+@end ifinfo
 
 @item
 BECAUSE THE LIBRARY IS LICENSED FREE OF CHARGE, THERE IS NO
@@ -539,7 +544,7 @@ Lesser General Public License for more details.
 
 You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307,
 USA.
 @end smallexample
 

@@ -32,20 +32,23 @@ void init1 ()
 }
 
 /* On some systems, such as AIX, unreferenced variables are deleted
-   from the executable.  On other compilers, such as ARM RealView,
-   const variables without their address taken are deleted.  */
+   from the executable.  */
 void usestatics1 ()
 {
-  void useit1 (const int *val);
+  void useit1 (int val);
   
-  useit1 (&filelocal);
-  useit1 (&filelocal_bss);
-  useit1 (&filelocal_ro);
+  useit1 (filelocal);
+  useit1 (filelocal_bss);
+  useit1 (filelocal_ro);
 }
 
-void useit1 (const int *val)
+#ifdef PROTOTYPES
+void useit1 (int val)
+#else
+void useit1 (val) int val;
+#endif
 {
     static int usedval;
 
-    usedval = *val;
+    usedval = val;
 }

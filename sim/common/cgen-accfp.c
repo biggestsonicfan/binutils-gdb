@@ -93,25 +93,6 @@ divsf (CGEN_FPU* fpu, SF x, SF y)
 }
 
 static SF
-remsf (CGEN_FPU* fpu, SF x, SF y)
-{
-  sim_fpu op1;
-  sim_fpu op2;
-  sim_fpu ans;
-  unsigned32 res;
-  sim_fpu_status status;
-
-  sim_fpu_32to (&op1, x);
-  sim_fpu_32to (&op2, y);
-  status = sim_fpu_rem (&ans, &op1, &op2);
-  if (status != 0)
-    (*fpu->ops->error) (fpu, status);
-  sim_fpu_to32 (&res, &ans);
-
-  return res;
-}
-
-static SF
 negsf (CGEN_FPU* fpu, SF x)
 {
   sim_fpu op1;
@@ -303,20 +284,8 @@ gesf (CGEN_FPU* fpu, SF x, SF y)
   return sim_fpu_is_ge (&op1, &op2);
 }
 
-static int
-unorderedsf (CGEN_FPU* fpu, SF x, SF y)
-{
-  sim_fpu op1;
-  sim_fpu op2;
-
-  sim_fpu_32to (&op1, x);
-  sim_fpu_32to (&op2, y);
-  return sim_fpu_is_nan (&op1) || sim_fpu_is_nan (&op2);
-}
-
-
 static DF
-fextsfdf (CGEN_FPU* fpu, int how UNUSED, SF x)
+fextsfdf (CGEN_FPU* fpu, SF x)
 {
   sim_fpu op1;
   unsigned64 res;
@@ -328,7 +297,7 @@ fextsfdf (CGEN_FPU* fpu, int how UNUSED, SF x)
 }
 
 static SF
-ftruncdfsf (CGEN_FPU* fpu, int how UNUSED, DF x)
+ftruncdfsf (CGEN_FPU* fpu, DF x)
 {
   sim_fpu op1;
   unsigned32 res;
@@ -340,7 +309,7 @@ ftruncdfsf (CGEN_FPU* fpu, int how UNUSED, DF x)
 }
 
 static SF
-floatsisf (CGEN_FPU* fpu, int how UNUSED, SI x)
+floatsisf (CGEN_FPU* fpu, SI x)
 {
   sim_fpu ans;
   unsigned32 res;
@@ -351,7 +320,7 @@ floatsisf (CGEN_FPU* fpu, int how UNUSED, SI x)
 }
 
 static DF
-floatsidf (CGEN_FPU* fpu, int how UNUSED, SI x)
+floatsidf (CGEN_FPU* fpu, SI x)
 {
   sim_fpu ans;
   unsigned64 res;
@@ -361,19 +330,8 @@ floatsidf (CGEN_FPU* fpu, int how UNUSED, SI x)
   return res;
 }
 
-static DF
-floatdidf (CGEN_FPU* fpu, int how UNUSED, DI x)
-{
-  sim_fpu ans;
-  unsigned64 res;
-
-  sim_fpu_i64to (&ans, x, sim_fpu_round_near);
-  sim_fpu_to64 (&res, &ans);
-  return res;
-}
-
 static SF
-ufloatsisf (CGEN_FPU* fpu, int how UNUSED, USI x)
+ufloatsisf (CGEN_FPU* fpu, USI x)
 {
   sim_fpu ans;
   unsigned32 res;
@@ -384,7 +342,7 @@ ufloatsisf (CGEN_FPU* fpu, int how UNUSED, USI x)
 }
 
 static SI
-fixsfsi (CGEN_FPU* fpu, int how UNUSED, SF x)
+fixsfsi (CGEN_FPU* fpu, SF x)
 {
   sim_fpu op1;
   unsigned32 res;
@@ -395,7 +353,7 @@ fixsfsi (CGEN_FPU* fpu, int how UNUSED, SF x)
 }
 
 static SI
-fixdfsi (CGEN_FPU* fpu, int how UNUSED, DF x)
+fixdfsi (CGEN_FPU* fpu, DF x)
 {
   sim_fpu op1;
   unsigned32 res;
@@ -405,19 +363,8 @@ fixdfsi (CGEN_FPU* fpu, int how UNUSED, DF x)
   return res;
 }
 
-static DI
-fixdfdi (CGEN_FPU* fpu, int how UNUSED, DF x)
-{
-  sim_fpu op1;
-  unsigned64 res;
-
-  sim_fpu_64to (&op1, x);
-  sim_fpu_to64i (&res, &op1, sim_fpu_round_near);
-  return res;
-}
-
 static USI
-ufixsfsi (CGEN_FPU* fpu, int how UNUSED, SF x)
+ufixsfsi (CGEN_FPU* fpu, SF x)
 {
   sim_fpu op1;
   unsigned32 res;
@@ -501,25 +448,6 @@ divdf (CGEN_FPU* fpu, DF x, DF y)
   if (status != 0)
     (*fpu->ops->error) (fpu, status);
   sim_fpu_to64 (&res, &ans);
-
-  return res;
-}
-
-static DF
-remdf (CGEN_FPU* fpu, DF x, DF y)
-{
-  sim_fpu op1;
-  sim_fpu op2;
-  sim_fpu ans;
-  unsigned64 res;
-  sim_fpu_status status;
-
-  sim_fpu_64to (&op1, x);
-  sim_fpu_64to (&op2, y);
-  status = sim_fpu_rem (&ans, &op1, &op2);
-  if (status != 0)
-    (*fpu->ops->error) (fpu, status);
-  sim_fpu_to64(&res, &ans);
 
   return res;
 }
@@ -715,17 +643,6 @@ gedf (CGEN_FPU* fpu, DF x, DF y)
   sim_fpu_64to (&op2, y);
   return sim_fpu_is_ge (&op1, &op2);
 }
-
-static int
-unordereddf (CGEN_FPU* fpu, DF x, DF y)
-{
-  sim_fpu op1;
-  sim_fpu op2;
-
-  sim_fpu_64to (&op1, x);
-  sim_fpu_64to (&op2, y);
-  return sim_fpu_is_nan (&op1) || sim_fpu_is_nan (&op2);
-}
 
 /* Initialize FP_OPS to use accurate library.  */
 
@@ -747,7 +664,6 @@ cgen_init_accurate_fpu (SIM_CPU* cpu, CGEN_FPU* fpu, CGEN_FPU_ERROR_FN* error)
   o->subsf = subsf;
   o->mulsf = mulsf;
   o->divsf = divsf;
-  o->remsf = remsf;
   o->negsf = negsf;
   o->abssf = abssf;
   o->sqrtsf = sqrtsf;
@@ -761,13 +677,11 @@ cgen_init_accurate_fpu (SIM_CPU* cpu, CGEN_FPU* fpu, CGEN_FPU_ERROR_FN* error)
   o->lesf = lesf;
   o->gtsf = gtsf;
   o->gesf = gesf;
-  o->unorderedsf = unorderedsf;
 
   o->adddf = adddf;
   o->subdf = subdf;
   o->muldf = muldf;
   o->divdf = divdf;
-  o->remdf = remdf;
   o->negdf = negdf;
   o->absdf = absdf;
   o->sqrtdf = sqrtdf;
@@ -781,15 +695,12 @@ cgen_init_accurate_fpu (SIM_CPU* cpu, CGEN_FPU* fpu, CGEN_FPU_ERROR_FN* error)
   o->ledf = ledf;
   o->gtdf = gtdf;
   o->gedf = gedf;
-  o->unordereddf = unordereddf;
   o->fextsfdf = fextsfdf;
   o->ftruncdfsf = ftruncdfsf;
   o->floatsisf = floatsisf;
   o->floatsidf = floatsidf;
-  o->floatdidf = floatdidf;
   o->ufloatsisf = ufloatsisf;
   o->fixsfsi = fixsfsi;
   o->fixdfsi = fixdfsi;
-  o->fixdfdi = fixdfdi;
   o->ufixsfsi = ufixsfsi;
 }

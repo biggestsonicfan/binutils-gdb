@@ -1,30 +1,25 @@
 /* d10v.h -- Header file for D10V opcode table
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
    Written by Martin Hunt (hunt@cygnus.com), Cygnus Support
 
-   This file is part of GDB, GAS, and the GNU binutils.
+This file is part of GDB, GAS, and the GNU binutils.
 
-   GDB, GAS, and the GNU binutils are free software; you can redistribute
-   them and/or modify them under the terms of the GNU General Public
-   License as published by the Free Software Foundation; either version 3,
-   or (at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-   GDB, GAS, and the GNU binutils are distributed in the hope that they
-   will be useful, but WITHOUT ANY WARRANTY; without even the implied
-   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
-   the GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING3.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef D10V_H
 #define D10V_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* Format Specifier */
 #define FM00	0
@@ -203,14 +198,10 @@ struct pd_reg
 };
 
 extern const struct pd_reg d10v_predefined_registers[];
-int d10v_reg_name_cnt (void);
+int d10v_reg_name_cnt PARAMS ((void));
 
 /* an expressionS only has one register type, so we fake it */
 /* by setting high bits to indicate type */
 #define REGISTER_MASK	0xFF
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* D10V_H */

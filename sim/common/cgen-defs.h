@@ -1,21 +1,22 @@
 /* General Cpu tools GENerated simulator support.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef CGEN_DEFS_H
 #define CGEN_DEFS_H
@@ -129,7 +130,7 @@ typedef enum {
 #define CASE(N, X) case_##N##_##X
 #define BREAK(N) goto end_switch_##N
 #define DEFAULT(N) default_##N
-#define ENDSWITCH(N) end_switch_##N:;
+#define ENDSWITCH(N) end_switch_##N:
 #else
 #define SWITCH(N, X) switch (X)
 #define CASE(N, X) case X /* FIXME: old sem-switch had (@arch@_,X) here */
@@ -140,10 +141,24 @@ typedef enum {
 
 /* Simulator state.  */
 
+/* Records simulator descriptor so utilities like @cpu@_dump_regs can be
+   called from gdb.  */
+extern SIM_DESC current_state;
+
+/* Simulator state.  */
+
 /* CGEN_STATE contains additional state information not present in
    sim_state_base.  */
 
 typedef struct cgen_state {
+  /* FIXME: Moved to sim_state_base.  */
+  /* argv, env */
+  char **argv;
+#define STATE_ARGV(s) ((s) -> cgen_state.argv)
+  /* FIXME: Move to sim_state_base.  */
+  char **envp;
+#define STATE_ENVP(s) ((s) -> cgen_state.envp)
+
   /* Non-zero if no tracing or profiling is selected.  */
   int run_fast_p;
 #define STATE_RUN_FAST_P(sd) ((sd) -> cgen_state.run_fast_p)

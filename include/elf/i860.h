@@ -1,5 +1,5 @@
 /* i860 ELF support for BFD.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000 Free Software Foundation, Inc.
 
    Contributed by Jason Eckhardt <jle@cygnus.com>.
 
@@ -7,7 +7,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -17,7 +17,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef _ELF_I860_H
 #define _ELF_I860_H
@@ -29,15 +29,15 @@
 START_RELOC_NUMBERS (elf_i860_reloc_type)
      RELOC_NUMBER (R_860_NONE,      0x00)	/* No reloc */
      RELOC_NUMBER (R_860_32,        0x01)	/* S+A  */
-     RELOC_NUMBER (R_860_COPY,      0x02)	/* No calculation */
+     RELOC_NUMBER (R_860_COPY,	    0x02)	/* No calculation */
      RELOC_NUMBER (R_860_GLOB_DAT,  0x03)	/* S, Create GOT entry */
      RELOC_NUMBER (R_860_JUMP_SLOT, 0x04)	/* S+A, Create PLT entry */
      RELOC_NUMBER (R_860_RELATIVE,  0x05)	/* B+A, Adj by program base */
-     RELOC_NUMBER (R_860_PC26,      0x30)	/* (S+A-P) >> 2 */
-     RELOC_NUMBER (R_860_PLT26,     0x31)	/* (L+A-P) >> 2 */
+     RELOC_NUMBER (R_860_PC26,      0x30)	/* (S+A-P) >> 2 */ 
+     RELOC_NUMBER (R_860_PLT26,	    0x31)	/* (L+A-P) >> 2 */
      RELOC_NUMBER (R_860_PC16,      0x32)	/* (S+A-P) >> 2 */
      RELOC_NUMBER (R_860_LOW0,      0x40)	/* S+A */
-     RELOC_NUMBER (R_860_SPLIT0,    0x42)	/* S+A */
+     RELOC_NUMBER (R_860_SPLIT0,    0x42)	/* S+A */       
      RELOC_NUMBER (R_860_LOW1,      0x44)	/* S+A */
      RELOC_NUMBER (R_860_SPLIT1,    0x46)	/* S+A */
      RELOC_NUMBER (R_860_LOW2,      0x48)	/* S+A */

@@ -1,11 +1,12 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+#   Copyright 1991, 1993, 1994, 1997, 1999, 2000, 2001, 2002
+#   Free Software Foundation, Inc.
 #
-# This file is part of the GNU Binutils.
+# This file is part of GLD, the Gnu Linker.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -15,17 +16,24 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-# This file is sourced from elf.em, and defines extra hppa-elf
+# This file is sourced from elf32.em, and defines extra hppa-elf
 # specific routines.
 #
-fragment <<EOF
+cat >>e${EMULATION_NAME}.c <<EOF
 
 #include "ldctor.h"
 #include "elf32-hppa.h"
+
+static void hppaelf_after_parse PARAMS((void));
+static void hppaelf_create_output_section_statements PARAMS ((void));
+static asection *hppaelf_add_stub_section
+  PARAMS ((const char *, asection *));
+static void hppaelf_layout_sections_again PARAMS ((void));
+static void gld${EMULATION_NAME}_finish PARAMS ((void));
+static void build_section_lists PARAMS ((lang_statement_union_type *));
 
 
 /* Fake input file for stubs.  */
@@ -48,47 +56,38 @@ static bfd_signed_vma group_size = 1;
    and adds millicode library to the list of input files.  */
 
 static void
-hppaelf_after_parse (void)
+hppaelf_after_parse ()
 {
-  if (bfd_link_relocatable (&link_info))
+  if (link_info.relocateable)
     lang_add_unique (".text");
-
-  /* Enable this once we split millicode stuff from libgcc:
-     lang_add_input_file ("milli",
-			  lang_input_file_is_l_enum,
-			  NULL);
-  */
-
-  ldelf_after_parse ();
+#if 0 /* enable this once we split millicode stuff from libgcc */
+  else
+    lang_add_input_file ("milli",
+			 lang_input_file_is_l_enum,
+			 NULL);
+#endif
 }
 
 /* This is called before the input files are opened.  We create a new
    fake input file to hold the stub sections.  */
 
 static void
-hppaelf_create_output_section_statements (void)
+hppaelf_create_output_section_statements ()
 {
-  if (!(bfd_get_flavour (link_info.output_bfd) == bfd_target_elf_flavour
-	&& (elf_object_id (link_info.output_bfd) == HPPA32_ELF_DATA
-	    || elf_object_id (link_info.output_bfd) == HPPA64_ELF_DATA)))
-    return;
-
   stub_file = lang_add_input_file ("linker stubs",
 				   lang_input_file_is_fake_enum,
 				   NULL);
-  stub_file->the_bfd = bfd_create ("linker stubs", link_info.output_bfd);
+  stub_file->the_bfd = bfd_create ("linker stubs", output_bfd);
   if (stub_file->the_bfd == NULL
       || ! bfd_set_arch_mach (stub_file->the_bfd,
-			      bfd_get_arch (link_info.output_bfd),
-			      bfd_get_mach (link_info.output_bfd)))
+			      bfd_get_arch (output_bfd),
+			      bfd_get_mach (output_bfd)))
     {
-      einfo (_("%F%P: can not create BFD: %E\n"));
+      einfo ("%X%P: can not create BFD %E\n");
       return;
     }
 
-  stub_file->the_bfd->flags |= BFD_LINKER_CREATED;
   ldlang_add_file (stub_file);
-  elf32_hppa_init_stub_bfd (stub_file->the_bfd, &link_info);
 }
 
 
@@ -100,11 +99,16 @@ struct hook_stub_info
 
 /* Traverse the linker tree to find the spot where the stub goes.  */
 
-static bfd_boolean
-hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
+static boolean hook_in_stub
+  PARAMS ((struct hook_stub_info *, lang_statement_union_type **));
+
+static boolean
+hook_in_stub (info, lp)
+     struct hook_stub_info *info;
+     lang_statement_union_type **lp;
 {
   lang_statement_union_type *l;
-  bfd_boolean ret;
+  boolean ret;
 
   for (; (l = *lp) != NULL; lp = &l->header.next)
     {
@@ -142,7 +146,7 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 		 before its associated input section.  */
 	      *lp = info->add.head;
 	      *(info->add.tail) = l;
-	      return TRUE;
+	      return true;
 	    }
 	  break;
 
@@ -163,7 +167,7 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 	  break;
 	}
     }
-  return FALSE;
+  return false;
 }
 
 
@@ -173,27 +177,33 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
    immediately before INPUT_SECTION.  */
 
 static asection *
-hppaelf_add_stub_section (const char *stub_sec_name, asection *input_section)
+hppaelf_add_stub_section (stub_sec_name, input_section)
+     const char *stub_sec_name;
+     asection *input_section;
 {
   asection *stub_sec;
   flagword flags;
   asection *output_section;
+  const char *secname;
   lang_output_section_statement_type *os;
   struct hook_stub_info info;
 
-  flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE
-	   | SEC_HAS_CONTENTS | SEC_RELOC | SEC_IN_MEMORY | SEC_KEEP);
-  stub_sec = bfd_make_section_anyway_with_flags (stub_file->the_bfd,
-						 stub_sec_name, flags);
+  stub_sec = bfd_make_section_anyway (stub_file->the_bfd, stub_sec_name);
   if (stub_sec == NULL)
     goto err_ret;
 
+  flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE
+	   | SEC_HAS_CONTENTS | SEC_RELOC | SEC_IN_MEMORY | SEC_KEEP);
+  if (!bfd_set_section_flags (stub_file->the_bfd, stub_sec, flags))
+    goto err_ret;
+
   output_section = input_section->output_section;
-  os = lang_output_section_get (output_section);
+  secname = bfd_get_section_name (output_section->owner, output_section);
+  os = lang_output_section_find (secname);
 
   info.input_section = input_section;
   lang_list_init (&info.add);
-  lang_add_section (&info.add, stub_sec, NULL, os);
+  lang_add_section (&info.add, stub_sec, os, stub_file);
 
   if (info.add.head == NULL)
     goto err_ret;
@@ -202,7 +212,7 @@ hppaelf_add_stub_section (const char *stub_sec_name, asection *input_section)
     return stub_sec;
 
  err_ret:
-  einfo (_("%X%P: can not make stub section: %E\n"));
+  einfo ("%X%P: can not make stub section: %E\n");
   return NULL;
 }
 
@@ -210,104 +220,133 @@ hppaelf_add_stub_section (const char *stub_sec_name, asection *input_section)
 /* Another call-back for elf32_hppa_size_stubs.  */
 
 static void
-hppaelf_layout_sections_again (void)
+hppaelf_layout_sections_again ()
 {
   /* If we have changed sizes of the stub sections, then we need
      to recalculate all the section offsets.  This may mean we need to
      add even more stubs.  */
-  ldelf_map_segments (TRUE);
-  need_laying_out = -1;
+  need_laying_out = 0;
+
+  lang_reset_memory_regions ();
+
+  /* Resize the sections.  */
+  lang_size_sections (stat_ptr->head, abs_output_section,
+		      &stat_ptr->head, 0, (bfd_vma) 0, NULL);
+
+  /* Redo special stuff.  */
+  ldemul_after_allocation ();
+
+  /* Do the assignments again.  */
+  lang_do_assignments (stat_ptr->head, abs_output_section,
+		       (fill_type *) 0, (bfd_vma) 0);
 }
 
 
 static void
-build_section_lists (lang_statement_union_type *statement)
+build_section_lists (statement)
+     lang_statement_union_type *statement;
 {
-  if (statement->header.type == lang_input_section_enum)
+  if (statement->header.type == lang_input_section_enum
+      && !statement->input_section.ifile->just_syms_flag
+      && statement->input_section.section->output_section != NULL
+      && statement->input_section.section->output_section->owner == output_bfd)
     {
-      asection *i = statement->input_section.section;
-
-      if (i->sec_info_type != SEC_INFO_TYPE_JUST_SYMS
-	  && (i->flags & SEC_EXCLUDE) == 0
-	  && i->output_section != NULL
-	  && i->output_section->owner == link_info.output_bfd)
-	{
-	  elf32_hppa_next_input_section (&link_info, i);
-	}
+      elf32_hppa_next_input_section (&link_info,
+				     statement->input_section.section);
     }
 }
 
 
-/* For the PA we use this opportunity to size and build linker stubs.  */
+/* Final emulation specific call.  For the PA we use this opportunity
+   to build linker stubs.  */
 
 static void
-gld${EMULATION_NAME}_after_allocation (void)
+gld${EMULATION_NAME}_finish ()
 {
   int ret;
 
-  /* bfd_elf_discard_info just plays with data and debugging sections,
-     ie. doesn't affect code size, so we can delay resizing the
-     sections.  It's likely we'll resize everything in the process of
-     adding stubs.  */
-  ret = bfd_elf_discard_info (link_info.output_bfd, &link_info);
-  if (ret < 0)
-    {
-      einfo (_("%X%P: .eh_frame/.stab edit: %E\n"));
-      return;
-    }
-  else if (ret > 0)
-    need_laying_out = 1;
-
   /* If generating a relocatable output file, then we don't
      have to examine the relocs.  */
-  if (stub_file != NULL && !bfd_link_relocatable (&link_info))
+  if (link_info.relocateable)
+    return;
+
+  /* bfd_elf32_discard_info just plays with debugging sections,
+     ie. doesn't affect any code, so we can delay resizing the
+     sections.  It's likely we'll resize everything in the process of
+     adding stubs.  */
+  if (bfd_elf${ELFSIZE}_discard_info (output_bfd, &link_info))
+    need_laying_out = 1;
+
+  ret = elf32_hppa_setup_section_lists (output_bfd, &link_info);
+  if (ret != 0)
     {
-      ret = elf32_hppa_setup_section_lists (link_info.output_bfd, &link_info);
-      if (ret != 0)
+      if (ret < 0)
 	{
-	  if (ret < 0)
-	    {
-	      einfo (_("%X%P: can not size stub section: %E\n"));
-	      return;
-	    }
-
-	  lang_for_each_statement (build_section_lists);
-
-	  /* Call into the BFD backend to do the real work.  */
-	  if (! elf32_hppa_size_stubs (link_info.output_bfd,
-				       stub_file->the_bfd,
-				       &link_info,
-				       multi_subspace,
-				       group_size,
-				       &hppaelf_add_stub_section,
-				       &hppaelf_layout_sections_again))
-	    {
-	      einfo (_("%X%P: can not size stub section: %E\n"));
-	      return;
-	    }
-	}
-    }
-
-  if (need_laying_out != -1)
-    ldelf_map_segments (need_laying_out);
-
-  if (!bfd_link_relocatable (&link_info))
-    {
-      /* Set the global data pointer.  */
-      if (! elf32_hppa_set_gp (link_info.output_bfd, &link_info))
-	{
-	  einfo (_("%X%P: can not set gp\n"));
+	  einfo ("%X%P: can not size stub section: %E\n");
 	  return;
 	}
 
-      /* Now build the linker stubs.  */
-      if (stub_file != NULL && stub_file->the_bfd->sections != NULL)
+      lang_for_each_statement (build_section_lists);
+
+      /* Call into the BFD backend to do the real work.  */
+      if (! elf32_hppa_size_stubs (output_bfd,
+				   stub_file->the_bfd,
+				   &link_info,
+				   multi_subspace,
+				   group_size,
+				   &hppaelf_add_stub_section,
+				   &hppaelf_layout_sections_again))
 	{
-	  if (! elf32_hppa_build_stubs (&link_info))
-	    einfo (_("%X%P: can not build stubs: %E\n"));
+	  einfo ("%X%P: can not size stub section: %E\n");
+	  return;
 	}
     }
+
+  if (need_laying_out)
+    hppaelf_layout_sections_again ();
+
+  /* Set the global data pointer.  */
+  if (! elf32_hppa_set_gp (output_bfd, &link_info))
+    {
+      einfo ("%X%P: can not set gp\n");
+      return;
+    }
+
+  /* Now build the linker stubs.  */
+  if (stub_file->the_bfd->sections != NULL)
+    {
+      if (! elf32_hppa_build_stubs (&link_info))
+	einfo ("%X%P: can not build stubs: %E\n");
+    }
 }
+
+
+/* Avoid processing the fake stub_file in vercheck, stat_needed and
+   check_needed routines.  */
+
+static void hppa_for_each_input_file_wrapper
+  PARAMS ((lang_input_statement_type *));
+static void hppa_lang_for_each_input_file
+  PARAMS ((void (*) (lang_input_statement_type *)));
+
+static void (*real_func) PARAMS ((lang_input_statement_type *));
+
+static void hppa_for_each_input_file_wrapper (l)
+     lang_input_statement_type *l;
+{
+  if (l != stub_file)
+    (*real_func) (l);
+}
+
+static void
+hppa_lang_for_each_input_file (func)
+     void (*func) PARAMS ((lang_input_statement_type *));
+{
+  real_func = func;
+  lang_for_each_input_file (&hppa_for_each_input_file_wrapper);
+}
+
+#define lang_for_each_input_file hppa_lang_for_each_input_file
 
 EOF
 
@@ -319,25 +358,28 @@ PARSE_AND_LIST_PROLOGUE='
 #define OPTION_STUBGROUP_SIZE		(OPTION_MULTI_SUBSPACE + 1)
 '
 
+# The options are repeated below so that no abbreviations are allowed.
+# Otherwise -s matches stub-group-size
 PARSE_AND_LIST_LONGOPTS='
   { "multi-subspace", no_argument, NULL, OPTION_MULTI_SUBSPACE },
+  { "multi-subspace", no_argument, NULL, OPTION_MULTI_SUBSPACE },
+  { "stub-group-size", required_argument, NULL, OPTION_STUBGROUP_SIZE },
   { "stub-group-size", required_argument, NULL, OPTION_STUBGROUP_SIZE },
 '
 
 PARSE_AND_LIST_OPTIONS='
   fprintf (file, _("\
-  --multi-subspace            Generate import and export stubs to support\n\
-                                multiple sub-space shared libraries\n"
+  --multi-subspace      Generate import and export stubs to support\n\
+                          multiple sub-space shared libraries\n"
 		   ));
   fprintf (file, _("\
-  --stub-group-size=N         Maximum size of a group of input sections that\n\
-                                can be handled by one stub section.  A negative\n\
-                                value locates all stubs before their branches\n\
-                                (with a group size of -N), while a positive\n\
-                                value allows two groups of input sections, one\n\
-                                before, and one after each stub section.\n\
-                                Values of +/-1 indicate the linker should\n\
-                                choose suitable defaults.\n"
+  --stub-group-size=N   Maximum size of a group of input sections that can be\n\
+                          handled by one stub section.  A negative value\n\
+                          locates all stubs before their branches (with a\n\
+                          group size of -N), while a positive value allows\n\
+                          two groups of input sections, one before, and one\n\
+                          after each stub section.  Values of +/-1 indicate\n\
+                          the linker should choose suitable defaults.\n"
 		   ));
 '
 
@@ -349,9 +391,9 @@ PARSE_AND_LIST_ARGS_CASES='
     case OPTION_STUBGROUP_SIZE:
       {
 	const char *end;
-	group_size = bfd_scan_vma (optarg, &end, 0);
-	if (*end)
-	  einfo (_("%F%P: invalid number `%s'\''\n"), optarg);
+        group_size = bfd_scan_vma (optarg, &end, 0);
+        if (*end)
+	  einfo (_("%P%F: invalid number `%s'\''\n"), optarg);
       }
       break;
 '
@@ -359,5 +401,5 @@ PARSE_AND_LIST_ARGS_CASES='
 # Put these extra hppaelf routines in ld_${EMULATION_NAME}_emulation
 #
 LDEMUL_AFTER_PARSE=hppaelf_after_parse
-LDEMUL_AFTER_ALLOCATION=gld${EMULATION_NAME}_after_allocation
+LDEMUL_FINISH=gld${EMULATION_NAME}_finish
 LDEMUL_CREATE_OUTPUT_SECTION_STATEMENTS=hppaelf_create_output_section_statements

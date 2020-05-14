@@ -1,11 +1,11 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+#   Copyright 2001, 2002 Free Software Foundation, Inc.
 #
-# This file is part of the GNU Binutils.
+# This file is part of GLD, the Gnu Linker.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
@@ -15,174 +15,211 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-# This file is sourced from generic.em.
+# This file is sourced from elf32.em and mmo.em, used to define
+# linker MMIX-specifics common to ELF and MMO.
 
-fragment <<EOF
-/* Need to have this macro defined before mmix-elfnmmo, which uses the
-   name for the before_allocation function, defined in ldemul.c (for
-   the mmo "emulation") or in elf.em (for the elf64mmix
-   "emulation").  */
+cat >>e${EMULATION_NAME}.c <<EOF
+/* Need to have this define before mmix-elfnmmo, which includes
+   needrelax.em which uses this name for the before_allocation function,
+   normally defined in elf32.em.  */
 #define gldmmo_before_allocation before_allocation_default
-
-/* We include this header *not* because we expect to handle ELF here
-   but because we use the map_segments function.  But this is only to
-   get a weird testcase right; ld-mmix/bpo-22, forcing ELF to be
-   output from the mmo emulation: -m mmo --oformat elf64-mmix!  */
-#include "ldelfgen.h"
-
-static void gld${EMULATION_NAME}_after_allocation (void);
 EOF
 
-source_em ${srcdir}/emultempl/elf-generic.em
-source_em ${srcdir}/emultempl/mmix-elfnmmo.em
+. ${srcdir}/emultempl/mmix-elfnmmo.em
 
-fragment <<EOF
+cat >>e${EMULATION_NAME}.c <<EOF
+
+static boolean mmo_place_orphan
+  PARAMS ((lang_input_statement_type *, asection *));
+static asection *output_prev_sec_find
+  PARAMS ((lang_output_section_statement_type *));
+static void mmo_finish PARAMS ((void));
+static void mmo_wipe_sec_reloc_flag PARAMS ((bfd *, asection *, PTR));
+static void mmo_after_open PARAMS ((void));
+
+/* Find the last output section before given output statement.
+   Used by place_orphan.  */
+
+static asection *
+output_prev_sec_find (os)
+     lang_output_section_statement_type *os;
+{
+  asection *s = (asection *) NULL;
+  lang_statement_union_type *u;
+  lang_output_section_statement_type *lookup;
+
+  for (u = lang_output_section_statement.head;
+       u != (lang_statement_union_type *) NULL;
+       u = lookup->next)
+    {
+      lookup = &u->output_section_statement;
+      if (lookup == os)
+	break;
+      if (lookup->bfd_section != NULL
+	  && lookup->bfd_section != bfd_abs_section_ptr
+	  && lookup->bfd_section != bfd_com_section_ptr
+	  && lookup->bfd_section != bfd_und_section_ptr)
+	s = lookup->bfd_section;
+    }
+
+  if (u == NULL)
+    return NULL;
+
+  return s;
+}
+
+struct orphan_save {
+  lang_output_section_statement_type *os;
+  asection **section;
+  lang_statement_union_type **stmt;
+};
+
+#define HAVE_SECTION(hold, name) \
+(hold.os != NULL || (hold.os = lang_output_section_find (name)) != NULL)
 
 /* Place an orphan section.  We use this to put random SEC_CODE or
    SEC_READONLY sections right after MMO_TEXT_SECTION_NAME.  Much borrowed
-   from elf.em.  */
+   from elf32.em.  */
 
-static lang_output_section_statement_type *
-mmo_place_orphan (asection *s,
-		  const char *secname,
-		  int constraint ATTRIBUTE_UNUSED)
+static boolean
+mmo_place_orphan (file, s)
+	lang_input_statement_type *file;
+	asection *s;
 {
-  static struct
-  {
-    flagword nonzero_flags;
-    struct orphan_save orphansave;
-  } holds[] =
-      {
-	{
-	  SEC_CODE | SEC_READONLY,
-	  {
-	    MMO_TEXT_SECTION_NAME,
-	    SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE,
-	    0, 0, 0, 0
-	  }
-	},
-	{
-	  SEC_LOAD | SEC_DATA,
-	  {
-	    MMO_DATA_SECTION_NAME,
-	    SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD | SEC_DATA,
-	    0, 0, 0, 0
-	  }
-	},
-	{
-	  SEC_ALLOC,
-	  {
-	    ".bss",
-	    SEC_ALLOC,
-	    0, 0, 0, 0
-	  }
-	}
-      };
-
-  struct orphan_save *place = NULL;
-  lang_output_section_statement_type *after;
+  static struct orphan_save hold_text;
+  struct orphan_save *place;
   lang_output_section_statement_type *os;
-  size_t i;
-  flagword flags;
-  asection *nexts;
+  lang_statement_list_type *old;
+  lang_statement_list_type add;
+  asection *snew, **pps, *bfd_section;
 
-  /* We have nothing to say for anything other than a final link or
-     for sections that are excluded.  */
-  if (bfd_link_relocatable (&link_info)
-      || (s->flags & SEC_EXCLUDE) != 0)
-    return NULL;
+  /* We have nothing to say for anything other than a final link.  */
+  if (link_info.relocateable
+      || (bfd_get_section_flags (s->owner, s)
+	  & (SEC_EXCLUDE | SEC_LOAD)) != SEC_LOAD)
+    return false;
 
-  os = lang_output_section_find (secname);
+  /* Only care for sections we're going to load.  */
+  os = lang_output_section_find (bfd_get_section_name (s->owner, s));
 
   /* We have an output section by this name.  Place the section inside it
      (regardless of whether the linker script lists it as input).  */
   if (os != NULL)
     {
-      lang_add_section (&os->children, s, NULL, os);
-      return os;
+      lang_add_section (&os->children, s, os, file);
+      return true;
     }
 
-  flags = s->flags;
-  if (!bfd_link_relocatable (&link_info))
+  /* If this section does not have .text-type section flags or there's no
+     MMO_TEXT_SECTION_NAME, we don't have anything to say.  */
+  if ((bfd_get_section_flags (s->owner, s) & (SEC_CODE | SEC_READONLY)) == 0)
+    return false;
+
+  if (hold_text.os == NULL)
+    hold_text.os = lang_output_section_find (MMO_TEXT_SECTION_NAME);
+
+  place = &hold_text;
+
+  /* If there's an output section by this name, we'll use it, regardless
+     of section flags, in contrast to what's done in elf32.em.  */
+
+  /* Start building a list of statements for this section.
+     First save the current statement pointer.  */
+  old = stat_ptr;
+
+  /* Add the output section statements for this orphan to our own private
+     list, inserting them later into the global statement list.  */
+  stat_ptr = &add;
+  lang_list_init (stat_ptr);
+
+  os = lang_enter_output_section_statement (bfd_get_section_name (s->owner,
+								  s),
+					    NULL, 0,
+					    (bfd_vma) 0,
+					    (etree_type *) NULL,
+					    (etree_type *) NULL,
+					    (etree_type *) NULL);
+
+  lang_add_section (&os->children, s, os, file);
+
+  lang_leave_output_section_statement
+    ((bfd_vma) 0, "*default*",
+     (struct lang_output_section_phdr_list *) NULL, NULL);
+
+  /* Restore the global list pointer.  */
+  stat_ptr = old;
+
+  snew = os->bfd_section;
+  if (snew == NULL)
+    /* /DISCARD/ section.  */
+    return true;
+
+  /* We need an output section for .text as a root, so if there was none
+     (might happen with a peculiar linker script such as in "map
+     addresses", map-address.exp), we grab the output section created
+     above.  */
+  if (hold_text.os == NULL)
     {
-      nexts = s;
-      while ((nexts = bfd_get_next_section_by_name (nexts->owner, nexts))
-	     != NULL)
-	if (nexts->output_section == NULL
-	    && (nexts->flags & SEC_EXCLUDE) == 0
-	    && ((nexts->flags ^ flags) & (SEC_LOAD | SEC_ALLOC)) == 0
-	    && (nexts->owner->flags & DYNAMIC) == 0
-	    && !bfd_input_just_syms (nexts->owner))
-	  flags = (((flags ^ SEC_READONLY) | (nexts->flags ^ SEC_READONLY))
-		   ^ SEC_READONLY);
+      if (os == NULL)
+	return false;
+      hold_text.os = os;
     }
 
-  /* Check for matching section type flags for sections we care about.
-     A section without contents can have SEC_LOAD == 0, but we still
-     want it attached to a sane section so the symbols appear as
-     expected.  */
+  bfd_section = place->os->bfd_section;
+  if (place->section == NULL && bfd_section == NULL)
+    bfd_section = output_prev_sec_find (place->os);
 
-  if ((flags & (SEC_ALLOC | SEC_READONLY)) != SEC_READONLY)
-    for (i = 0; i < sizeof (holds) / sizeof (holds[0]); i++)
-      if ((flags & holds[i].nonzero_flags) != 0)
+  if (place->section != NULL
+      || (bfd_section != NULL
+	  && bfd_section != snew))
+    {
+      /* Shuffle the section to make the output file look neater.  This is
+	 really only cosmetic.  */
+      if (place->section == NULL)
+	/* Put orphans after the first section on the list.  */
+	place->section = &bfd_section->next;
+
+      /* Unlink the section.  */
+      for (pps = &output_bfd->sections; *pps != snew; pps = &(*pps)->next)
+	;
+      bfd_section_list_remove (output_bfd, pps);
+
+      /* Now tack it on to the "place->os" section list.  */
+      bfd_section_list_insert (output_bfd, place->section, snew);
+    }
+  place->section = &snew->next;	/* Save the end of this list.  */
+
+  if (add.head != NULL)
+    {
+      /* We try to put the output statements in some sort of reasonable
+	 order here, because they determine the final load addresses of
+	 the orphan sections.  */
+      if (place->stmt == NULL)
 	{
-	  place = &holds[i].orphansave;
-	  if (place->os == NULL)
-	    place->os = lang_output_section_find (place->name);
-	  break;
+	  /* Put the new statement list right at the head.  */
+	  *add.tail = place->os->header.next;
+	  place->os->header.next = add.head;
+	}
+      else
+	{
+	  /* Put it after the last orphan statement we added.  */
+	  *add.tail = *place->stmt;
+	  *place->stmt = add.head;
 	}
 
-  if (place == NULL)
-    {
-      /* For other combinations, we have to give up, except we make
-	 sure not to place the orphan section after the
-	 linker-generated register section; that'd make it continue
-	 the reg section and we never want that to happen for orphan
-	 sections.  */
-      lang_output_section_statement_type *before;
-      lang_output_section_statement_type *lookup;
-      static struct orphan_save hold_nonreg =
-	{
-	  NULL,
-	  SEC_READONLY,
-	  0, 0, 0, 0
-	};
+      /* Fix the global list pointer if we happened to tack our new list
+	 at the tail.  */
+      if (*old->tail == add.head)
+	old->tail = add.tail;
 
-      if (hold_nonreg.os == NULL)
-	{
-	  before = lang_output_section_find (MMIX_REG_CONTENTS_SECTION_NAME);
-
-	  /* If we have no such section, all fine; we don't care where
-	     it's placed.  */
-	  if (before == NULL)
-	    return NULL;
-
-	  /* We have to find the oss before this one, so we can use that as
-	     "after".  */
-	  for (lookup = (void *) lang_os_list.head;
-	       lookup != NULL && lookup->next != before;
-	       lookup = lookup->next)
-	    ;
-
-	  hold_nonreg.os = lookup;
-	}
-
-      place = &hold_nonreg;
+      /* Save the end of this list.  */
+      place->stmt = add.tail;
     }
 
-  after = place->os;
-  if (after == NULL)
-    return NULL;
-
-  /* If there's an output section by *this* name, we'll use it, regardless
-     of actual section flags, in contrast to what's done in elf.em.  */
-  os = lang_insert_orphan (s, secname, 0, after, place, NULL, NULL);
-
-  return os;
+  return true;
 }
 
 /* Remove the spurious settings of SEC_RELOC that make it to the output at
@@ -190,19 +227,21 @@ mmo_place_orphan (asection *s,
    paper over the bug similarly.  */
 
 static void
-mmo_wipe_sec_reloc_flag (bfd *abfd ATTRIBUTE_UNUSED, asection *sec,
-			 void *ptr ATTRIBUTE_UNUSED)
+mmo_wipe_sec_reloc_flag (abfd, sec, ptr)
+     bfd *abfd;
+     asection *sec;
+     PTR ptr ATTRIBUTE_UNUSED;
 {
-  bfd_set_section_flags (sec, bfd_section_flags (sec) & ~SEC_RELOC);
+  bfd_set_section_flags (abfd, sec,
+			 bfd_get_section_flags (abfd, sec) & ~SEC_RELOC);
 }
 
 /* Iterate with bfd_map_over_sections over mmo_wipe_sec_reloc_flag... */
 
 static void
-gld${EMULATION_NAME}_after_allocation (void)
+mmo_finish ()
 {
-  bfd_map_over_sections (link_info.output_bfd, mmo_wipe_sec_reloc_flag, NULL);
-  ldelf_map_segments (FALSE);
+  bfd_map_over_sections (output_bfd, mmo_wipe_sec_reloc_flag, NULL);
 }
 
 /* To get on-demand global register allocation right, we need to parse the
@@ -212,26 +251,26 @@ gld${EMULATION_NAME}_after_allocation (void)
    when all input files are seen, which is equivalent.  */
 
 static void
-mmo_after_open (void)
+mmo_after_open ()
 {
   /* When there's a mismatch between the output format and the emulation
      (using weird combinations like "-m mmo --oformat elf64-mmix" for
      example), we'd count relocs twice because they'd also be counted
      along the usual route for ELF-only linking, which would lead to an
      internal accounting error.  */
-  if (bfd_get_flavour (link_info.output_bfd) != bfd_target_elf_flavour)
+  if (bfd_get_flavour (output_bfd) != bfd_target_elf_flavour)
     {
       LANG_FOR_EACH_INPUT_STATEMENT (is)
 	{
 	  if (bfd_get_flavour (is->the_bfd) == bfd_target_elf_flavour
 	      && !_bfd_mmix_check_all_relocs (is->the_bfd, &link_info))
-	    einfo (_("%X%P: internal problems scanning %pB after opening it"),
+	    einfo ("%X%P: Internal problems scanning %B after opening it",
 		   is->the_bfd);
 	}
     }
-  after_open_default ();
 }
 EOF
 
 LDEMUL_PLACE_ORPHAN=mmo_place_orphan
+LDEMUL_FINISH=mmo_finish
 LDEMUL_AFTER_OPEN=mmo_after_open

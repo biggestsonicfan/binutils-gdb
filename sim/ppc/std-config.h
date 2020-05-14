@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -56,6 +57,15 @@ extern int current_target_byte_order;
 
 #ifndef WITH_XOR_ENDIAN
 #define WITH_XOR_ENDIAN		8
+#endif
+
+
+/* Intel host BSWAP support:
+
+   Whether to use bswap on the 486 and pentiums rather than the 386
+   sequence that uses xchgb/rorl/xchgb */
+#ifndef WITH_BSWAP
+#define	WITH_BSWAP 0
 #endif
 
 
@@ -110,6 +120,10 @@ extern int current_target_byte_order;
 #define USER_ENVIRONMENT		1
 #define VIRTUAL_ENVIRONMENT		2
 #define OPERATING_ENVIRONMENT		3
+
+#ifndef WITH_ENVIRONMENT
+#define WITH_ENVIRONMENT		0
+#endif
 
 extern int current_environment;
 #define CURRENT_ENVIRONMENT (WITH_ENVIRONMENT \
@@ -219,6 +233,20 @@ extern int current_floating_point;
 
    Control the inclusion of debugging code. */
 
+/* Include the tracing code.  Disabling this eliminates all tracing
+   code */
+
+#ifndef WITH_TRACE
+#define WITH_TRACE                      1
+#endif
+
+/* include code that checks assertions scattered through out the
+   program */
+
+#ifndef WITH_ASSERT
+#define WITH_ASSERT			1
+#endif
+
 /* Whether to check instructions for reserved bits being set */
 
 #ifndef WITH_RESERVED_BITS
@@ -265,6 +293,10 @@ extern int current_model_issue;
 #define DONT_USE_STDIO			2
 #define DO_USE_STDIO			1
 
+#ifndef WITH_STDIO
+#define WITH_STDIO			0
+#endif
+
 extern int current_stdio;
 #define CURRENT_STDIO (WITH_STDIO	\
 		       ? WITH_STDIO     \
@@ -281,7 +313,7 @@ extern int current_stdio;
    to both eliminate the overhead of function calls and (as a
    consequence) also eliminate further dead code.
 
-   On a CISC (x86) I've found that I can achieve an order of magnitude
+   On a CISC (x86) I've found that I can achieve an order of magintude
    speed improvement (x3-x5).  In the case of RISC (sparc) while the
    performance gain isn't as great it is still significant.
 
@@ -429,6 +461,40 @@ extern int current_stdio;
 #define INLINE /*inline*/
 #endif
 #endif
+
+
+/* Your compilers pass parameters in registers reserved word */
+
+#ifndef WITH_REGPARM
+#define WITH_REGPARM                   0
+#endif
+
+/* Your compilers use an alternative calling sequence reserved word */
+
+#ifndef WITH_STDCALL
+#define WITH_STDCALL                   0
+#endif
+
+#if !defined REGPARM
+#if defined(__GNUC__) && (defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__))
+#if (WITH_REGPARM && WITH_STDCALL)
+#define REGPARM __attribute__((__regparm__(WITH_REGPARM),__stdcall__))
+#else
+#if (WITH_REGPARM && !WITH_STDCALL)
+#define REGPARM __attribute__((__regparm__(WITH_REGPARM)))
+#else
+#if (!WITH_REGPARM && WITH_STDCALL)
+#define REGPARM __attribute__((__stdcall__))
+#endif
+#endif
+#endif
+#endif
+#endif
+
+#if !defined REGPARM
+#define REGPARM
+#endif
+
 
 
 /* Default prefix for static functions */

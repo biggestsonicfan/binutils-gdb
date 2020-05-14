@@ -1,33 +1,48 @@
-# This testcase is part of GDB, the GNU debugger.
-
-# Copyright 1997-2020 Free Software Foundation, Inc.
+# Copyright 1997, 1998, 1999, 2000, 2002 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
+
+# use this to debug:
+#
+#log_user 1
+
 # step-test.exp -- Expect script to test stepping in gdb
 
-standard_testfile .c
-
-remote_exec build "rm -f ${binfile}"
-if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
-     untested "failed to compile"
-     return -1
+if $tracelevel then {
+    strace $tracelevel
 }
 
-clean_restart ${binfile}
+set testfile step-test
+set srcfile ${srcdir}/${subdir}/${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+
+remote_exec build "rm -f ${binfile}"
+if { [gdb_compile "${srcfile}" "${binfile}" executable {debug}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
 
 if ![runto_main] then {
-   fail "can't run to main"
+   fail "Can't run to main"
    return 0
 }
 
@@ -41,8 +56,8 @@ gdb_test "step" ".*${decimal}.*y = 2;.*" "step 1"
 
 # With count
 #
-gdb_test "next 2" ".*${decimal}.*w = w.*2;.*"
-gdb_test "step 3" ".*${decimal}.*z = z.*5;.*"
+gdb_test "next 2" ".*${decimal}.*w = w.*2;.*" "next 2"
+gdb_test "step 3" ".*${decimal}.*z = z.*5;.*" "step 3"
 gdb_test "next" ".*${decimal}.*callee.*OVER.*" "next 3"
 
 # Step over call
@@ -63,16 +78,12 @@ gdb_test "step" ".*${decimal}.*myglob.*"   "step into"
 # On PA64, we end up at a different instruction than PA32.
 # On IA-64, we also end up on callee instead of on the next line due
 # to the restoration of the global pointer (which is a caller-save).
-# Similarly on MIPS PIC targets.
-set test "step out"
-if { [istarget "ia64-*-*"] || [istarget "mips*-*-*"]} {
-    gdb_test_multiple "finish" "$test" {
-        -re ".*${decimal}.*a.*5.*= a.*3.*$gdb_prompt $" {
-	    pass "$test"
-	}
-        -re ".*${decimal}.*callee.*INTO.*$gdb_prompt $" {
-	    pass "$test"
-	}
+if { [istarget "hppa2.0w-hp-hpux*"] || [istarget "ia64-*-*"]} {
+    send_gdb "finish\n"
+    gdb_expect {
+        -re ".*${decimal}.*a.*5.*= a.*3.*$gdb_prompt $" { pass "step out 1" }
+        -re ".*${decimal}.*callee.*INTO.*$gdb_prompt $" { pass "step out 2" }
+        timeout { fail "step out" }
     }
 } else {
     gdb_test "finish" ".*${decimal}.*a.*5.*= a.*3.*" "step out"
@@ -97,19 +108,31 @@ proc test_i {name command here there} {
     global gdb_prompt
     
     set i 0
-    gdb_test_multiple "$command" "$name" {
-	-re "$here.*$gdb_prompt $" {
-	    # Have we gone for too many steps without seeing any progress?
-	    if {[incr i] >= 100} {
-		fail "$name (no progress after 100 steps)"
+    while 1 {
+	send_gdb "${command}\n"
+	gdb_expect {
+	    -re "$here.*$gdb_prompt $" {
+		# Okay, we're still on the same line.  Just step again.
+	    }
+	    -re "$there.*$gdb_prompt $" {
+		# We've reached the next line.  Rah.
+		pass "$name"
 		return
 	    }
-	    send_gdb "$command\n"
-	    exp_continue
+	    -re "$gdb_prompt $" {
+		# We got something else.  Fail.
+		fail "$name"
+		return
+	    }
+	    timeout {
+		fail "$name (timeout)"
+		return
+	    }
 	}
-	-re "$there.*$gdb_prompt $" {
-	    # We've reached the next line.  Rah.
-	    pass "$name"
+
+	# Have we gone for too many steps without seeing any progress?
+	if {[incr i] >= 100} {
+	    fail "$name (no progress after 100 steps)"
 	    return
 	}
     }
@@ -118,11 +141,8 @@ proc test_i {name command here there} {
 test_i "stepi to next line" "stepi" \
        ".*${decimal}.*a.*5.* = a.*3" \
        ".*${decimal}.*callee.*STEPI"
-
-# Continue to step until we enter the function.  Also keep stepping
-# if this passes through a (useless) PLT entry.
 test_i "stepi into function" "stepi" \
-       "(.*${decimal}.*callee.*STEPI|.* in callee@plt)" \
+       ".*${decimal}.*callee.*STEPI" \
        ".*callee \\(\\) at .*step-test\\.c" 
 
 # Continue to step until we reach the function's body.  This makes it
@@ -135,35 +155,43 @@ test_i "stepi into function's first source line" "stepi" \
 # Have to be careful here, if the finish does not work, 
 # then we may run to the end of the program, which
 # will cause erroneous failures in the rest of the tests
-set test "stepi: finish call"
-gdb_test_multiple "finish" "$test" {
-    -re ".*${decimal}.*callee.*NEXTI.*$gdb_prompt $" {
-	pass "$test"
+send_gdb "finish\n"
+gdb_expect {
+  -re ".*(Program received|Program exited).*$gdb_prompt $" {
+    # Oops... We ran to the end of the program...  Better reset     
+    if {![runto_main]} then {
+      fail "Can't run to main"
+      return 0
     }
-    -re ".*(Program received|$inferior_exited_re).*$gdb_prompt $" {
-	# Oops... We ran to the end of the program...  Better reset     
-	if {![runto_main]} then {
-	    fail "$test (Can't run to main)"
-	    return 0
-	}
-	if {![runto step-test.c:45]} {
-	    fail "$test (Can't run to line 45)"
-	    return 0
-	}
-	fail "$test"
+    if {![runto step-test.c:45]} {
+      fail "Can't run to line 45"
+      return 0
     }
-    -re ".*${decimal}.*callee.*STEPI.*$gdb_prompt $" {
-	# On PA64, we end up at a different instruction than PA32.
-	# On IA-64, we end up on callee instead of on the following line due
-	# to the restoration of the global pointer.
-	# Similarly on MIPS PIC targets.
-	if { [istarget "ia64-*-*"] || [istarget "mips*-*-*"] } {
-	    test_i "$test" "stepi" \
-		".*${decimal}.*callee.*STEPI"  ".*${decimal}.*callee.*NEXTI"
-	} else {
-	    fail "$test"
-	}
+    fail "stepi: finish call"
+  }
+  -re ".*${decimal}.*callee.*NEXTI.*$gdb_prompt $" {
+    pass "stepi: finish call"
+  }
+  -re ".*${decimal}.*callee.*STEPI.*$gdb_prompt $" {
+    # On PA64, we end up at a different instruction than PA32.
+    # On IA-64, we end up on callee instead of on the following line due
+    # to the restoration of the global pointer.
+    if { [istarget "hppa2.0w-hp-hpux*"] || [istarget "ia64-*-*"] } {
+        pass "stepi: finish call 2"
+    } else {
+	fail "stepi: finish call 2"
+        return
     }
+  }
+  -re "$gdb_prompt $" {
+    # We got something else.  Fail.
+    fail "stepi: finish call"
+    return
+  }
+  timeout {
+    fail "stepi: finish call (timeout)"
+    return
+  }
 }
 
 test_i "nexti over function" "nexti" \
@@ -190,15 +218,21 @@ gdb_test \
 gdb_test "continue" \
          ".*Breakpoint ${decimal},.*large_struct_by_value.*" \
 	 "run to pass large struct"
-set test "large struct by value"
-gdb_test_multiple "step" "$test" {
+send_gdb "step\n"
+gdb_expect {
     -re ".*step-test.exp: arrive here 1.*$gdb_prompt $" {
-	pass "$test"
+	pass "large struct by value"
     }
     -re ".*(memcpy|bcopy).*$gdb_prompt $" {
 	send_gdb "finish\n" ; gdb_expect -re "$gdb_prompt $"
 	send_gdb "step\n"
 	exp_continue
+    }
+    -re ".*$gdb_prompt $" {
+	fail "large struct by value"
+    }
+    timeout {
+	fail "large struct by value (timeout)"
     }
 }
 

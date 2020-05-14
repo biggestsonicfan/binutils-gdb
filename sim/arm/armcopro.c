@@ -1,24 +1,24 @@
 /*  armcopro.c -- co-processor interface:  ARM6 Instruction Emulator.
     Copyright (C) 1994, 2000 Advanced RISC Machines Ltd.
-
+ 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+ 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+ 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.  */
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "armdefs.h"
 #include "armos.h"
 #include "armemu.h"
 #include "ansidecl.h"
-#include "iwmmxt.h"
 
 /* Dummy Co-processors.  */
 
@@ -85,8 +85,6 @@ XScale_cp15_init (ARMul_State * state ATTRIBUTE_UNUSED)
 
   /* Initialise the ARM Control Register.  */
   XScale_cp15_opcode_2_is_0_Regs[1] = 0x00000078;
-
-  return TRUE;
 }
 
 /* Check an access to a register.  */
@@ -114,7 +112,7 @@ check_cp15_access (ARMul_State * state,
       /* CRm must be 0.  Opcode_2 can be anything.  */
       if (CRm != 0)
 	return ARMul_CANT;
-      break;
+      break;      
     case 2:
     case 3:
       /* CRm must be 0.  Opcode_2 must be zero.  */
@@ -373,6 +371,34 @@ read_cp15_reg (unsigned reg, unsigned opcode_2, unsigned CRm)
 }
 
 static unsigned
+XScale_cp15_LDC (ARMul_State * state, unsigned type, ARMword instr, ARMword data)
+{
+  unsigned reg = BITS (12, 15);
+  unsigned result;
+  
+  result = check_cp15_access (state, reg, 0, 0, 0);
+
+  if (result == ARMul_DONE && type == ARMul_DATA)
+    write_cp15_reg (state, reg, 0, 0, data);
+
+  return result;
+}
+
+static unsigned
+XScale_cp15_STC (ARMul_State * state, unsigned type, ARMword instr, ARMword * data)
+{
+  unsigned reg = BITS (12, 15);
+  unsigned result;
+
+  result = check_cp15_access (state, reg, 0, 0, 0);
+
+  if (result == ARMul_DONE && type == ARMul_DATA)
+    * data = read_cp15_reg (reg, 0, 0);
+
+  return result;
+}
+
+static unsigned
 XScale_cp15_MRC (ARMul_State * state,
 		 unsigned      type ATTRIBUTE_UNUSED,
 		 ARMword       instr,
@@ -556,8 +582,6 @@ XScale_cp13_init (ARMul_State * state ATTRIBUTE_UNUSED)
       XScale_cp13_CR0_Regs[i] = 0;
       XScale_cp13_CR1_Regs[i] = 0;
     }
-
-  return TRUE;
 }
 
 /* Check an access to a register.  */
@@ -788,8 +812,6 @@ XScale_cp14_init (ARMul_State * state ATTRIBUTE_UNUSED)
 
   for (i = 16; i--;)
     XScale_cp14_Regs[i] = 0;
-
-  return TRUE;
 }
 
 /* Check an access to a register.  */
@@ -1300,57 +1322,34 @@ ARMul_CoProInit (ARMul_State * state)
 
   /* Install CoPro Instruction handlers here.
      The format is:
-     ARMul_CoProAttach (state, CP Number, Init routine, Exit routine
-                        LDC routine, STC routine, MRC routine, MCR routine,
-                        CDP routine, Read Reg routine, Write Reg routine).  */
-  if (state->is_ep9312)
-    {
-      ARMul_CoProAttach (state, 4, NULL, NULL, DSPLDC4, DSPSTC4,
-			 DSPMRC4, DSPMCR4, DSPCDP4, NULL, NULL);
-      ARMul_CoProAttach (state, 5, NULL, NULL, DSPLDC5, DSPSTC5,
-			 DSPMRC5, DSPMCR5, DSPCDP5, NULL, NULL);
-      ARMul_CoProAttach (state, 6, NULL, NULL, NULL, NULL,
-			 DSPMRC6, DSPMCR6, DSPCDP6, NULL, NULL);
-    }
-  else
-    {
-      ARMul_CoProAttach (state, 4, NULL, NULL, ValLDC, ValSTC,
-			 ValMRC, ValMCR, ValCDP, NULL, NULL);
+     ARMul_CoProAttach (state, CP Number,
+                        Init routine, Exit routine
+                        LDC routine, STC routine,
+			MRC routine, MCR routine,
+                        CDP routine,
+			Read Reg routine, Write Reg routine).  */
+  ARMul_CoProAttach (state, 4, NULL, NULL,
+		     ValLDC, ValSTC, ValMRC, ValMCR, ValCDP, NULL, NULL);
 
-      ARMul_CoProAttach (state, 5, NULL, NULL, NULL, NULL,
-			 ValMRC, ValMCR, IntCDP, NULL, NULL);
-    }
+  ARMul_CoProAttach (state, 5, NULL, NULL,
+		     NULL, NULL, ValMRC, ValMCR, IntCDP, NULL, NULL);
 
-  if (state->is_XScale)
-    {
-      ARMul_CoProAttach (state, 13, XScale_cp13_init, NULL,
-			 XScale_cp13_LDC, XScale_cp13_STC, XScale_cp13_MRC,
-			 XScale_cp13_MCR, NULL, XScale_cp13_read_reg,
-			 XScale_cp13_write_reg);
+  ARMul_CoProAttach (state, 15, MMUInit, NULL,
+		     NULL, NULL, MMUMRC, MMUMCR, NULL, MMURead, MMUWrite);
 
-      ARMul_CoProAttach (state, 14, XScale_cp14_init, NULL,
-			 XScale_cp14_LDC, XScale_cp14_STC, XScale_cp14_MRC,
-			 XScale_cp14_MCR, NULL, XScale_cp14_read_reg,
-			 XScale_cp14_write_reg);
+  ARMul_CoProAttach (state, 13, XScale_cp13_init, NULL,
+		     XScale_cp13_LDC, XScale_cp13_STC, XScale_cp13_MRC,
+		     XScale_cp13_MCR, NULL, XScale_cp13_read_reg,
+		     XScale_cp13_write_reg);
 
-      ARMul_CoProAttach (state, 15, XScale_cp15_init, NULL,
-			 NULL, NULL, XScale_cp15_MRC, XScale_cp15_MCR,
-			 NULL, XScale_cp15_read_reg, XScale_cp15_write_reg);
-    }
-  else
-    {
-      ARMul_CoProAttach (state, 15, MMUInit, NULL, NULL, NULL,
-			 MMUMRC, MMUMCR, NULL, MMURead, MMUWrite);
-    }
+  ARMul_CoProAttach (state, 14, XScale_cp14_init, NULL,
+		     XScale_cp14_LDC, XScale_cp14_STC, XScale_cp14_MRC,
+		     XScale_cp14_MCR, NULL, XScale_cp14_read_reg,
+		     XScale_cp14_write_reg);
 
-  if (state->is_iWMMXt)
-    {
-      ARMul_CoProAttach (state, 0, NULL, NULL, IwmmxtLDC, IwmmxtSTC,
-			 NULL, NULL, IwmmxtCDP, NULL, NULL);
-
-      ARMul_CoProAttach (state, 1, NULL, NULL, NULL, NULL,
-			 IwmmxtMRC, IwmmxtMCR, IwmmxtCDP, NULL, NULL);
-    }
+  ARMul_CoProAttach (state, 15, XScale_cp15_init, NULL,
+		     NULL, NULL, XScale_cp15_MRC, XScale_cp15_MCR,
+		     NULL, XScale_cp15_read_reg, XScale_cp15_write_reg);
 
   /* No handlers below here.  */
 

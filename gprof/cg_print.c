@@ -1,12 +1,12 @@
 /* cg_print.c -  Print routines for displaying call graphs.
 
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,12 +16,11 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "gprof.h"
 #include "libiberty.h"
-#include "filenames.h"
+#include "gprof.h"
 #include "search_list.h"
 #include "source.h"
 #include "symtab.h"
@@ -36,35 +35,35 @@
 #define	EQUALTO		0
 #define	GREATERTHAN	1
 
-static void print_header (void);
-static void print_cycle (Sym *);
-static int cmp_member (Sym *, Sym *);
-static void sort_members (Sym *);
-static void print_members (Sym *);
-static int cmp_arc (Arc *, Arc *);
-static void sort_parents (Sym *);
-static void print_parents (Sym *);
-static void sort_children (Sym *);
-static void print_children (Sym *);
-static void print_line (Sym *);
-static int cmp_name (const PTR, const PTR);
-static int cmp_arc_count (const PTR, const PTR);
-static int cmp_fun_nuses (const PTR, const PTR);
+static void print_header PARAMS ((void));
+static void print_cycle PARAMS ((Sym *));
+static int cmp_member PARAMS ((Sym *, Sym *));
+static void sort_members PARAMS ((Sym *));
+static void print_members PARAMS ((Sym *));
+static int cmp_arc PARAMS ((Arc *, Arc *));
+static void sort_parents PARAMS ((Sym *));
+static void print_parents PARAMS ((Sym *));
+static void sort_children PARAMS ((Sym *));
+static void print_children PARAMS ((Sym *));
+static void print_line PARAMS ((Sym *));
+static int cmp_name PARAMS ((const PTR, const PTR));
+static int cmp_arc_count PARAMS ((const PTR, const PTR));
+static int cmp_fun_nuses PARAMS ((const PTR, const PTR));
 static void order_and_dump_functions_by_arcs
-  (Arc **, unsigned long, int, Arc **, unsigned long *);
+  PARAMS ((Arc **, unsigned long, int, Arc **, unsigned long *));
 
 /* Declarations of automatically generated functions to output blurbs.  */
-extern void bsd_callg_blurb (FILE * fp);
-extern void fsf_callg_blurb (FILE * fp);
+extern void bsd_callg_blurb PARAMS ((FILE * fp));
+extern void fsf_callg_blurb PARAMS ((FILE * fp));
 
 double print_time = 0.0;
 
 
 static void
-print_header (void)
+print_header ()
 {
   if (first_output)
-    first_output = FALSE;
+    first_output = false;
   else
     printf ("\f\n");
 
@@ -77,7 +76,7 @@ print_header (void)
     }
 
   printf (_("\ngranularity: each sample hit covers %ld byte(s)"),
-	  (long) hist_scale * (long) sizeof (UNIT));
+	  (long) hist_scale * sizeof (UNIT));
 
   if (print_time > 0.0)
     printf (_(" for %.2f%% of %.2f seconds\n\n"),
@@ -95,11 +94,8 @@ print_header (void)
       printf ("%6.6s %5.5s %7.7s %11.11s %7.7s/%-7.7s     %-8.8s\n",
 	      "", "", "", "", _("called"), _("total"), _("parents"));
       printf ("%-6.6s %5.5s %7.7s %11.11s %7.7s+%-7.7s %-8.8s\t%5.5s\n",
-	      _("index"),
-	      /* xgettext:no-c-format */
-	      _("%time"),
-	      _("self"), _("descendants"), _("called"), _("self"),
-	      _("name"), _("index"));
+	      _("index"), _("%time"), _("self"), _("descendants"),
+	      _("called"), _("self"), _("name"), _("index"));
       printf ("%6.6s %5.5s %7.7s %11.11s %7.7s/%-7.7s     %-8.8s\n",
 	      "", "", "", "", _("called"), _("total"), _("children"));
       printf ("\n");
@@ -113,7 +109,8 @@ print_header (void)
 /* Print a cycle header.  */
 
 static void
-print_cycle (Sym *cyc)
+print_cycle (cyc)
+     Sym *cyc;
 {
   char buf[BUFSIZ];
 
@@ -136,7 +133,9 @@ print_cycle (Sym *cyc)
    CG.PROP.SELF+CG.PROP.CHILD, secondary key is NCALLS+CG.SELF_CALLS.  */
 
 static int
-cmp_member (Sym *left, Sym *right)
+cmp_member (left, right)
+     Sym *left;
+     Sym *right;
 {
   double left_time = left->cg.prop.self + left->cg.prop.child;
   double right_time = right->cg.prop.self + right->cg.prop.child;
@@ -161,7 +160,8 @@ cmp_member (Sym *left, Sym *right)
 /* Sort members of a cycle.  */
 
 static void
-sort_members (Sym *cyc)
+sort_members (cyc)
+     Sym *cyc;
 {
   Sym *todo, *doing, *prev;
 
@@ -170,7 +170,7 @@ sort_members (Sym *cyc)
   todo = cyc->cg.cyc.next;
   cyc->cg.cyc.next = 0;
 
-  for (doing = todo; doing != NULL; doing = todo)
+  for (doing = todo; doing && doing->cg.cyc.next; doing = todo)
     {
       todo = doing->cg.cyc.next;
 
@@ -188,7 +188,8 @@ sort_members (Sym *cyc)
 /* Print the members of a cycle.  */
 
 static void
-print_members (Sym *cyc)
+print_members (cyc)
+     Sym *cyc;
 {
   Sym *member;
 
@@ -222,7 +223,9 @@ print_members (Sym *cyc)
 		arc count as minor key.  */
 
 static int
-cmp_arc (Arc *left, Arc *right)
+cmp_arc (left, right)
+     Arc *left;
+     Arc *right;
 {
   Sym *left_parent = left->parent;
   Sym *left_child = left->child;
@@ -308,7 +311,8 @@ cmp_arc (Arc *left, Arc *right)
 
 
 static void
-sort_parents (Sym * child)
+sort_parents (child)
+     Sym * child;
 {
   Arc *arc, *detached, sorted, *prev;
 
@@ -341,7 +345,8 @@ sort_parents (Sym * child)
 
 
 static void
-print_parents (Sym *child)
+print_parents (child)
+     Sym *child;
 {
   Sym *parent;
   Arc *arc;
@@ -395,7 +400,8 @@ print_parents (Sym *child)
 
 
 static void
-sort_children (Sym *parent)
+sort_children (parent)
+     Sym *parent;
 {
   Arc *arc, *detached, sorted, *prev;
 
@@ -428,7 +434,8 @@ sort_children (Sym *parent)
 
 
 static void
-print_children (Sym *parent)
+print_children (parent)
+     Sym *parent;
 {
   Sym *child;
   Arc *arc;
@@ -467,7 +474,8 @@ print_children (Sym *parent)
 
 
 static void
-print_line (Sym *np)
+print_line (np)
+     Sym *np;
 {
   char buf[BUFSIZ];
 
@@ -500,9 +508,10 @@ print_line (Sym *np)
 /* Print dynamic call graph.  */
 
 void
-cg_print (Sym ** timesortsym)
+cg_print (timesortsym)
+     Sym ** timesortsym;
 {
-  unsigned int sym_index;
+  unsigned int index;
   Sym *parent;
 
   if (print_descriptions && bsd_style_output)
@@ -510,9 +519,9 @@ cg_print (Sym ** timesortsym)
 
   print_header ();
 
-  for (sym_index = 0; sym_index < symtab.len + num_cycles; ++sym_index)
+  for (index = 0; index < symtab.len + num_cycles; ++index)
     {
-      parent = timesortsym[sym_index];
+      parent = timesortsym[index];
 
       if ((ignore_zeros && parent->ncalls == 0
 	   && parent->cg.self_calls == 0 && parent->cg.prop.self == 0
@@ -551,7 +560,9 @@ cg_print (Sym ** timesortsym)
 
 
 static int
-cmp_name (const PTR left, const PTR right)
+cmp_name (left, right)
+     const PTR left;
+     const PTR right;
 {
   const Sym **npp1 = (const Sym **) left;
   const Sym **npp2 = (const Sym **) right;
@@ -561,9 +572,9 @@ cmp_name (const PTR left, const PTR right)
 
 
 void
-cg_print_index (void)
+cg_print_index ()
 {
-  unsigned int sym_index;
+  unsigned int index;
   unsigned int nnames, todo, i, j;
   int col, starting_col;
   Sym **name_sorted_syms, *sym;
@@ -575,30 +586,30 @@ cg_print_index (void)
      alphabetically to create an index.  */
   name_sorted_syms = (Sym **) xmalloc ((symtab.len + num_cycles) * sizeof (Sym *));
 
-  for (sym_index = 0, nnames = 0; sym_index < symtab.len; sym_index++)
+  for (index = 0, nnames = 0; index < symtab.len; index++)
     {
-      if (ignore_zeros && symtab.base[sym_index].ncalls == 0
-	  && symtab.base[sym_index].hist.time == 0)
+      if (ignore_zeros && symtab.base[index].ncalls == 0
+	  && symtab.base[index].hist.time == 0)
 	continue;
 
-      name_sorted_syms[nnames++] = &symtab.base[sym_index];
+      name_sorted_syms[nnames++] = &symtab.base[index];
     }
 
   qsort (name_sorted_syms, nnames, sizeof (Sym *), cmp_name);
 
-  for (sym_index = 1, todo = nnames; sym_index <= num_cycles; sym_index++)
-    name_sorted_syms[todo++] = &cycle_header[sym_index];
+  for (index = 1, todo = nnames; index <= num_cycles; index++)
+    name_sorted_syms[todo++] = &cycle_header[index];
 
   printf ("\f\n");
   printf (_("Index by function name\n\n"));
-  sym_index = (todo + 2) / 3;
+  index = (todo + 2) / 3;
 
-  for (i = 0; i < sym_index; i++)
+  for (i = 0; i < index; i++)
     {
       col = 0;
       starting_col = 0;
 
-      for (j = i; j < todo; j += sym_index)
+      for (j = i; j < todo; j += index)
 	{
 	  sym = name_sorted_syms[j];
 
@@ -675,7 +686,9 @@ cg_print_index (void)
    We want to sort in descending order.  */
 
 static int
-cmp_arc_count (const PTR left, const PTR right)
+cmp_arc_count (left, right)
+     const PTR left;
+     const PTR right;
 {
   const Arc **npp1 = (const Arc **) left;
   const Arc **npp2 = (const Arc **) right;
@@ -692,7 +705,9 @@ cmp_arc_count (const PTR left, const PTR right)
    We want to sort in descending order.  */
 
 static int
-cmp_fun_nuses (const PTR left, const PTR right)
+cmp_fun_nuses (left, right)
+     const PTR left;
+     const PTR right;
 {
   const Sym **npp1 = (const Sym **) left;
   const Sym **npp2 = (const Sym **) right;
@@ -774,11 +789,9 @@ cmp_fun_nuses (const PTR left, const PTR right)
 	of function ordering).  */
 
 void
-cg_print_function_ordering (void)
+cg_print_function_ordering ()
 {
-  unsigned long sym_index;
-  unsigned long arc_index;
-  unsigned long used, unused, scratch_index;
+  unsigned long index, used, unused, scratch_index;
   unsigned long  unplaced_arc_count, high_arc_count, scratch_arc_count;
 #ifdef __GNUC__
   unsigned long long total_arcs, tmp_arcs_count;
@@ -788,7 +801,7 @@ cg_print_function_ordering (void)
   Sym **unused_syms, **used_syms, **scratch_syms;
   Arc **unplaced_arcs, **high_arcs, **scratch_arcs;
 
-  sym_index = 0;
+  index = 0;
   used = 0;
   unused = 0;
   scratch_index = 0;
@@ -806,20 +819,25 @@ cg_print_function_ordering (void)
 
   /* Walk through all the functions; mark those which are never
      called as placed (we'll emit them as a group later).  */
-  for (sym_index = 0, used = 0, unused = 0; sym_index < symtab.len; sym_index++)
+  for (index = 0, used = 0, unused = 0; index < symtab.len; index++)
     {
-      if (symtab.base[sym_index].ncalls == 0)
+      if (symtab.base[index].ncalls == 0)
 	{
-	  unused_syms[unused++] = &symtab.base[sym_index];
-	  symtab.base[sym_index].has_been_placed = 1;
+	  /* Filter out gprof generated names.  */
+	  if (strcmp (symtab.base[index].name, "<locore>")
+	      && strcmp (symtab.base[index].name, "<hicore>"))
+	    {
+	      unused_syms[unused++] = &symtab.base[index];
+	      symtab.base[index].has_been_placed = 1;
+	    }
 	}
       else
 	{
-	  used_syms[used++] = &symtab.base[sym_index];
-	  symtab.base[sym_index].has_been_placed = 0;
-	  symtab.base[sym_index].next = 0;
-	  symtab.base[sym_index].prev = 0;
-	  symtab.base[sym_index].nuses = 0;
+	  used_syms[used++] = &symtab.base[index];
+	  symtab.base[index].has_been_placed = 0;
+	  symtab.base[index].next = 0;
+	  symtab.base[index].prev = 0;
+	  symtab.base[index].nuses = 0;
 	}
     }
 
@@ -832,26 +850,26 @@ cg_print_function_ordering (void)
      Overflow is much less likely when this file is compiled
      with GCC as it can double-wide integers via long long.  */
   total_arcs = 0;
-  for (arc_index = 0; arc_index < numarcs; arc_index++)
+  for (index = 0; index < numarcs; index++)
     {
-      total_arcs += arcs[arc_index]->count;
-      arcs[arc_index]->has_been_placed = 0;
+      total_arcs += arcs[index]->count;
+      arcs[index]->has_been_placed = 0;
     }
 
   /* We want to pull out those functions which are referenced
      by many highly used arcs and emit them as a group.  This
      could probably use some tuning.  */
   tmp_arcs_count = 0;
-  for (arc_index = 0; arc_index < numarcs; arc_index++)
+  for (index = 0; index < numarcs; index++)
     {
-      tmp_arcs_count += arcs[arc_index]->count;
+      tmp_arcs_count += arcs[index]->count;
 
       /* Count how many times each parent and child are used up
-	 to our threshold of arcs (90%).  */
+	 to our threshhold of arcs (90%).  */
       if ((double)tmp_arcs_count / (double)total_arcs > 0.90)
 	break;
 
-      arcs[arc_index]->child->nuses++;
+      arcs[index]->child->nuses++;
     }
 
   /* Now sort a temporary symbol table based on the number of
@@ -861,9 +879,9 @@ cg_print_function_ordering (void)
 
   /* Now pick out those symbols we're going to emit as
      a group.  We take up to 1.25% of the used symbols.  */
-  for (sym_index = 0; sym_index < used / 80; sym_index++)
+  for (index = 0; index < used / 80; index++)
     {
-      Sym *sym = scratch_syms[sym_index];
+      Sym *sym = scratch_syms[index];
       Arc *arc;
 
       /* If we hit symbols that aren't used from many call sites,
@@ -902,7 +920,7 @@ cg_print_function_ordering (void)
 	}
 
       /* Keep track of how many symbols we're going to place.  */
-      scratch_index = sym_index;
+      scratch_index = index;
 
       /* A lie, but it makes identifying
 	 these functions easier later.  */
@@ -911,16 +929,16 @@ cg_print_function_ordering (void)
 
   /* Now walk through the temporary arcs and copy
      those we care about into the high arcs array.  */
-  for (arc_index = 0; arc_index < scratch_arc_count; arc_index++)
+  for (index = 0; index < scratch_arc_count; index++)
     {
-      Arc *arc = scratch_arcs[arc_index];
+      Arc *arc = scratch_arcs[index];
 
       /* If this arc refers to highly used functions, then
 	 then we want to keep it.  */
       if (arc->child->has_been_placed
 	  && arc->parent->has_been_placed)
 	{
-	  high_arcs[high_arc_count++] = scratch_arcs[arc_index];
+	  high_arcs[high_arc_count++] = scratch_arcs[index];
 
 	  /* We need to turn of has_been_placed since we're going to
 	     use the main arc placement algorithm on these arcs.  */
@@ -931,10 +949,10 @@ cg_print_function_ordering (void)
 
   /* Dump the multi-site high usage functions which are not
      going to be ordered by the main ordering algorithm.  */
-  for (sym_index = 0; sym_index < scratch_index; sym_index++)
+  for (index = 0; index < scratch_index; index++)
     {
-      if (scratch_syms[sym_index]->has_been_placed)
-	printf ("%s\n", scratch_syms[sym_index]->name);
+      if (scratch_syms[index]->has_been_placed)
+	printf ("%s\n", scratch_syms[index]->name);
     }
 
   /* Now we can order the multi-site high use
@@ -953,13 +971,13 @@ cg_print_function_ordering (void)
 				    scratch_arcs, &scratch_arc_count);
 
   /* Output any functions not emitted by the order_and_dump calls.  */
-  for (sym_index = 0; sym_index < used; sym_index++)
-    if (used_syms[sym_index]->has_been_placed == 0)
-      printf("%s\n", used_syms[sym_index]->name);
+  for (index = 0; index < used; index++)
+    if (used_syms[index]->has_been_placed == 0)
+      printf("%s\n", used_syms[index]->name);
 
   /* Output the unused functions.  */
-  for (sym_index = 0; sym_index < unused; sym_index++)
-    printf("%s\n", unused_syms[sym_index]->name);
+  for (index = 0; index < unused; index++)
+    printf("%s\n", unused_syms[index]->name);
 
   unused_syms = (Sym **) xmalloc (symtab.len * sizeof (Sym *));
   used_syms = (Sym **) xmalloc (symtab.len * sizeof (Sym *));
@@ -984,16 +1002,20 @@ cg_print_function_ordering (void)
 
 #define MOST 0.99
 static void
-order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
-				  int all, Arc **unplaced_arcs,
-				  unsigned long *unplaced_arc_count)
+order_and_dump_functions_by_arcs (the_arcs, arc_count, all,
+				  unplaced_arcs, unplaced_arc_count)
+     Arc **the_arcs;
+     unsigned long arc_count;
+     int all;
+     Arc **unplaced_arcs;
+     unsigned long *unplaced_arc_count;
 {
 #ifdef __GNUC__
   unsigned long long tmp_arcs, total_arcs;
 #else
   unsigned long tmp_arcs, total_arcs;
 #endif
-  unsigned int arc_index;
+  unsigned int index;
 
   /* If needed, compute the total arc count.
 
@@ -1001,27 +1023,27 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
   if (! all)
     {
       total_arcs = 0;
-      for (arc_index = 0; arc_index < arc_count; arc_index++)
-	total_arcs += the_arcs[arc_index]->count;
+      for (index = 0; index < arc_count; index++)
+	total_arcs += the_arcs[index]->count;
     }
   else
     total_arcs = 0;
 
   tmp_arcs = 0;
 
-  for (arc_index = 0; arc_index < arc_count; arc_index++)
+  for (index = 0; index < arc_count; index++)
     {
       Sym *sym1, *sym2;
       Sym *child, *parent;
 
-      tmp_arcs += the_arcs[arc_index]->count;
+      tmp_arcs += the_arcs[index]->count;
 
       /* Ignore this arc if it's already been placed.  */
-      if (the_arcs[arc_index]->has_been_placed)
+      if (the_arcs[index]->has_been_placed)
 	continue;
 
-      child = the_arcs[arc_index]->child;
-      parent = the_arcs[arc_index]->parent;
+      child = the_arcs[index]->child;
+      parent = the_arcs[index]->parent;
 
       /* If we're not using all arcs, and this is a rarely used
 	 arc, then put it on the unplaced_arc list.  Similarly
@@ -1029,7 +1051,7 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
       if ((! all && (double)tmp_arcs / (double)total_arcs > MOST)
 	  || child->has_been_placed || parent->has_been_placed)
 	{
-	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[arc_index];
+	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[index];
 	  continue;
 	}
 
@@ -1039,7 +1061,7 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
 	 algorithm can use it to place function chains.  */
       if (parent->next && parent->prev && child->next && child->prev)
 	{
-	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[arc_index];
+	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[index];
 	  continue;
 	}
 
@@ -1094,7 +1116,7 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
 	{
 	  /* Couldn't find anywhere to attach the functions,
 	     put the arc on the unplaced arc list.  */
-	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[arc_index];
+	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[index];
 	  continue;
 	}
 
@@ -1119,7 +1141,7 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
 	  && sym2 == parent)
 	{
 	  /* This would tie two ends together.  */
-	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[arc_index];
+	  unplaced_arcs[(*unplaced_arc_count)++] = the_arcs[index];
 	  continue;
 	}
 
@@ -1131,7 +1153,7 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
 	      /* parent-prev and child-next */
 	      parent->prev = child;
 	      child->next = parent;
-	      the_arcs[arc_index]->has_been_placed = 1;
+	      the_arcs[index]->has_been_placed = 1;
 	    }
 	}
       else if (parent->prev)
@@ -1142,7 +1164,7 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
 	      /* parent-next and child-prev */
 	      parent->next = child;
 	      child->prev = parent;
-	      the_arcs[arc_index]->has_been_placed = 1;
+	      the_arcs[index]->has_been_placed = 1;
 	    }
 	}
       else
@@ -1154,27 +1176,27 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
 	      /* parent-prev and child-next.  */
 	      parent->prev = child;
 	      child->next = parent;
-	      the_arcs[arc_index]->has_been_placed = 1;
+	      the_arcs[index]->has_been_placed = 1;
 	    }
 	  else
 	    {
 	      /* parent-next and child-prev.  */
 	      parent->next = child;
 	      child->prev = parent;
-	      the_arcs[arc_index]->has_been_placed = 1;
+	      the_arcs[index]->has_been_placed = 1;
 	    }
 	}
     }
 
   /* Dump the chains of functions we've made.  */
-  for (arc_index = 0; arc_index < arc_count; arc_index++)
+  for (index = 0; index < arc_count; index++)
     {
       Sym *sym;
-      if (the_arcs[arc_index]->parent->has_been_placed
-	  || the_arcs[arc_index]->child->has_been_placed)
+      if (the_arcs[index]->parent->has_been_placed
+	  || the_arcs[index]->child->has_been_placed)
 	continue;
 
-      sym = the_arcs[arc_index]->parent;
+      sym = the_arcs[index]->parent;
 
       /* If this symbol isn't attached to any other
 	 symbols, then we've got a rarely used arc.
@@ -1200,28 +1222,18 @@ order_and_dump_functions_by_arcs (Arc **the_arcs, unsigned long arc_count,
   /* If we want to place all the arcs, then output
      those which weren't placed by the main algorithm.  */
   if (all)
-    for (arc_index = 0; arc_index < arc_count; arc_index++)
+    for (index = 0; index < arc_count; index++)
       {
 	Sym *sym;
-	if (the_arcs[arc_index]->parent->has_been_placed
-	    || the_arcs[arc_index]->child->has_been_placed)
+	if (the_arcs[index]->parent->has_been_placed
+	    || the_arcs[index]->child->has_been_placed)
 	  continue;
 
-	sym = the_arcs[arc_index]->parent;
+	sym = the_arcs[index]->parent;
 
 	sym->has_been_placed = 1;
 	printf ("%s\n", sym->name);
       }
-}
-
-/* Compare two function_map structs based on file name.
-   We want to sort in ascending order.  */
-
-static int
-cmp_symbol_map (const void * l, const void * r)
-{
-  return filename_cmp (((struct function_map *) l)->file_name,
-		       ((struct function_map *) r)->file_name);
 }
 
 /* Print a suggested .o ordering for files on a link line based
@@ -1229,46 +1241,42 @@ cmp_symbol_map (const void * l, const void * r)
    code for the bulk of its work.  */
 
 void
-cg_print_file_ordering (void)
+cg_print_file_ordering ()
 {
-  unsigned long scratch_arc_count;
-  unsigned long arc_index;
-  unsigned long sym_index;
+  unsigned long scratch_arc_count, index;
   Arc **scratch_arcs;
   char *last;
 
   scratch_arc_count = 0;
 
   scratch_arcs = (Arc **) xmalloc (numarcs * sizeof (Arc *));
-  for (arc_index = 0; arc_index < numarcs; arc_index++)
+  for (index = 0; index < numarcs; index++)
     {
-      if (! arcs[arc_index]->parent->mapped
-	  || ! arcs[arc_index]->child->mapped)
-	arcs[arc_index]->has_been_placed = 1;
+      if (! arcs[index]->parent->mapped
+	  || ! arcs[index]->child->mapped)
+	arcs[index]->has_been_placed = 1;
     }
 
   order_and_dump_functions_by_arcs (arcs, numarcs, 0,
 				    scratch_arcs, &scratch_arc_count);
 
   /* Output .o's not handled by the main placement algorithm.  */
-  for (sym_index = 0; sym_index < symtab.len; sym_index++)
+  for (index = 0; index < symtab.len; index++)
     {
-      if (symtab.base[sym_index].mapped
-	  && ! symtab.base[sym_index].has_been_placed)
-	printf ("%s\n", symtab.base[sym_index].name);
+      if (symtab.base[index].mapped
+	  && ! symtab.base[index].has_been_placed)
+	printf ("%s\n", symtab.base[index].name);
     }
-
-  qsort (symbol_map, symbol_map_count, sizeof (struct function_map), cmp_symbol_map);
 
   /* Now output any .o's that didn't have any text symbols.  */
   last = NULL;
-  for (sym_index = 0; sym_index < symbol_map_count; sym_index++)
+  for (index = 0; index < symbol_map_count; index++)
     {
       unsigned int index2;
 
       /* Don't bother searching if this symbol
 	 is the same as the previous one.  */
-      if (last && !filename_cmp (last, symbol_map[sym_index].file_name))
+      if (last && !strcmp (last, symbol_map[index].file_name))
 	continue;
 
       for (index2 = 0; index2 < symtab.len; index2++)
@@ -1276,15 +1284,14 @@ cg_print_file_ordering (void)
 	  if (! symtab.base[index2].mapped)
 	    continue;
 
-	  if (!filename_cmp (symtab.base[index2].name,
-			     symbol_map[sym_index].file_name))
+	  if (!strcmp (symtab.base[index2].name, symbol_map[index].file_name))
 	    break;
 	}
 
       /* If we didn't find it in the symbol table, then it must
 	 be a .o with no text symbols.  Output it last.  */
       if (index2 == symtab.len)
-	printf ("%s\n", symbol_map[sym_index].file_name);
-      last = symbol_map[sym_index].file_name;
+	printf ("%s\n", symbol_map[index].file_name);
+      last = symbol_map[index].file_name;
     }
 }

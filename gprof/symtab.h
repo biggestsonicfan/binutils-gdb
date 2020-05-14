@@ -1,23 +1,22 @@
 /* symtab.h
 
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2002 Free Software Foundation, Inc.
 
-   This file is part of GNU Binutils.
+This file is part of GNU Binutils.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef symtab_h
 #define symtab_h
@@ -78,7 +77,7 @@ typedef struct sym
 	double child_time;	/* Cumulative ticks in children.  */
 	int index;		/* Index in the graph list.  */
 	int top_order;		/* Graph call chain top-sort order.  */
-	bfd_boolean print_flag;	/* Should this be printed?  */
+	boolean print_flag;	/* Should this be printed?  */
 	struct
 	  {
 	    double fract;	/* What % of time propagates.  */
@@ -112,12 +111,12 @@ Sym_Table;
 
 extern Sym_Table symtab;	/* The symbol table.  */
 
-extern void sym_init        (Sym *);
-extern void symtab_finalize (Sym_Table *);
+extern void sym_init        PARAMS ((Sym *));
+extern void symtab_finalize PARAMS ((Sym_Table *));
 #ifdef DEBUG
-extern Sym *dbg_sym_lookup  (Sym_Table *, bfd_vma);
+extern Sym *dbg_sym_lookup  PARAMS ((Sym_Table *, bfd_vma));
 #endif
-extern Sym *sym_lookup      (Sym_Table *, bfd_vma);
-extern void find_call       (Sym *, bfd_vma, bfd_vma);
+extern Sym *sym_lookup      PARAMS ((Sym_Table *, bfd_vma));
+extern void find_call       PARAMS ((Sym *, bfd_vma, bfd_vma));
 
 #endif /* symtab_h */

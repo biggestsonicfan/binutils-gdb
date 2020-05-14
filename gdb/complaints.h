@@ -1,12 +1,12 @@
 /* Definitions for complaint handling during symbol reading in GDB.
-
-   Copyright (C) 1990-2020 Free Software Foundation, Inc.
+   Copyright 1990, 1991, 1992, 1995, 1998, 2000
+   Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,36 +15,39 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 
 #if !defined (COMPLAINTS_H)
 #define COMPLAINTS_H
 
-/* Helper for complaint.  */
-extern void complaint_internal (const char *fmt, ...)
-  ATTRIBUTE_PRINTF (1, 2);
 
-/* This controls whether complaints are emitted.  */
+/* Support for complaining about things in the symbol file that aren't
+   catastrophic.
 
-extern int stop_whining;
+   Each such thing gets a counter.  The first time we have the problem,
+   during a symbol read, we report it.  At the end of symbol reading,
+   if verbose, we report how many of each problem we had.  */
 
-/* Register a complaint.  This is a macro around complaint_internal to
-   avoid computing complaint's arguments when complaints are disabled.
-   Running FMT via gettext [i.e., _(FMT)] can be quite expensive, for
-   example.  */
-#define complaint(FMT, ...)					\
-  do								\
-    {								\
-      if (stop_whining > 0)					\
-	complaint_internal (FMT, ##__VA_ARGS__);		\
-    }								\
-  while (0)
+struct complaint
+  {
+    char *message;
+    unsigned counter;
+    struct complaint *next;
+  };
 
-/* Clear out / initialize all complaint counters that have ever been
-   incremented.  */
+/* Root of the chain of complaints that have at some point been issued. 
+   This is used to reset the counters, and/or report the total counts.  */
 
-extern void clear_complaints ();
+extern struct complaint complaint_root[1];
+
+/* Functions that handle complaints.  (in complaints.c)  */
+
+extern void complain (struct complaint *, ...);
+
+extern void clear_complaints (int, int);
 
 
 #endif /* !defined (COMPLAINTS_H) */

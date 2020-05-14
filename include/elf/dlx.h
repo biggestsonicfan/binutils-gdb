@@ -1,11 +1,11 @@
 /* DLX support for BFD.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,16 +15,12 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef _ELF_DLX_H
 #define _ELF_DLX_H
 
 #include "elf/reloc-macros.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #if 0
 START_RELOC_NUMBERS (elf_dlx_reloc_type)
@@ -53,9 +49,5 @@ START_RELOC_NUMBERS (elf_dlx_reloc_type)
      RELOC_NUMBER (R_DLX_RELOC_26_PCREL,  9)
 END_RELOC_NUMBERS (R_DLX_max)
 #endif /* 0 */
-
-#ifdef __cplusplus
-     }
-#endif
 
 #endif /* _ELF_DLX_H */

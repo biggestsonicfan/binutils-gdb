@@ -1,27 +1,26 @@
 /* Engine header for Cpu tools GENerated simulators.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-/* This file is included by ${cpu}.h.
-   It needs CGEN_INSN_WORD which is defined by ${cpu}.h.
+/* This file must be included after eng.h and before ${cpu}.h.
    ??? A lot of this could be moved to genmloop.sh to be put in eng.h
-   and thus remove some conditional compilation.  We'd still need
-   CGEN_INSN_WORD though.  */
+   and thus remove some conditional compilation.  Worth it?  */
 
 /* Semantic functions come in six versions on two axes:
    fast/full-featured, and using one of the simple/scache/compilation engines.
@@ -51,39 +50,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* Instruction field support macros.  */
 
-#define EXTRACT_MSB0_SINT(val, total, start, length) \
+#define EXTRACT_MSB0_INT(val, total, start, length) \
 (((INT) (val) << ((sizeof (INT) * 8) - (total) + (start))) \
  >> ((sizeof (INT) * 8) - (length)))
 #define EXTRACT_MSB0_UINT(val, total, start, length) \
 (((UINT) (val) << ((sizeof (UINT) * 8) - (total) + (start))) \
  >> ((sizeof (UINT) * 8) - (length)))
 
-#define EXTRACT_LSB0_SINT(val, total, start, length) \
+#define EXTRACT_LSB0_INT(val, total, start, length) \
 (((INT) (val) << ((sizeof (INT) * 8) - (start) - 1)) \
  >> ((sizeof (INT) * 8) - (length)))
 #define EXTRACT_LSB0_UINT(val, total, start, length) \
 (((UINT) (val) << ((sizeof (UINT) * 8) - (start) - 1)) \
  >> ((sizeof (UINT) * 8) - (length)))
-
-#define EXTRACT_MSB0_LGSINT(val, total, start, length) \
-(((CGEN_INSN_LGSINT) (val) << ((sizeof (CGEN_INSN_LGSINT) * 8) - (total) + (start))) \
- >> ((sizeof (CGEN_INSN_LGSINT) * 8) - (length)))
-#define EXTRACT_MSB0_LGUINT(val, total, start, length) \
-(((CGEN_INSN_UINT) (val) << ((sizeof (CGEN_INSN_LGUINT) * 8) - (total) + (start))) \
- >> ((sizeof (CGEN_INSN_LGUINT) * 8) - (length)))
-
-#define EXTRACT_LSB0_LGSINT(val, total, start, length) \
-(((CGEN_INSN_LGSINT) (val) << ((sizeof (CGEN_INSN_LGSINT) * 8) - (start) - 1)) \
- >> ((sizeof (CGEN_INSN_LGSINT) * 8) - (length)))
-#define EXTRACT_LSB0_LGUINT(val, total, start, length) \
-(((CGEN_INSN_LGUINT) (val) << ((sizeof (CGEN_INSN_LGUINT) * 8) - (start) - 1)) \
- >> ((sizeof (CGEN_INSN_LGUINT) * 8) - (length)))
 
 /* Semantic routines.  */
 
 /* Type of the machine generated extraction fns.  */
 /* ??? No longer used.  */
-typedef void (EXTRACT_FN) (SIM_CPU *, IADDR, CGEN_INSN_WORD, ARGBUF *);
+typedef void (EXTRACT_FN) (SIM_CPU *, IADDR, CGEN_INSN_INT, ARGBUF *);
 
 /* Type of the machine generated semantic fns.  */
 
@@ -105,9 +90,9 @@ typedef unsigned int SEM_STATUS;
 /* Instruction fields are extracted by the semantic routine.
    ??? TODO: multi word insns.  */
 #if HAVE_PARALLEL_INSNS && ! WITH_PARALLEL_GENWRITE
-typedef SEM_STATUS (SEMANTIC_FN) (SIM_CPU *, SEM_ARG, PAREXEC *, CGEN_INSN_WORD);
+typedef SEM_STATUS (SEMANTIC_FN) (SIM_CPU *, SEM_ARG, PAREXEC *, CGEN_INSN_INT);
 #else
-typedef SEM_STATUS (SEMANTIC_FN) (SIM_CPU *, SEM_ARG, CGEN_INSN_WORD);
+typedef SEM_STATUS (SEMANTIC_FN) (SIM_CPU *, SEM_ARG, CGEN_INSN_INT);
 #endif
 
 #endif
@@ -136,7 +121,7 @@ union sem {
 #ifdef __GNUC__
 #define SEM_SET_FULL_CODE(abuf, idesc) \
   do { (abuf)->semantic.sem_case = (idesc)->sem_full_lab; } while (0)
-#else
+#else 
 #define SEM_SET_FULL_CODE(abuf, idesc) \
   do { (abuf)->semantic.sem_case = (idesc)->num; } while (0)
 #endif
@@ -149,7 +134,7 @@ union sem {
 #ifdef __GNUC__
 #define SEM_SET_FAST_CODE(abuf, idesc) \
   do { (abuf)->semantic.sem_case = (idesc)->sem_fast_lab; } while (0)
-#else
+#else 
 #define SEM_SET_FAST_CODE(abuf, idesc) \
   do { (abuf)->semantic.sem_case = (idesc)->num; } while (0)
 #endif
@@ -184,7 +169,21 @@ do { \
 /* Return pointer to ARGBUF given ptr to SCACHE.  */
 #define SEM_ARGBUF(sem_arg) (& (sem_arg) -> argbuf)
 
+/* There are several styles of engines, all generally supported by the
+   same code:
+
+   WITH_SCACHE && WITH_SCACHE_PBB - pseudo-basic-block scaching
+   WITH_SCACHE && !WITH_SCACHE_PBB - scaching on an insn by insn basis
+   !WITH_SCACHE - simple engine: fetch an insn, execute an insn
+
+   ??? The !WITH_SCACHE case can also be broken up into two flavours:
+   extract the fields of the insn into an ARGBUF struct, or defer the
+   extraction to the semantic handler.  The WITH_SCACHE case always
+   extracts the fields into an ARGBUF struct.  */
+
 #if WITH_SCACHE
+
+#define CIA_ADDR(cia) (cia)
 
 #if WITH_SCACHE_PBB
 
@@ -277,6 +276,8 @@ do { \
 #else /* ! WITH_SCACHE */
 
 /* This is the "simple" engine case.  */
+
+#define CIA_ADDR(cia) (cia)
 
 #define SEM_SEM_ARG(vpc, sc) (sc)
 

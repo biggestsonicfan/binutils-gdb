@@ -1,12 +1,13 @@
+
 /* Main header for the m32r.  */
 
 #ifndef SIM_MAIN_H
 #define SIM_MAIN_H
 
-/* This is a global setting.  Different cpu families can't mix-n-match -scache
-   and -pbb.  However some cpu families may use -simple while others use
-   one of -scache/-pbb.  */
-#define WITH_SCACHE_PBB 1
+#define USING_SIM_BASE_H /* FIXME: quick hack */
+
+struct _sim_cpu; /* FIXME: should be in sim-basics.h */
+typedef struct _sim_cpu SIM_CPU;
 
 #include "symcat.h"
 #include "sim-basics.h"
@@ -14,6 +15,23 @@
 #include "m32r-desc.h"
 #include "m32r-opc.h"
 #include "arch.h"
+
+/* These must be defined before sim-base.h.  */
+typedef USI sim_cia;
+
+#define CIA_GET(cpu)     CPU_PC_GET (cpu)
+#define CIA_SET(cpu,val) CPU_PC_SET ((cpu), (val))
+
+#define SIM_ENGINE_HALT_HOOK(sd, cpu, cia) \
+do { \
+  if (cpu) /* null if ctrl-c */ \
+    sim_pc_set ((cpu), (cia)); \
+} while (0)
+#define SIM_ENGINE_RESTART_HOOK(sd, cpu, cia) \
+do { \
+  sim_pc_set ((cpu), (cia)); \
+} while (0)
+
 #include "sim-base.h"
 #include "cgen-sim.h"
 #include "m32r-sim.h"
@@ -40,18 +58,16 @@ struct _sim_cpu {
      go after here.  Oh for a better language.  */
 #if defined (WANT_CPU_M32RBF)
   M32RBF_CPU_DATA cpu_data;
-#endif
-#if defined (WANT_CPU_M32RXF)
+#elif defined (WANT_CPU_M32RXF)
   M32RXF_CPU_DATA cpu_data;
-#elif defined (WANT_CPU_M32R2F)
-  M32R2F_CPU_DATA cpu_data;
 #endif
 };
 
 /* The sim_state struct.  */
 
 struct sim_state {
-  sim_cpu *cpu[MAX_NR_PROCESSORS];
+  sim_cpu *cpu;
+#define STATE_CPU(sd, n) (/*&*/ (sd)->cpu)
 
   CGEN_STATE cgen_state;
 
@@ -67,10 +83,6 @@ m32r_core_signal ((SD), (CPU), (CIA), (MAP), (NR_BYTES), (ADDR), \
 		  (TRANSFER), (ERROR))
 
 /* Default memory size.  */
-#ifdef M32R_LINUX
-#define M32R_DEFAULT_MEM_SIZE 0x2000000 /* 32M */
-#else
 #define M32R_DEFAULT_MEM_SIZE 0x800000 /* 8M */
-#endif
 
 #endif /* SIM_MAIN_H */

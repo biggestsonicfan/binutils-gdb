@@ -1,5 +1,5 @@
 /* tc-cris.c -- Assembler code for the CRIS CPU core.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001 Free Software Foundation, Inc.
 
    Contributed by Axis Communications AB, Lund, Sweden.
    Originally written for GAS 1.38.1 by Mikael Asker.
@@ -9,7 +9,7 @@
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -19,9 +19,10 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Free Software Foundation, 59 Temple Place - Suite 330, Boston,
+   MA 02111-1307, USA.  */
 
+#include <stdio.h>
 #include "as.h"
 #include "safe-ctype.h"
 #include "subsegs.h"
@@ -42,22 +43,15 @@
 #define SYNTAX_USER_SYM_NO_LEADING_UNDERSCORE "no_leading_underscore"
 #define REGISTER_PREFIX_CHAR '$'
 
-/* True for expressions where getting X_add_symbol and X_add_number is
-   enough to get the "base" and "offset"; no need to make_expr_symbol.
-   It's not enough to check if X_op_symbol is NULL; that misses unary
-   operations like O_uminus.  */
-#define SIMPLE_EXPR(EXP) \
- ((EXP)->X_op == O_constant || (EXP)->X_op == O_symbol)
-
 /* Like in ":GOT", ":GOTOFF" etc.  Other ports use '@', but that's in
    line_separator_chars for CRIS, so we avoid it.  */
-#define RELOC_SUFFIX_CHAR ':'
+#define PIC_SUFFIX_CHAR ':'
 
 /* This might be CRIS_INSN_NONE if we're assembling a prefix-insn only.
    Note that some prefix-insns might be assembled as CRIS_INSN_NORMAL.  */
 enum cris_insn_kind
 {
-  CRIS_INSN_NORMAL, CRIS_INSN_NONE, CRIS_INSN_BRANCH, CRIS_INSN_MUL
+  CRIS_INSN_NORMAL, CRIS_INSN_NONE, CRIS_INSN_BRANCH
 };
 
 /* An instruction will have one of these prefixes.
@@ -81,7 +75,7 @@ struct cris_prefix
   expressionS expr;
 
   /* If there's an expression, we might need a relocation.  Here's the
-     type of what relocation to start relaxation with.
+     type of what relocation to start relaxaton with.
      The relocation is assumed to start immediately after the prefix insn,
      so we don't provide an offset.  */
   enum bfd_reloc_code_real reloc;
@@ -112,104 +106,69 @@ struct cris_instruction
   int imm_oprnd_size;
 };
 
-enum cris_archs
-{
-  arch_cris_unknown,
-  arch_crisv0, arch_crisv3, arch_crisv8, arch_crisv10,
-  arch_cris_any_v0_v10, arch_crisv32, arch_cris_common_v10_v32
-};
-
-static enum cris_archs cris_arch_from_string (const char **);
-static int cris_insn_ver_valid_for_arch (enum cris_insn_version_usage,
-					 enum cris_archs);
-
-static void cris_process_instruction (char *, struct cris_instruction *,
-				      struct cris_prefix *);
-static int get_bwd_size_modifier (char **, int *);
-static int get_bw_size_modifier (char **, int *);
-static int get_gen_reg (char **, int *);
-static int get_spec_reg (char **, const struct cris_spec_reg **);
-static int get_sup_reg (char **, int *);
-static int get_autoinc_prefix_or_indir_op (char **, struct cris_prefix *,
-					   int *, int *, int *,
-					   expressionS *);
-static int get_3op_or_dip_prefix_op (char **, struct cris_prefix *);
-static int cris_get_expression (char **, expressionS *);
-static int get_flags (char **, int *);
-static void gen_bdap (int, expressionS *);
-static int branch_disp (int);
-static void gen_cond_branch_32 (char *, char *, fragS *, symbolS *, symbolS *,
-				long int);
-static void cris_number_to_imm (char *, long, int, fixS *, segT);
-static void s_syntax (int);
-static void s_cris_file (int);
-static void s_cris_loc (int);
-static void s_cris_arch (int);
-static void s_cris_dtpoff (int);
+static void cris_process_instruction PARAMS ((char *,
+					      struct cris_instruction *,
+					      struct cris_prefix *));
+static int get_bwd_size_modifier PARAMS ((char **, int *));
+static int get_bw_size_modifier PARAMS ((char **, int *));
+static int get_gen_reg PARAMS ((char **, int *));
+static int get_spec_reg PARAMS ((char **,
+				 const struct cris_spec_reg **));
+static int get_autoinc_prefix_or_indir_op PARAMS ((char **,
+						   struct cris_prefix *,
+						   int *, int *, int *,
+						   expressionS *));
+static int get_3op_or_dip_prefix_op PARAMS ((char **,
+					     struct cris_prefix *));
+static int cris_get_expression PARAMS ((char **, expressionS *));
+static int get_flags PARAMS ((char **, int *));
+static void gen_bdap PARAMS ((int, expressionS *));
+static int branch_disp PARAMS ((int));
+static void gen_cond_branch_32 PARAMS ((char *, char *, fragS *,
+					symbolS *, symbolS *, long int));
+static void cris_number_to_imm PARAMS ((char *, long, int, fixS *, segT));
+static void cris_create_short_jump PARAMS ((char *, addressT, addressT,
+					    fragS *, symbolS *));
+static void s_syntax PARAMS ((int));
+static void s_cris_file PARAMS ((int));
+static void s_cris_loc PARAMS ((int));
 
 /* Get ":GOT", ":GOTOFF", ":PLT" etc. suffixes.  */
-static void cris_get_reloc_suffix (char **, bfd_reloc_code_real_type *,
-				   expressionS *);
-static unsigned int cris_get_specified_reloc_size (bfd_reloc_code_real_type);
+static void cris_get_pic_suffix PARAMS ((char **,
+					 bfd_reloc_code_real_type *,
+					 expressionS *));
+static unsigned int cris_get_pic_reloc_size
+  PARAMS ((bfd_reloc_code_real_type));
 
 /* All the .syntax functions.  */
-static void cris_force_reg_prefix (void);
-static void cris_relax_reg_prefix (void);
-static void cris_sym_leading_underscore (void);
-static void cris_sym_no_leading_underscore (void);
-static char *cris_insn_first_word_frag (void);
+static void cris_force_reg_prefix PARAMS ((void));
+static void cris_relax_reg_prefix PARAMS ((void));
+static void cris_sym_leading_underscore PARAMS ((void));
+static void cris_sym_no_leading_underscore PARAMS ((void));
+static char *cris_insn_first_word_frag PARAMS ((void));
 
 /* Handle to the opcode hash table.  */
 static struct hash_control *op_hash = NULL;
 
-/* If we target cris-axis-linux-gnu (as opposed to generic cris-axis-elf),
-   we default to no underscore and required register-prefixes.  The
-   difference is in the default values.  */
-#ifdef TE_LINUX
-#define DEFAULT_CRIS_AXIS_LINUX_GNU TRUE
-#else
-#define DEFAULT_CRIS_AXIS_LINUX_GNU FALSE
-#endif
-
 /* Whether we demand that registers have a `$' prefix.  Default here.  */
-static bfd_boolean demand_register_prefix = DEFAULT_CRIS_AXIS_LINUX_GNU;
+static boolean demand_register_prefix = false;
 
 /* Whether global user symbols have a leading underscore.  Default here.  */
-static bfd_boolean symbols_have_leading_underscore
-  = !DEFAULT_CRIS_AXIS_LINUX_GNU;
+static boolean symbols_have_leading_underscore = true;
 
 /* Whether or not we allow PIC, and expand to PIC-friendly constructs.  */
-static bfd_boolean pic = FALSE;
-
-/* Whether or not we allow TLS suffixes.  For the moment, we always do.  */
-static const bfd_boolean tls = TRUE;
-
-/* If we're configured for "cris", default to allow all v0..v10
-   instructions and register names.  */
-#ifndef DEFAULT_CRIS_ARCH
-#define DEFAULT_CRIS_ARCH cris_any_v0_v10
-#endif
-
-/* No whitespace in the CONCAT2 parameter list.  */
-static enum cris_archs cris_arch = XCONCAT2 (arch_,DEFAULT_CRIS_ARCH);
+static boolean pic = false;
 
 const pseudo_typeS md_pseudo_table[] =
 {
   {"dword", cons, 4},
-  {"dtpoffd", s_cris_dtpoff, 4},
   {"syntax", s_syntax, 0},
   {"file", s_cris_file, 0},
   {"loc", s_cris_loc, 0},
-  {"arch", s_cris_arch, 0},
   {NULL, 0, 0}
 };
 
 static int warn_for_branch_expansion = 0;
-
-/* Whether to emit error when a MULS/MULU could be located last on a
-   cache-line.  */
-static int err_for_dangerous_mul_placement
- = (XCONCAT2 (arch_,DEFAULT_CRIS_ARCH) != arch_crisv32);
 
 const char cris_comment_chars[] = ";";
 
@@ -234,42 +193,19 @@ const char FLT_CHARS[] = "";
       ---/ /--+-----------------+-----------------+-----------------+
 
    The "how long" bits are 00 = byte, 01 = word, 10 = dword (long).
+   This is a Un*x convention.
    Not all lengths are legit for a given value of (what state).
 
    Groups for CRIS address relaxing:
 
-   1. Bcc (pre-V32)
+   1. Bcc
       length: byte, word, 10-byte expansion
 
    2. BDAP
-      length: byte, word, dword
+      length: byte, word, dword  */
 
-   3. MULS/MULU
-      Not really a relaxation (no infrastructure to get delay-slots
-      right), just an alignment and placement checker for the v10
-      multiply/cache-bug.
-
-   4. Bcc (V32 and later)
-      length: byte, word, 14-byte expansion
-
-   5. Bcc (V10+V32)
-      length: byte, word, error
-
-   6. BA (V32)
-      length: byte, word, dword
-
-   7. LAPC (V32)
-      length: byte, dword
-  */
-
-#define STATE_COND_BRANCH           (1)
+#define STATE_CONDITIONAL_BRANCH    (1)
 #define STATE_BASE_PLUS_DISP_PREFIX (2)
-#define STATE_MUL		    (3)
-#define STATE_COND_BRANCH_V32       (4)
-#define STATE_COND_BRANCH_COMMON    (5)
-#define STATE_ABS_BRANCH_V32	    (6)
-#define STATE_LAPC		    (7)
-#define STATE_COND_BRANCH_PIC       (8)
 
 #define STATE_LENGTH_MASK	    (3)
 #define STATE_BYTE		    (0)
@@ -279,18 +215,14 @@ const char FLT_CHARS[] = "";
 #define STATE_UNDF		    (3)
 #define STATE_MAX_LENGTH	    (3)
 
-/* These displacements are relative to the address following the opcode
+/* These displacements are relative to the adress following the opcode
    word of the instruction.  The first letter is Byte, Word.  The 2nd
    letter is Forward, Backward.  */
 
 #define BRANCH_BF ( 254)
 #define BRANCH_BB (-256)
-#define BRANCH_BF_V32 ( 252)
-#define BRANCH_BB_V32 (-258)
 #define BRANCH_WF (2 +  32767)
 #define BRANCH_WB (2 + -32768)
-#define BRANCH_WF_V32 (-2 + 32767)
-#define BRANCH_WB_V32 (-2 + -32768)
 
 #define BDAP_BF	  ( 127)
 #define BDAP_BB	  (-128)
@@ -333,105 +265,32 @@ const relax_typeS md_cris_relax_table[] =
   {BDAP_WF,   BDAP_WB,	 2,  ENCODE_RELAX (2, 2)},
 
   /* BDAP.d [PC+] (2, 2).  */
-  {0,	      0,	 4,  0},
-
-  /* Unused (2, 3).  */
-  {1,	      1,	 0,  0},
-
-  /* MULS/MULU (3, 0).  Positions (3, 1..3) are unused.  */
-  {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0},
-
-  /* V32: Bcc o (4, 0).  */
-  {BRANCH_BF_V32, BRANCH_BB_V32, 0,  ENCODE_RELAX (4, 1)},
-
-  /* V32: Bcc [PC+] (4, 1).  */
-  {BRANCH_WF_V32, BRANCH_WB_V32, 2,  ENCODE_RELAX (4, 2)},
-
-  /* V32: BA .+12; NOP; BA32 target; NOP; Bcc .-6  (4, 2).  */
-  {0,	      0,	 12, 0},
-
-  /* Unused (4, 3).  */
-  {1,	      1,	 0,  0},
-
-  /* COMMON: Bcc o (5, 0).  The offsets are calculated as for v32.  Code
-     should contain two nop insns (or four if offset size is large or
-     unknown) after every label.  */
-  {BRANCH_BF_V32, BRANCH_BB_V32, 0,  ENCODE_RELAX (5, 1)},
-
-  /* COMMON: Bcc [PC+] (5, 1).  */
-  {BRANCH_WF_V32, BRANCH_WB_V32, 2,  ENCODE_RELAX (5, 2)},
-
-  /* COMMON: FIXME: ???.  Treat as error currently.  */
-  {0,	      0,	 12, 0},
-
-  /* Unused (5, 3).  */
-  {1,	      1,	 0,  0},
-
-  /* V32: BA o (6, 0).  */
-  {BRANCH_BF_V32, BRANCH_BB_V32, 0,  ENCODE_RELAX (6, 1)},
-
-  /* V32: BA.W (6, 1).  */
-  {BRANCH_WF_V32, BRANCH_WB_V32, 2,  ENCODE_RELAX (6, 2)},
-
-  /* V32: BA.D (6, 2).  */
-  {0,	      0,	 4, 0},
-
-  /* Unused (6, 3).  */
-  {1,	      1,	 0,  0},
-
-  /* LAPC: LAPCQ .+0..15*2,Rn  (7, 0).  */
-  {14*2,   -1*2,	 0,  ENCODE_RELAX (7, 2)},
-
-  /* Unused (7, 1).
-     While there's a shorter sequence, e.g. LAPCQ + an ADDQ or SUBQ,
-     that would affect flags, so we can't do that as it wouldn't be a
-     proper insn expansion of LAPCQ.  This row is associated with a
-     2-byte expansion, so it's unused rather than the next.  */
-  {1,	      1,	 0,  0},
-
-  /* LAPC: LAPC.D (7, 2).  */
-  {0,	      0,	 4, 0},
-
-  /* Unused (7, 3).  */
-  {1,	      1,	 0,  0},
-
-  /* PIC for pre-v32: Bcc o (8, 0).  */
-  {BRANCH_BF, BRANCH_BB, 0,  ENCODE_RELAX (STATE_COND_BRANCH_PIC, 1)},
-
-  /* Bcc [PC+] (8, 1).  */
-  {BRANCH_WF, BRANCH_WB, 2,  ENCODE_RELAX (STATE_COND_BRANCH_PIC, 2)},
-
-  /* 32-bit expansion, PIC (8, 2).  */
-  {0,	      0,	 12, 0},
-
-  /* Unused (8, 3).  */
-  {1,	      1,	 0,  0}
+  {0,	      0,	 4,  0}
 };
 
+#undef BRANCH_BF
+#undef BRANCH_BB
+#undef BRANCH_WF
+#undef BRANCH_WB
 #undef BDAP_BF
 #undef BDAP_BB
 #undef BDAP_WF
 #undef BDAP_WB
 
-/* Target-specific multicharacter options, not const-declared.  */
+/* Target-specific multicharacter options, not const-declared at usage
+   in 2.9.1 and CVS of 2000-02-16.  */
 struct option md_longopts[] =
 {
 #define OPTION_NO_US (OPTION_MD_BASE + 0)
   {"no-underscore", no_argument, NULL, OPTION_NO_US},
 #define OPTION_US (OPTION_MD_BASE + 1)
   {"underscore", no_argument, NULL, OPTION_US},
-#define OPTION_PIC (OPTION_US + 1)
+#define OPTION_PIC (OPTION_MD_BASE + 2)
   {"pic", no_argument, NULL, OPTION_PIC},
-#define OPTION_MULBUG_ABORT_ON (OPTION_PIC + 1)
-  {"mul-bug-abort", no_argument, NULL, OPTION_MULBUG_ABORT_ON},
-#define OPTION_MULBUG_ABORT_OFF (OPTION_MULBUG_ABORT_ON + 1)
-  {"no-mul-bug-abort", no_argument, NULL, OPTION_MULBUG_ABORT_OFF},
-#define OPTION_ARCH (OPTION_MULBUG_ABORT_OFF + 1)
-  {"march", required_argument, NULL, OPTION_ARCH},
   {NULL, no_argument, NULL, 0}
 };
 
-/* Not const-declared.  */
+/* Not const-declared at usage in 2.9.1.  */
 size_t md_longopts_size = sizeof (md_longopts);
 const char *md_shortopts = "hHN";
 
@@ -445,22 +304,15 @@ const char *md_shortopts = "hHN";
    Note that we can't add relocs, because relaxation uses these fixed
    numbers, and md_create_short_jump is called after relaxation.  */
 
-int md_short_jump_size = 6;
-
-/* The v32 version has a delay-slot, hence two bytes longer.
-   The pre-v32 PIC version uses a prefixed insn.  */
-#define cris_any_v0_v10_long_jump_size 6
-#define cris_any_v0_v10_long_jump_size_pic 8
-#define crisv32_long_jump_size 8
-
-int md_long_jump_size = XCONCAT2 (DEFAULT_CRIS_ARCH,_long_jump_size);
+const int md_short_jump_size = 6;
+const int md_long_jump_size = 6;
 
 /* Report output format.  Small changes in output format (like elf
    variants below) can happen until all options are parsed, but after
    that, the output format must remain fixed.  */
 
 const char *
-cris_target_format (void)
+cris_target_format ()
 {
   switch (OUTPUT_FLAVOR)
     {
@@ -478,135 +330,6 @@ cris_target_format (void)
     }
 }
 
-/* Return a bfd_mach_cris... value corresponding to the value of
-   cris_arch.  */
-
-unsigned int
-cris_mach (void)
-{
-  unsigned int retval = 0;
-
-  switch (cris_arch)
-    {
-    case arch_cris_common_v10_v32:
-      retval = bfd_mach_cris_v10_v32;
-      break;
-
-    case arch_crisv32:
-      retval = bfd_mach_cris_v32;
-      break;
-
-    case arch_crisv10:
-    case arch_cris_any_v0_v10:
-      retval = bfd_mach_cris_v0_v10;
-      break;
-
-    default:
-      BAD_CASE (cris_arch);
-    }
-
-  return retval;
-}
-
-/* We need a port-specific relaxation function to cope with sym2 - sym1
-   relative expressions with both symbols in the same segment (but not
-   necessarily in the same frag as this insn), for example:
-     move.d [pc+sym2-(sym1-2)],r10
-    sym1:
-   The offset can be 8, 16 or 32 bits long.  */
-
-long
-cris_relax_frag (segT seg ATTRIBUTE_UNUSED, fragS *fragP,
-		 long stretch ATTRIBUTE_UNUSED)
-{
-  long growth;
-  offsetT aim = 0;
-  symbolS *symbolP;
-  const relax_typeS *this_type;
-  const relax_typeS *start_type;
-  relax_substateT next_state;
-  relax_substateT this_state;
-  const relax_typeS *table = TC_GENERIC_RELAX_TABLE;
-
-  /* We only have to cope with frags as prepared by
-     md_estimate_size_before_relax.  The dword cases may get here
-     because of the different reasons that they aren't relaxable.  */
-  switch (fragP->fr_subtype)
-    {
-    case ENCODE_RELAX (STATE_COND_BRANCH_PIC, STATE_DWORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH, STATE_DWORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_V32, STATE_DWORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_COMMON, STATE_DWORD):
-    case ENCODE_RELAX (STATE_ABS_BRANCH_V32, STATE_DWORD):
-    case ENCODE_RELAX (STATE_LAPC, STATE_DWORD):
-    case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_DWORD):
-      /* When we get to these states, the frag won't grow any more.  */
-      return 0;
-
-    case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_WORD):
-    case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_BYTE):
-      if (fragP->fr_symbol == NULL
-	  || S_GET_SEGMENT (fragP->fr_symbol) != absolute_section)
-	as_fatal (_("internal inconsistency problem in %s: fr_symbol %lx"),
-		  __FUNCTION__, (long) fragP->fr_symbol);
-      symbolP = fragP->fr_symbol;
-      if (symbol_resolved_p (symbolP))
-	as_fatal (_("internal inconsistency problem in %s: resolved symbol"),
-		  __FUNCTION__);
-      aim = S_GET_VALUE (symbolP);
-      break;
-
-    case ENCODE_RELAX (STATE_MUL, STATE_BYTE):
-      /* Nothing to do here.  */
-      return 0;
-
-    default:
-      as_fatal (_("internal inconsistency problem in %s: fr_subtype %d"),
-		  __FUNCTION__, fragP->fr_subtype);
-    }
-
-  /* The rest is stolen from relax_frag.  There's no obvious way to
-     share the code, but fortunately no requirement to keep in sync as
-     long as fragP->fr_symbol does not have its segment changed.  */
-
-  this_state = fragP->fr_subtype;
-  start_type = this_type = table + this_state;
-
-  if (aim < 0)
-    {
-      /* Look backwards.  */
-      for (next_state = this_type->rlx_more; next_state;)
-	if (aim >= this_type->rlx_backward)
-	  next_state = 0;
-	else
-	  {
-	    /* Grow to next state.  */
-	    this_state = next_state;
-	    this_type = table + this_state;
-	    next_state = this_type->rlx_more;
-	  }
-    }
-  else
-    {
-      /* Look forwards.  */
-      for (next_state = this_type->rlx_more; next_state;)
-	if (aim <= this_type->rlx_forward)
-	  next_state = 0;
-	else
-	  {
-	    /* Grow to next state.  */
-	    this_state = next_state;
-	    this_type = table + this_state;
-	    next_state = this_type->rlx_more;
-	  }
-    }
-
-  growth = this_type->rlx_length - start_type->rlx_length;
-  if (growth != 0)
-    fragP->fr_subtype = this_state;
-  return growth;
-}
-
 /* Prepare machine-dependent frags for relaxation.
 
    Called just before relaxation starts. Any symbol that is now undefined
@@ -622,67 +345,27 @@ cris_relax_frag (segT seg ATTRIBUTE_UNUSED, fragS *fragP,
    fr_var starts with a value.  */
 
 int
-md_estimate_size_before_relax (fragS *fragP, segT segment_type)
+md_estimate_size_before_relax (fragP, segment_type)
+     fragS *fragP;
+     /* The segment is either N_DATA or N_TEXT.  */
+     segT segment_type;
 {
   int old_fr_fix;
-  symbolS *symbolP = fragP->fr_symbol;
-
-#define HANDLE_RELAXABLE(state)						\
-    case ENCODE_RELAX (state, STATE_UNDF):				\
-      if (symbolP != NULL						\
-	  && S_GET_SEGMENT (symbolP) == segment_type			\
-	  && !S_IS_WEAK (symbolP))					\
-	/* The symbol lies in the same segment - a relaxable		\
-	   case.  */							\
-	fragP->fr_subtype						\
-	  = ENCODE_RELAX (state, STATE_BYTE);				\
-      else								\
-	/* Unknown or not the same segment, so not relaxable.  */	\
-	fragP->fr_subtype						\
-	  = ENCODE_RELAX (state, STATE_DWORD);				\
-      fragP->fr_var							\
-	= md_cris_relax_table[fragP->fr_subtype].rlx_length;		\
-      break
 
   old_fr_fix = fragP->fr_fix;
 
   switch (fragP->fr_subtype)
     {
-      HANDLE_RELAXABLE (STATE_COND_BRANCH);
-      HANDLE_RELAXABLE (STATE_COND_BRANCH_V32);
-      HANDLE_RELAXABLE (STATE_COND_BRANCH_COMMON);
-      HANDLE_RELAXABLE (STATE_COND_BRANCH_PIC);
-      HANDLE_RELAXABLE (STATE_ABS_BRANCH_V32);
-
-    case ENCODE_RELAX (STATE_LAPC, STATE_UNDF):
-      if (symbolP != NULL
-	  && S_GET_SEGMENT (symbolP) == segment_type
-	  && !S_IS_WEAK (symbolP))
-	{
-	  /* The symbol lies in the same segment - a relaxable case.
-	     Check if we currently have an odd offset; we can't code
-	     that into the instruction.  Relaxing presumably only cause
-	     multiple-of-two changes, so we should only need to adjust
-	     for that here.  */
-	  bfd_vma target_address
-	    = (symbolP
-	       ? S_GET_VALUE (symbolP)
-	       : 0) + fragP->fr_offset;
-	  bfd_vma var_part_offset = fragP->fr_fix;
-	  bfd_vma address_of_var_part = fragP->fr_address + var_part_offset;
-	  long offset = target_address - (address_of_var_part - 2);
-
-	  fragP->fr_subtype
-	    = (offset & 1)
-	    ? ENCODE_RELAX (STATE_LAPC, STATE_DWORD)
-	    : ENCODE_RELAX (STATE_LAPC, STATE_BYTE);
-	}
+    case ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_UNDF):
+      if (S_GET_SEGMENT (fragP->fr_symbol) == segment_type)
+	/* The symbol lies in the same segment - a relaxable case.  */
+	fragP->fr_subtype
+	  = ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_BYTE);
       else
 	/* Unknown or not the same segment, so not relaxable.  */
 	fragP->fr_subtype
-	  = ENCODE_RELAX (STATE_LAPC, STATE_DWORD);
-      fragP->fr_var
-	= md_cris_relax_table[fragP->fr_subtype].rlx_length;
+	  = ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_DWORD);
+      fragP->fr_var = md_cris_relax_table[fragP->fr_subtype].rlx_length;
       break;
 
     case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_UNDF):
@@ -696,30 +379,18 @@ md_estimate_size_before_relax (fragS *fragP, segT segment_type)
 	 would in general be no shorter or faster code, only more
 	 complicated.  */
 
-      if (S_GET_SEGMENT (symbolP) != absolute_section)
+      if (S_GET_SEGMENT (fragP->fr_symbol) != absolute_section)
 	{
 	  /* Go for dword if not absolute or same segment.  */
 	  fragP->fr_subtype
 	    = ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_DWORD);
 	  fragP->fr_var = md_cris_relax_table[fragP->fr_subtype].rlx_length;
 	}
-      else if (!symbol_resolved_p (fragP->fr_symbol))
-	{
-	  /* The symbol will eventually be completely resolved as an
-	     absolute expression, but right now it depends on the result
-	     of relaxation and we don't know anything else about the
-	     value.  We start relaxation with the assumption that it'll
-	     fit in a byte.  */
-	  fragP->fr_subtype
-	    = ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_BYTE);
-	  fragP->fr_var = md_cris_relax_table[fragP->fr_subtype].rlx_length;
-	}
       else
 	{
 	  /* Absolute expression.  */
 	  long int value;
-	  value = (symbolP != NULL
-		   ? S_GET_VALUE (symbolP) : 0) + fragP->fr_offset;
+	  value = S_GET_VALUE (fragP->fr_symbol) + fragP->fr_offset;
 
 	  if (value >= -128 && value <= 127)
 	    {
@@ -756,33 +427,15 @@ md_estimate_size_before_relax (fragS *fragP, segT segment_type)
 	}
       break;
 
-    case ENCODE_RELAX (STATE_COND_BRANCH, STATE_BYTE):
-    case ENCODE_RELAX (STATE_COND_BRANCH, STATE_WORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH, STATE_DWORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_PIC, STATE_BYTE):
-    case ENCODE_RELAX (STATE_COND_BRANCH_PIC, STATE_WORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_PIC, STATE_DWORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_V32, STATE_BYTE):
-    case ENCODE_RELAX (STATE_COND_BRANCH_V32, STATE_WORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_V32, STATE_DWORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_COMMON, STATE_BYTE):
-    case ENCODE_RELAX (STATE_COND_BRANCH_COMMON, STATE_WORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_COMMON, STATE_DWORD):
-    case ENCODE_RELAX (STATE_ABS_BRANCH_V32, STATE_BYTE):
-    case ENCODE_RELAX (STATE_ABS_BRANCH_V32, STATE_WORD):
-    case ENCODE_RELAX (STATE_ABS_BRANCH_V32, STATE_DWORD):
-    case ENCODE_RELAX (STATE_LAPC, STATE_BYTE):
-    case ENCODE_RELAX (STATE_LAPC, STATE_DWORD):
+    case ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_BYTE):
+    case ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_WORD):
+    case ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_DWORD):
     case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_BYTE):
     case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_WORD):
     case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_DWORD):
       /* When relaxing a section for the second time, we don't need to
 	 do anything except making sure that fr_var is set right.  */
       fragP->fr_var = md_cris_relax_table[fragP->fr_subtype].rlx_length;
-      break;
-
-    case ENCODE_RELAX (STATE_MUL, STATE_BYTE):
-      /* Nothing to do here.  */
       break;
 
     default:
@@ -803,8 +456,10 @@ md_estimate_size_before_relax (fragS *fragP, segT segment_type)
    The caller will turn the frag into a ".space 0".  */
 
 void
-md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED, segT sec ATTRIBUTE_UNUSED,
-		 fragS *fragP)
+md_convert_frag (abfd, sec, fragP)
+     bfd *abfd ATTRIBUTE_UNUSED;
+     segT sec ATTRIBUTE_UNUSED;
+     fragS *fragP;
 {
   /* Pointer to first byte in variable-sized part of the frag.  */
   char *var_partp;
@@ -814,7 +469,7 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED, segT sec ATTRIBUTE_UNUSED,
 
   /* Used to check integrity of the relaxation.
      One of 2 = long, 1 = word, or 0 = byte.  */
-  int length_code ATTRIBUTE_UNUSED;
+  int length_code;
 
   /* Size in bytes of variable-sized part of frag.  */
   int var_part_size = 0;
@@ -845,37 +500,24 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED, segT sec ATTRIBUTE_UNUSED,
 
   switch (fragP->fr_subtype)
     {
-    case ENCODE_RELAX (STATE_COND_BRANCH, STATE_BYTE):
-    case ENCODE_RELAX (STATE_COND_BRANCH_PIC, STATE_BYTE):
-    case ENCODE_RELAX (STATE_COND_BRANCH_V32, STATE_BYTE):
-    case ENCODE_RELAX (STATE_COND_BRANCH_COMMON, STATE_BYTE):
-    case ENCODE_RELAX (STATE_ABS_BRANCH_V32, STATE_BYTE):
+    case ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_BYTE):
       opcodep[0] = branch_disp ((target_address - address_of_var_part));
       var_part_size = 0;
       break;
 
-    case ENCODE_RELAX (STATE_COND_BRANCH, STATE_WORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_PIC, STATE_WORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_V32, STATE_WORD):
-    case ENCODE_RELAX (STATE_COND_BRANCH_COMMON, STATE_WORD):
-    case ENCODE_RELAX (STATE_ABS_BRANCH_V32, STATE_WORD):
+    case ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_WORD):
       /* We had a quick immediate branch, now turn it into a word one i.e. a
 	 PC autoincrement.  */
       opcodep[0] = BRANCH_PC_LOW;
       opcodep[1] &= 0xF0;
       opcodep[1] |= BRANCH_INCR_HIGH;
       md_number_to_chars (var_partp,
-			  (long)
-			  (target_address
-			   - (address_of_var_part
-			      + (cris_arch == arch_crisv32
-				 || cris_arch == arch_cris_common_v10_v32
-				 ? -2 : 2))),
+			  (long) (target_address - (address_of_var_part + 2)),
 			  2);
       var_part_size = 2;
       break;
 
-    case ENCODE_RELAX (STATE_COND_BRANCH, STATE_DWORD):
+    case ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, STATE_DWORD):
       gen_cond_branch_32 (fragP->fr_opcode, var_partp, fragP,
 			  fragP->fr_symbol, (symbolS *) NULL,
 			  fragP->fr_offset);
@@ -883,87 +525,8 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED, segT sec ATTRIBUTE_UNUSED,
       var_part_size = 2 + 2 + 4 + 2;
       break;
 
-    case ENCODE_RELAX (STATE_COND_BRANCH_PIC, STATE_DWORD):
-      gen_cond_branch_32 (fragP->fr_opcode, var_partp, fragP,
-			  fragP->fr_symbol, (symbolS *) NULL,
-			  fragP->fr_offset);
-      /* Twelve bytes added: a branch, nop and a pic-branch-32.  */
-      var_part_size = 2 + 2 + 4 + 2 + 2;
-      break;
-
-    case ENCODE_RELAX (STATE_COND_BRANCH_V32, STATE_DWORD):
-      gen_cond_branch_32 (fragP->fr_opcode, var_partp, fragP,
-			  fragP->fr_symbol, (symbolS *) NULL,
-			  fragP->fr_offset);
-      /* Twelve bytes added: a branch, nop and another branch and nop.  */
-      var_part_size = 2 + 2 + 2 + 4 + 2;
-      break;
-
-    case ENCODE_RELAX (STATE_COND_BRANCH_COMMON, STATE_DWORD):
-      as_bad_where (fragP->fr_file, fragP->fr_line,
-		    _("Relaxation to long branches for .arch common_v10_v32\
- not implemented"));
-      /* Pretend we have twelve bytes for sake of quelling further
-         errors.  */
-      var_part_size = 2 + 2 + 2 + 4 + 2;
-      break;
-
-    case ENCODE_RELAX (STATE_ABS_BRANCH_V32, STATE_DWORD):
-      /* We had a quick immediate branch or a word immediate ba.  Now
-	 turn it into a dword one.  */
-      opcodep[0] = BA_DWORD_OPCODE & 255;
-      opcodep[1] = (BA_DWORD_OPCODE >> 8) & 255;
-      fix_new (fragP, var_partp - fragP->fr_literal, 4, symbolP,
-	       fragP->fr_offset + 6, 1, BFD_RELOC_32_PCREL);
-      var_part_size = 4;
-      break;
-
-    case ENCODE_RELAX (STATE_LAPC, STATE_BYTE):
-      {
-	long offset = target_address - (address_of_var_part - 2);
-
-	/* This is mostly a sanity check; useful occurrences (if there
-	   really are any) should have been caught in
-	   md_estimate_size_before_relax.  We can (at least
-	   theoretically) stumble over invalid code with odd sizes and
-	   .p2aligns within the code, so emit an error if that happens.
-	   (The generic relaxation machinery is not fit to check this.)  */
-
-	if (offset & 1)
-	  as_bad_where (fragP->fr_file, fragP->fr_line,
-		    _("Complicated LAPC target operand is not\
- a multiple of two.  Use LAPC.D"));
-
-	/* FIXME: This *is* a sanity check.  Remove when done with.  */
-	if (offset > 15*2 || offset < 0)
-	  as_fatal (_("Internal error found in md_convert_frag: offset %ld.\
-  Please report this."),
-		    offset);
-
-	opcodep[0] |= (offset / 2) & 0xf;
-	var_part_size = 0;
-      }
-      break;
-
-    case ENCODE_RELAX (STATE_LAPC, STATE_DWORD):
-      {
-	md_number_to_chars (opcodep,
-			    LAPC_DWORD_OPCODE + (opcodep[1] & 0xf0) * 256,
-			    2);
-	/* Remember that the reloc is against the position *after* the
-	   relocated contents, so we need to adjust to the start of
-	   the insn.  */
-	fix_new (fragP, var_partp - fragP->fr_literal, 4, fragP->fr_symbol,
-		 fragP->fr_offset + 6, 1, BFD_RELOC_32_PCREL);
-	var_part_size = 4;
-      }
-      break;
-
     case ENCODE_RELAX (STATE_BASE_PLUS_DISP_PREFIX, STATE_BYTE):
-      if (symbolP == NULL)
-	as_fatal (_("internal inconsistency in %s: bdapq no symbol"),
-		    __FUNCTION__);
-      opcodep[0] = S_GET_VALUE (symbolP);
+      var_partp[0] = target_address - (address_of_var_part + 1);
       var_part_size = 0;
       break;
 
@@ -973,10 +536,7 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED, segT sec ATTRIBUTE_UNUSED,
       opcodep[0] = BDAP_PC_LOW + (1 << 4);
       opcodep[1] &= 0xF0;
       opcodep[1] |= BDAP_INCR_HIGH;
-      if (symbolP == NULL)
-	as_fatal (_("internal inconsistency in %s: bdap.w with no symbol"),
-		  __FUNCTION__);
-      md_number_to_chars (var_partp, S_GET_VALUE (symbolP), 2);
+      md_number_to_chars (var_partp, (long) (target_address), 2);
       var_part_size = 2;
       break;
 
@@ -993,24 +553,6 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED, segT sec ATTRIBUTE_UNUSED,
       var_part_size = 4;
       break;
 
-    case ENCODE_RELAX (STATE_MUL, STATE_BYTE):
-      /* This is the only time we check position and alignment of the
-	 placement-tracking frag.  */
-      if (sec->alignment_power < 2)
-	as_bad_where (fragP->fr_file, fragP->fr_line,
-		      _("section alignment must be >= 4 bytes to check MULS/MULU safeness"));
-      else
-	{
-	  /* If the address after the MULS/MULU has alignment which is
-	     that of the section and may be that of a cache-size of the
-	     buggy versions, then the MULS/MULU can be placed badly.  */
-	  if ((address_of_var_part
-	       & ((1 << sec->alignment_power) - 1) & 31) == 0)
-	    as_bad_where (fragP->fr_file, fragP->fr_line,
-			  _("dangerous MULS/MULU location; give it higher alignment"));
-	}
-      break;
-
     default:
       BAD_CASE (fragP->fr_subtype);
       break;
@@ -1020,80 +562,49 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED, segT sec ATTRIBUTE_UNUSED,
 }
 
 /* Generate a short jump around a secondary jump table.
-   Also called from md_create_long_jump, when sufficient.  */
+   Used by md_create_long_jump.
 
-void
-md_create_short_jump (char *storep, addressT from_addr, addressT to_addr,
-			fragS *fragP ATTRIBUTE_UNUSED,
-			symbolS *to_symbol ATTRIBUTE_UNUSED)
+   This used to be md_create_short_jump, but is now called from
+   md_create_long_jump instead, when sufficient.
+   since the sizes of the jumps are the same.  It used to be brittle,
+   making possibilities for creating bad code.  */
+
+static void
+cris_create_short_jump (storep, from_addr, to_addr, fragP, to_symbol)
+     char *storep;
+     addressT from_addr;
+     addressT to_addr;
+     fragS *fragP ATTRIBUTE_UNUSED;
+     symbolS *to_symbol ATTRIBUTE_UNUSED;
 {
   long int distance;
 
-  /* See md_create_long_jump about the comment on the "+ 2".  */
-  long int max_minimal_minus_distance;
-  long int max_minimal_plus_distance;
-  long int max_minus_distance;
-  long int max_plus_distance;
-  int nop_opcode;
-
-  if (cris_arch == arch_crisv32)
-    {
-      max_minimal_minus_distance = BRANCH_BB_V32 + 2;
-      max_minimal_plus_distance = BRANCH_BF_V32 + 2;
-      max_minus_distance = BRANCH_WB_V32 + 2;
-      max_plus_distance = BRANCH_WF_V32 + 2;
-      nop_opcode = NOP_OPCODE_V32;
-    }
-  else if (cris_arch == arch_cris_common_v10_v32)
-    /* Bail out for compatibility mode.  (It seems it can be implemented,
-       perhaps with a 10-byte sequence: "move.d NNNN,$pc/$acr", "jump
-       $acr", "nop"; but doesn't seem worth it at the moment.)  */
-    as_fatal (_("Out-of-range .word offset handling\
- is not implemented for .arch common_v10_v32"));
-  else
-    {
-      max_minimal_minus_distance = BRANCH_BB + 2;
-      max_minimal_plus_distance = BRANCH_BF + 2;
-      max_minus_distance = BRANCH_WB + 2;
-      max_plus_distance = BRANCH_WF + 2;
-      nop_opcode = NOP_OPCODE;
-    }
-
   distance = to_addr - from_addr;
 
-  if (max_minimal_minus_distance <= distance
-      && distance <= max_minimal_plus_distance)
+  if (-254 <= distance && distance <= 256)
     {
       /* Create a "short" short jump: "BA distance - 2".  */
       storep[0] = branch_disp (distance - 2);
       storep[1] = BA_QUICK_HIGH;
 
       /* A nop for the delay slot.  */
-      md_number_to_chars (storep + 2, nop_opcode, 2);
+      md_number_to_chars (storep + 2, NOP_OPCODE, 2);
 
       /* The extra word should be filled with something sane too.  Make it
 	 a nop to keep disassembly sane.  */
-      md_number_to_chars (storep + 4, nop_opcode, 2);
+      md_number_to_chars (storep + 4, NOP_OPCODE, 2);
     }
-  else if (max_minus_distance <= distance
-	   && distance <= max_plus_distance)
+  else
     {
       /* Make it a "long" short jump: "BA (PC+)".  */
       md_number_to_chars (storep, BA_PC_INCR_OPCODE, 2);
 
       /* ".WORD distance - 4".  */
-      md_number_to_chars (storep + 2,
-			  (long) (distance - 4
-				  - (cris_arch == arch_crisv32
-				     ? -4 : 0)),
-			  2);
+      md_number_to_chars (storep + 2, (long) (distance - 4), 2);
 
       /* A nop for the delay slot.  */
-      md_number_to_chars (storep + 4, nop_opcode, 2);
+      md_number_to_chars (storep + 4, NOP_OPCODE, 2);
     }
-  else
-    as_bad_where (fragP->fr_file, fragP->fr_line,
-		  _(".word case-table handling failed: table too large"));
 }
 
 /* Generate a long jump in a secondary jump table.
@@ -1106,58 +617,33 @@ md_create_short_jump (char *storep, addressT from_addr, addressT to_addr,
    to_symbol  Destination symbol.  */
 
 void
-md_create_long_jump (char *storep, addressT from_addr, addressT to_addr,
-		     fragS *fragP, symbolS *to_symbol)
+md_create_long_jump (storep, from_addr, to_addr, fragP, to_symbol)
+     char *storep;
+     addressT from_addr;
+     addressT to_addr;
+     fragS *fragP;
+     symbolS *to_symbol;
 {
   long int distance;
 
-  /* FIXME: What's that "+ 3"?  It comes from the magic numbers that
-     used to be here, it's just translated to the limit macros used in
-     the relax table.  But why + 3?  */
-  long int max_short_minus_distance
-    = cris_arch != arch_crisv32 ? BRANCH_WB + 3 : BRANCH_WB_V32 + 3;
-
-  long int max_short_plus_distance
-    = cris_arch != arch_crisv32 ? BRANCH_WF + 3 : BRANCH_WF_V32 + 3;
-
   distance = to_addr - from_addr;
 
-  if (max_short_minus_distance <= distance
-      && distance <= max_short_plus_distance)
+  if (-32763 <= distance && distance <= 32772)
     {
       /* Then make it a "short" long jump.  */
-      md_create_short_jump (storep, from_addr, to_addr, fragP,
-			    to_symbol);
-      if (cris_arch == arch_crisv32)
-	md_number_to_chars (storep + 6, NOP_OPCODE_V32, 2);
-      else
-	md_number_to_chars (storep + 6, NOP_OPCODE, 2);
+      cris_create_short_jump (storep, from_addr, to_addr, fragP,
+			      to_symbol);
     }
   else
     {
-      /* We have a "long" long jump: "JUMP [PC+]".  If CRISv32, always
-	 make it a BA.  Else make it an "MOVE [PC=PC+N],P0" if we're supposed
-	 to emit PIC code.  */
+      /* We have a "long" long jump: "JUMP [PC+]".
+	 Make it an "ADD [PC+],PC" if we're supposed to emit PIC code.  */
       md_number_to_chars (storep,
-			  cris_arch == arch_crisv32
-			  ? BA_DWORD_OPCODE
-			  : (pic ? MOVE_PC_INCR_OPCODE_PREFIX
-			     : JUMP_PC_INCR_OPCODE),
-			  2);
+			  pic ? ADD_PC_INCR_OPCODE : JUMP_PC_INCR_OPCODE, 2);
 
       /* Follow with a ".DWORD to_addr", PC-relative for PIC.  */
       fix_new (fragP, storep + 2 - fragP->fr_literal, 4, to_symbol,
-	       cris_arch == arch_crisv32 ? 6 : 0,
-	       cris_arch == arch_crisv32 || pic ? 1 : 0,
-	       cris_arch == arch_crisv32 || pic
-	       ? BFD_RELOC_32_PCREL : BFD_RELOC_32);
-
-      /* Follow it with a "NOP" for CRISv32.  */
-      if (cris_arch == arch_crisv32)
-	md_number_to_chars (storep + 6, NOP_OPCODE_V32, 2);
-      else if (pic)
-	/* ...and the rest of the move-opcode for pre-v32 PIC.  */
-	md_number_to_chars (storep + 6, MOVE_PC_INCR_OPCODE_SUFFIX, 2);
+	       0, pic ? 1 : 0, pic ? BFD_RELOC_32_PCREL : BFD_RELOC_32);
     }
 }
 
@@ -1165,7 +651,7 @@ md_create_long_jump (char *storep, addressT from_addr, addressT to_addr,
    start of the insn for debug-format use.  */
 
 static char *
-cris_insn_first_word_frag (void)
+cris_insn_first_word_frag ()
 {
   char *insnp = frag_more (2);
 
@@ -1184,7 +670,7 @@ cris_insn_first_word_frag (void)
 /* Port-specific assembler initialization.  */
 
 void
-md_begin (void)
+md_begin ()
 {
   const char *hashret = NULL;
   int i = 0;
@@ -1194,36 +680,10 @@ md_begin (void)
   if (op_hash == NULL)
     as_fatal (_("Virtual memory exhausted"));
 
-  /* Enable use of ".if ..asm.arch.cris.v32"
-     and ".if ..asm.arch.cris.common_v10_v32" and a few others.  */
-  symbol_table_insert (symbol_new ("..asm.arch.cris.v32", absolute_section,
-				   (cris_arch == arch_crisv32),
-				   &zero_address_frag));
-  symbol_table_insert (symbol_new ("..asm.arch.cris.v10", absolute_section,
-				   (cris_arch == arch_crisv10),
-				   &zero_address_frag));
-  symbol_table_insert (symbol_new ("..asm.arch.cris.common_v10_v32",
-				   absolute_section,
-				   (cris_arch == arch_cris_common_v10_v32),
-				   &zero_address_frag));
-  symbol_table_insert (symbol_new ("..asm.arch.cris.any_v0_v10",
-				   absolute_section,
-				   (cris_arch == arch_cris_any_v0_v10),
-				   &zero_address_frag));
-
   while (cris_opcodes[i].name != NULL)
     {
       const char *name = cris_opcodes[i].name;
-
-      if (! cris_insn_ver_valid_for_arch (cris_opcodes[i].applicable_version,
-					  cris_arch))
-	{
-	  i++;
-	  continue;
-	}
-
-      /* Need to cast to get rid of "const".  FIXME: Fix hash_insert instead.  */
-      hashret = hash_insert (op_hash, name, (void *) &cris_opcodes[i]);
+      hashret = hash_insert (op_hash, name, (PTR) &cris_opcodes[i]);
 
       if (hashret != NULL && *hashret != '\0')
 	as_fatal (_("Can't hash `%s': %s\n"), cris_opcodes[i].name,
@@ -1244,7 +704,8 @@ md_begin (void)
 /* Assemble a source line.  */
 
 void
-md_assemble (char *str)
+md_assemble (str)
+     char *str;
 {
   struct cris_instruction output_instruction;
   struct cris_prefix prefix;
@@ -1266,7 +727,7 @@ md_assemble (char *str)
       /* When the expression is unknown for a BDAP, it can need 0, 2 or 4
 	 extra bytes, so we handle it separately.  */
     case PREFIX_BDAP_IMM:
-      /* We only do it if the relocation is unspecified, i.e. not a PIC or TLS
+      /* We only do it if the relocation is unspecified, i.e. not a PIC
 	 relocation.  */
       if (prefix.reloc == BFD_RELOC_NONE)
 	{
@@ -1283,13 +744,13 @@ md_assemble (char *str)
       md_number_to_chars (opcodep, (long) prefix.opcode, 2);
 
       /* Having a specified reloc only happens for DIP and for BDAP with
-	 PIC or TLS operands, but it is ok to drop through here for the other
+	 PIC operands, but it is ok to drop through here for the other
 	 prefixes as they can have no relocs specified.  */
       if (prefix.reloc != BFD_RELOC_NONE)
 	{
 	  unsigned int relocsize
 	    = (prefix.kind == PREFIX_DIP
-	       ? 4 : cris_get_specified_reloc_size (prefix.reloc));
+	       ? 4 : cris_get_pic_reloc_size (prefix.reloc));
 
 	  p = frag_more (relocsize);
 	  fix_new_exp (frag_now, (p - frag_now->fr_literal), relocsize,
@@ -1347,55 +808,33 @@ md_assemble (char *str)
 	    is_undefined = 1;
 	}
 
-      if (to_seg == now_seg || is_undefined
-	  /* In CRISv32, there *is* a 32-bit absolute branch, so don't
-	     emit the 12-byte sequence for known symbols in other
-	     segments.  */
-	  || (cris_arch == arch_crisv32
-	      && output_instruction.opcode == BA_QUICK_OPCODE))
+      if (output_instruction.expr.X_op == O_constant
+	  || to_seg == now_seg || is_undefined)
 	{
 	  /* Handle complex expressions.  */
 	  valueT addvalue
-	    = (SIMPLE_EXPR (&output_instruction.expr)
-	       ? output_instruction.expr.X_add_number
-	       : 0);
+	    = (output_instruction.expr.X_op_symbol != NULL
+	       ? 0 : output_instruction.expr.X_add_number);
 	  symbolS *sym
-	    = (SIMPLE_EXPR (&output_instruction.expr)
-	       ? output_instruction.expr.X_add_symbol
-	       : make_expr_symbol (&output_instruction.expr));
+	    = (output_instruction.expr.X_op_symbol != NULL
+	       ? make_expr_symbol (&output_instruction.expr)
+	       : output_instruction.expr.X_add_symbol);
 
-	  /* If is_undefined, the expression may still become now_seg.
-	     That case is handled by md_estimate_size_before_relax.  */
-	  length_code = to_seg == now_seg ? STATE_BYTE : STATE_UNDF;
+	  /* If is_undefined, then the expression may BECOME now_seg.  */
+	  length_code = is_undefined ? STATE_UNDF : STATE_BYTE;
 
-	  /* Make room for max twelve bytes of variable length for v32 mode
-	     or PIC, ten for v10 and older.  */
-	  frag_var (rs_machine_dependent,
-		    (cris_arch == arch_crisv32
-		     || cris_arch == arch_cris_common_v10_v32
-		     || pic) ? 12 : 10, 0,
-		    ENCODE_RELAX (cris_arch == arch_crisv32
-				  ? (output_instruction.opcode
-				     == BA_QUICK_OPCODE
-				     ? STATE_ABS_BRANCH_V32
-				     : STATE_COND_BRANCH_V32)
-				  : (cris_arch == arch_cris_common_v10_v32
-				     ? STATE_COND_BRANCH_COMMON
-				     : (pic ? STATE_COND_BRANCH_PIC
-					: STATE_COND_BRANCH)),
-				  length_code),
+	  /* Make room for max ten bytes of variable length.  */
+	  frag_var (rs_machine_dependent, 10, 0,
+		    ENCODE_RELAX (STATE_CONDITIONAL_BRANCH, length_code),
 		    sym, addvalue, opcodep);
 	}
       else
 	{
 	  /* We have: to_seg != now_seg && to_seg != undefined_section.
 	     This means it is a branch to a known symbol in another
-	     section, perhaps an absolute address.  Emit a 32-bit branch.  */
-	  char *cond_jump
-	    = frag_more ((cris_arch == arch_crisv32
-			  || cris_arch == arch_cris_common_v10_v32
-			  || pic)
-			 ? 12 : 10);
+	     section.  Code in data?  Weird but valid.	Emit a 32-bit
+	     branch.  */
+	  char *cond_jump = frag_more (10);
 
 	  gen_cond_branch_32 (opcodep, cond_jump, frag_now,
 			      output_instruction.expr.X_add_symbol,
@@ -1403,18 +842,11 @@ md_assemble (char *str)
 			      output_instruction.expr.X_add_number);
 	}
     }
-  else if (output_instruction.insn_type == CRIS_INSN_MUL
-	   && err_for_dangerous_mul_placement)
-    /* Create a frag which which we track the location of the mul insn
-       (in the last two bytes before the mul-frag).  */
-    frag_variant (rs_machine_dependent, 0, 0,
-		  ENCODE_RELAX (STATE_MUL, STATE_BYTE),
-		  NULL, 0, opcodep);
   else
     {
       if (output_instruction.imm_oprnd_size > 0)
 	{
-	  /* The instruction has an immediate operand.  */
+	  /* The intruction has an immediate operand.  */
 	  enum bfd_reloc_code_real reloc = BFD_RELOC_NONE;
 
 	  switch (output_instruction.imm_oprnd_size)
@@ -1447,29 +879,7 @@ md_assemble (char *str)
 	  p = frag_more (output_instruction.imm_oprnd_size);
 	  fix_new_exp (frag_now, (p - frag_now->fr_literal),
 		       output_instruction.imm_oprnd_size,
-		       &output_instruction.expr,
-		       reloc == BFD_RELOC_32_PCREL
-		       || reloc == BFD_RELOC_16_PCREL
-		       || reloc == BFD_RELOC_8_PCREL, reloc);
-	}
-      else if (output_instruction.reloc == BFD_RELOC_CRIS_LAPCQ_OFFSET
-	       && output_instruction.expr.X_md != 0)
-	{
-	  /* Handle complex expressions.  */
-	  valueT addvalue
-	    = (output_instruction.expr.X_op_symbol != NULL
-	       ? 0 : output_instruction.expr.X_add_number);
-	  symbolS *sym
-	    = (output_instruction.expr.X_op_symbol != NULL
-	       ? make_expr_symbol (&output_instruction.expr)
-	       : output_instruction.expr.X_add_symbol);
-
-	  /* This is a relaxing construct, so we need a frag_var rather
-	     than the fix_new_exp call below.  */
-	  frag_var (rs_machine_dependent,
-		    4, 0,
-		    ENCODE_RELAX (STATE_LAPC, STATE_UNDF),
-		    sym, addvalue, opcodep);
+		       &output_instruction.expr, 0, reloc);
 	}
       else if (output_instruction.reloc != BFD_RELOC_NONE)
 	{
@@ -1481,35 +891,19 @@ md_assemble (char *str)
 	     expressions" - where the expression contains a difference of
 	     two symbols in the same segment.  */
 	  fix_new_exp (frag_now, (opcodep - frag_now->fr_literal), 2,
-		       &output_instruction.expr,
-		       output_instruction.reloc == BFD_RELOC_32_PCREL
-		       || output_instruction.reloc == BFD_RELOC_16_PCREL
-		       || output_instruction.reloc == BFD_RELOC_8_PCREL
-		       || (output_instruction.reloc
-			   == BFD_RELOC_CRIS_LAPCQ_OFFSET),
+		       &output_instruction.expr, 0,
 		       output_instruction.reloc);
 	}
     }
 }
 
-/* Helper error-reporting function: calls as_bad for a format string
-   for a single value and zeroes the offending value (zero assumed
-   being a valid value) to avoid repeated error reports in later value
-   checking.  */
-
-static void
-cris_bad (const char *format, offsetT *valp)
-{
-  /* We cast to long so the format string can assume that format.  */
-  as_bad (format, (long) *valp);
-  *valp = 0;
-}
-
 /* Low level text-to-bits assembly.  */
 
 static void
-cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
-			  struct cris_prefix *prefixp)
+cris_process_instruction (insn_text, out_insnp, prefixp)
+     char *insn_text;
+     struct cris_instruction *out_insnp;
+     struct cris_prefix *prefixp;
 {
   char *s;
   char modified_char = 0;
@@ -1525,7 +919,7 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
      error.  */
   prefixp->kind = PREFIX_NONE;
   prefixp->reloc = BFD_RELOC_NONE;
-  out_insnp->insn_type = CRIS_INSN_NONE;
+  out_insnp->insn_type = CRIS_INSN_NORMAL;
   out_insnp->imm_oprnd_size = 0;
 
   /* Find the end of the opcode mnemonic.  We assume (true in 2.9.1)
@@ -1611,29 +1005,12 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		 Ignore it here.  */
 	      continue;
 
-	    case '[':
-	    case ']':
 	    case ',':
 	    case ' ':
 	      /* These must match exactly.  */
 	      if (*s++ == *args)
 		continue;
 	      break;
-
-	    case 'A':
-	      /* "ACR", case-insensitive.
-		 Handle a sometimes-mandatory dollar sign as register
-		 prefix.  */
-	      if (*s == REGISTER_PREFIX_CHAR)
-		s++;
-	      else if (demand_register_prefix)
-		break;
-
-	      if ((*s++ != 'a' && s[-1] != 'A')
-		  || (*s++ != 'c' && s[-1] != 'C')
-		  || (*s++ != 'r' && s[-1] != 'R'))
-		break;
-	      continue;
 
 	    case 'B':
 	      /* This is not really an operand, but causes a "BDAP
@@ -1659,8 +1036,8 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  if (out_insnp->expr.X_op == O_constant
 		      && (out_insnp->expr.X_add_number < 0
 			  || out_insnp->expr.X_add_number > 31))
-		    cris_bad (_("Immediate value not in 5 bit unsigned range: %ld"),
-			      &out_insnp->expr.X_add_number);
+		    as_bad (_("Immediate value not in 5 bit unsigned range: %ld"),
+			    out_insnp->expr.X_add_number);
 
 		  out_insnp->reloc = BFD_RELOC_CRIS_UNSIGNED_5;
 		  continue;
@@ -1675,25 +1052,12 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  if (out_insnp->expr.X_op == O_constant
 		      && (out_insnp->expr.X_add_number < 0
 			  || out_insnp->expr.X_add_number > 15))
-		    cris_bad (_("Immediate value not in 4 bit unsigned range: %ld"),
-			      &out_insnp->expr.X_add_number);
+		    as_bad (_("Immediate value not in 4 bit unsigned range: %ld"),
+			    out_insnp->expr.X_add_number);
 
 		  out_insnp->reloc = BFD_RELOC_CRIS_UNSIGNED_4;
 		  continue;
 		}
-
- 	      /* For 'd', check for an optional ".d" or ".D" at the
-                 start of the operands, followed by a space character.  */
-	    case 'd':
-	      if (modified_char == '.' && *s == '.')
-		{
-		  if ((s[1] != 'd' && s[1] == 'D')
-		      || ! ISSPACE (s[2]))
-		    break;
-		  s += 2;
-		  continue;
-		}
-	      continue;
 
 	    case 'D':
 	      /* General register in bits <15:12> and <3:0>.  */
@@ -1727,9 +1091,8 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  if (out_insnp->expr.X_op == O_constant
 		      && (out_insnp->expr.X_add_number < -32
 			  || out_insnp->expr.X_add_number > 31))
-		    cris_bad (_("Immediate value not in 6 bit range: %ld"),
-			      &out_insnp->expr.X_add_number);
-
+		    as_bad (_("Immediate value not in 6 bit range: %ld"),
+			    out_insnp->expr.X_add_number);
 		  out_insnp->reloc = BFD_RELOC_CRIS_SIGNED_6;
 		  continue;
 		}
@@ -1743,9 +1106,8 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  if (out_insnp->expr.X_op == O_constant
 		      && (out_insnp->expr.X_add_number < 0
 			  || out_insnp->expr.X_add_number > 63))
-		    cris_bad (_("Immediate value not in 6 bit unsigned range: %ld"),
-			      &out_insnp->expr.X_add_number);
-
+		    as_bad (_("Immediate value not in 6 bit unsigned range: %ld"),
+			    out_insnp->expr.X_add_number);
 		  out_insnp->reloc = BFD_RELOC_CRIS_UNSIGNED_6;
 		  continue;
 		}
@@ -1777,8 +1139,7 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 
 	    case 'm':
 	      /* A size modifier, B, W or D, to be put in bits <5:4>.  */
-	      if (modified_char != '.'
-		  || ! get_bwd_size_modifier (&s, &size_bits))
+	      if (! get_bwd_size_modifier (&s, &size_bits))
 		break;
 	      else
 		{
@@ -1796,25 +1157,8 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  continue;
 		}
 
-	    case 'Q':
-	      /* A 8-bit quick BDAP expression, "expr,R".  */
-	      if (! cris_get_expression (&s, &out_insnp->expr))
-		break;
-
-	      if (*s != ',')
-		break;
-
-	      s++;
-
-	      if (!get_gen_reg (&s, &regno))
-		break;
-
-	      out_insnp->opcode |= regno << 12;
-	      out_insnp->reloc = BFD_RELOC_CRIS_SIGNED_8;
-	      continue;
-
 	    case 'O':
-	      /* A BDAP expression for any size, "expr,R".  */
+	      /* A BDAP expression for any size, "expr,r".  */
 	      if (! cris_get_expression (&s, &prefixp->expr))
 		break;
 	      else
@@ -1848,7 +1192,7 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		     pseudo yet, so some of this is just unused
 		     framework.  */
 		  if (out_insnp->spec_reg->warning)
-		    as_warn ("%s", out_insnp->spec_reg->warning);
+		    as_warn (out_insnp->spec_reg->warning);
 		  else if (out_insnp->spec_reg->applicable_version
 			   == cris_ver_warning)
 		    /* Others have a generic warning.  */
@@ -1898,7 +1242,7 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 	    case 's':
 	      /* Source operand in bits <10>, <3:0> and optionally a
 		 prefix; i.e. an indirect operand or an side-effect
-		 prefix (where valid).  */
+		 prefix.  */
 	      if (! get_autoinc_prefix_or_indir_op (&s, prefixp, &mode,
 						    &regno,
 						    &imm_expr_found,
@@ -1918,7 +1262,7 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 			 whether or not this is autoincrement mode.  */
 		      out_insnp->opcode |= (mode << 10);
 
-		      /* If there was a reloc specifier, then it was
+		      /* If there was a PIC reloc specifier, then it was
 			 attached to the prefix.  Note that we can't check
 			 that the reloc size matches, since we don't have
 			 all the operands yet in all cases.  */
@@ -1929,72 +1273,6 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  out_insnp->opcode |= regno /* << 0 */ ;
 		  continue;
 		}
-
-	    case 'N':
-	    case 'Y':
-	      /* Like 's', but immediate operand only.  Also do not
-		 modify insn.  There are no insns where an explicit reloc
-		 specifier makes sense.  */
-	      if (cris_get_expression (&s, &out_insnp->expr))
-		{
-		  imm_expr_found = 1;
-		  continue;
-		}
-	      break;
-
-	    case 'n':
-	      /* Like 'N', but PC-relative to the start of the insn.
-		 There might be a :PLT to request a PLT entry.  */
-	      if (cris_get_expression (&s, &out_insnp->expr))
-		{
-		  imm_expr_found = 1;
-		  out_insnp->reloc = BFD_RELOC_32_PCREL;
-
-		  /* We have to adjust the expression, because that
-		     relocation is to the location *after* the
-		     relocation.  So add 2 for the insn and 4 for the
-		     relocation.  */
-		  out_insnp->expr.X_add_number += 6;
-
-		  /* TLS specifiers do not make sense here.  */
-		  if (pic && *s == RELOC_SUFFIX_CHAR)
-		    cris_get_reloc_suffix (&s, &out_insnp->reloc,
-					   &out_insnp->expr);
-
-		  continue;
-		}
-	      break;
-
-	    case 'U':
-	      /* Maybe 'u', maybe 'n'.  Only for LAPC/LAPCQ.  */
-	      if (cris_get_expression (&s, &out_insnp->expr))
-		{
-		  out_insnp->reloc = BFD_RELOC_CRIS_LAPCQ_OFFSET;
-
-		  /* Define 1 as relaxing.  */
-		  out_insnp->expr.X_md = 1;
-		  continue;
-		}
-	      break;
-
-	    case 'u':
-	      /* Four PC-relative bits in <3:0> representing <4:1>:0 of
-		 an offset relative to the beginning of the current
-		 insn.  */
-	      if (cris_get_expression (&s, &out_insnp->expr))
-		{
-		  out_insnp->reloc = BFD_RELOC_CRIS_LAPCQ_OFFSET;
-
-		  /* Define 0 as non-relaxing.  */
-		  out_insnp->expr.X_md = 0;
-
-		  /* We have to adjust the expression, because that
-		     relocation is to the location *after* the
-		     insn.  So add 2 for the insn.  */
-		  out_insnp->expr.X_add_number += 2;
-		  continue;
-		}
-	      break;
 
 	    case 'x':
 	      /* Rs.m in bits <15:12> and <5:4>.  */
@@ -2050,15 +1328,6 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  continue;
 		}
 
-	    case 'T':
-	      if (cris_arch == arch_crisv32
-		  && get_sup_reg (&s, &regno))
-		{
-		  out_insnp->opcode |= regno << 12;
-		  continue;
-		}
-	      break;
-
 	    default:
 	      BAD_CASE (*args);
 	    }
@@ -2073,19 +1342,9 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 	{
 	  /* If it's just that the args don't match, maybe the next
 	     item in the table is the same opcode but with
-	     matching operands.  First skip any invalid ones.  */
-	  while (instruction[1].name != NULL
-		 && strcmp (instruction->name, instruction[1].name) == 0
-		 && ! cris_insn_ver_valid_for_arch (instruction[1]
-						    .applicable_version,
-						    cris_arch))
-	    ++instruction;
-
+	     matching operands.  */
 	  if (instruction[1].name != NULL
-	      && strcmp (instruction->name, instruction[1].name) == 0
-	      && cris_insn_ver_valid_for_arch (instruction[1]
-					       .applicable_version,
-					       cris_arch))
+	      && ! strcmp (instruction->name, instruction[1].name))
 	    {
 	      /* Yep.  Restart and try that one instead.  */
 	      ++instruction;
@@ -2097,11 +1356,6 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 	      /* We've come to the end of instructions with this
 		 opcode, so it must be an error.  */
 	      as_bad (_("Illegal operands"));
-
-	      /* As discard_rest_of_line, but without continuing to the
-		 next line.  */
-	      while (!is_end_of_line[(unsigned char) *input_line_pointer])
-		input_line_pointer++;
 	      return;
 	    }
 	}
@@ -2126,91 +1380,52 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		  break;
 
 		case SIZE_SPEC_REG:
-		  if (cris_arch == arch_crisv32)
-		    /* All immediate loads of special registers are
-		       32-bit on CRISv32.  */
-		    out_insnp->imm_oprnd_size = 4;
-		  else
-		    switch (out_insnp->spec_reg->reg_size)
-		      {
-		      case 1:
-			if (out_insnp->expr.X_op == O_constant
-			    && (out_insnp->expr.X_add_number < -128
-				|| out_insnp->expr.X_add_number > 255))
-			  cris_bad (_("Immediate value not in 8 bit range: %ld"),
-				    &out_insnp->expr.X_add_number);
-			/* Fall through.  */
-		      case 2:
-			/* FIXME:  We need an indicator in the instruction
-			   table to pass on, to indicate if we need to check
-			   overflow for a signed or unsigned number.  */
-			if (out_insnp->expr.X_op == O_constant
-			    && (out_insnp->expr.X_add_number < -32768
-				|| out_insnp->expr.X_add_number > 65535))
-			  cris_bad (_("Immediate value not in 16 bit range: %ld"),
-				    &out_insnp->expr.X_add_number);
-			out_insnp->imm_oprnd_size = 2;
-			break;
+		  switch (out_insnp->spec_reg->reg_size)
+		    {
+		    case 1:
+		      if (out_insnp->expr.X_op == O_constant
+			  && (out_insnp->expr.X_add_number < -128
+			      || out_insnp->expr.X_add_number > 255))
+			as_bad (_("Immediate value not in 8 bit range: %ld"),
+				out_insnp->expr.X_add_number);
+		      /* Fall through.  */
+		    case 2:
+		      /* FIXME:  We need an indicator in the instruction
+			 table to pass on, to indicate if we need to check
+			 overflow for a signed or unsigned number.  */
+		      if (out_insnp->expr.X_op == O_constant
+			  && (out_insnp->expr.X_add_number < -32768
+			      || out_insnp->expr.X_add_number > 65535))
+			as_bad (_("Immediate value not in 16 bit range: %ld"),
+				out_insnp->expr.X_add_number);
+		      out_insnp->imm_oprnd_size = 2;
+		      break;
 
-		      case 4:
-			out_insnp->imm_oprnd_size = 4;
-			break;
+		    case 4:
+		      out_insnp->imm_oprnd_size = 4;
+		      break;
 
-		      default:
-			BAD_CASE (out_insnp->spec_reg->reg_size);
-		      }
+		    default:
+		      BAD_CASE (out_insnp->spec_reg->reg_size);
+		    }
 		  break;
 
 		case SIZE_FIELD:
-		case SIZE_FIELD_SIGNED:
-		case SIZE_FIELD_UNSIGNED:
 		  switch (size_bits)
 		    {
-		      /* FIXME: Find way to pass un/signedness to
-			 caller, and set reloc type instead, postponing
-			 this check until cris_number_to_imm.  That
-			 necessarily corrects the reloc type for the
-			 byte case, maybe requiring further changes.  */
 		    case 0:
-		      if (out_insnp->expr.X_op == O_constant)
-			{
-			  if (instruction->imm_oprnd_size == SIZE_FIELD
-			      && (out_insnp->expr.X_add_number < -128
-				  || out_insnp->expr.X_add_number > 255))
-			    cris_bad (_("Immediate value not in 8 bit range: %ld"),
-				      &out_insnp->expr.X_add_number);
-			  else if (instruction->imm_oprnd_size == SIZE_FIELD_SIGNED
-			      && (out_insnp->expr.X_add_number < -128
-				  || out_insnp->expr.X_add_number > 127))
-			    cris_bad (_("Immediate value not in 8 bit signed range: %ld"),
-				      &out_insnp->expr.X_add_number);
-			  else if (instruction->imm_oprnd_size == SIZE_FIELD_UNSIGNED
-				   && (out_insnp->expr.X_add_number < 0
-				       || out_insnp->expr.X_add_number > 255))
-			    cris_bad (_("Immediate value not in 8 bit unsigned range: %ld"),
-				      &out_insnp->expr.X_add_number);
-			}
-
+		      if (out_insnp->expr.X_op == O_constant
+			  && (out_insnp->expr.X_add_number < -128
+			      || out_insnp->expr.X_add_number > 255))
+			as_bad (_("Immediate value not in 8 bit range: %ld"),
+				out_insnp->expr.X_add_number);
 		      /* Fall through.  */
 		    case 1:
-		      if (out_insnp->expr.X_op == O_constant)
-			{
-			  if (instruction->imm_oprnd_size == SIZE_FIELD
-			      && (out_insnp->expr.X_add_number < -32768
-				  || out_insnp->expr.X_add_number > 65535))
-			    cris_bad (_("Immediate value not in 16 bit range: %ld"),
-				      &out_insnp->expr.X_add_number);
-			  else if (instruction->imm_oprnd_size == SIZE_FIELD_SIGNED
-			      && (out_insnp->expr.X_add_number < -32768
-				  || out_insnp->expr.X_add_number > 32767))
-			    cris_bad (_("Immediate value not in 16 bit signed range: %ld"),
-				      &out_insnp->expr.X_add_number);
-			  else if (instruction->imm_oprnd_size == SIZE_FIELD_UNSIGNED
-			      && (out_insnp->expr.X_add_number < 0
-				  || out_insnp->expr.X_add_number > 65535))
-			    cris_bad (_("Immediate value not in 16 bit unsigned range: %ld"),
-				      &out_insnp->expr.X_add_number);
-			}
+		      if (out_insnp->expr.X_op == O_constant
+			  && (out_insnp->expr.X_add_number < -32768
+			      || out_insnp->expr.X_add_number > 65535))
+			as_bad (_("Immediate value not in 16 bit range: %ld"),
+				out_insnp->expr.X_add_number);
 		      out_insnp->imm_oprnd_size = 2;
 		      break;
 
@@ -2224,22 +1439,14 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
 		}
 
 	      /* If there was a relocation specified for the immediate
-		 expression (i.e. it had a PIC or TLS modifier) check that the
-		 size of the relocation matches the size specified by
+		 expression (i.e. it had a PIC modifier) check that the
+		 size of the PIC relocation matches the size specified by
 		 the opcode.  */
 	      if (out_insnp->reloc != BFD_RELOC_NONE
-		  && (cris_get_specified_reloc_size (out_insnp->reloc)
+		  && (cris_get_pic_reloc_size (out_insnp->reloc)
 		      != (unsigned int) out_insnp->imm_oprnd_size))
-		as_bad (out_insnp->reloc == BFD_RELOC_CRIS_32_GD
-			|| out_insnp->reloc == BFD_RELOC_CRIS_32_TPREL
-			|| out_insnp->reloc == BFD_RELOC_CRIS_16_TPREL
-			|| out_insnp->reloc == BFD_RELOC_CRIS_32_IE
-			? _("TLS relocation size does not match operand size")
-			: _("PIC relocation size does not match operand size"));
+		as_bad (_("PIC relocation size does not match operand size"));
 	    }
-	  else if (instruction->op == cris_muls_op
-		   || instruction->op == cris_mulu_op)
-	    out_insnp->insn_type = CRIS_INSN_MUL;
 	}
       break;
     }
@@ -2259,7 +1466,9 @@ cris_process_instruction (char *insn_text, struct cris_instruction *out_insnp,
    Return 1 iff a correct size modifier is found, else 0.  */
 
 static int
-get_bwd_size_modifier (char **cPP, int *size_bitsp)
+get_bwd_size_modifier (cPP, size_bitsp)
+     char **cPP;
+     int *size_bitsp;
 {
   if (**cPP != '.')
     return 0;
@@ -2309,7 +1518,9 @@ get_bwd_size_modifier (char **cPP, int *size_bitsp)
    Return 1 iff a correct size modifier is found, else 0.  */
 
 static int
-get_bw_size_modifier (char **cPP, int *size_bitsp)
+get_bw_size_modifier (cPP, size_bitsp)
+     char **cPP;
+     int *size_bitsp;
 {
   if (**cPP != '.')
     return 0;
@@ -2354,7 +1565,9 @@ get_bw_size_modifier (char **cPP, int *size_bitsp)
 	    else 0.  */
 
 static int
-get_gen_reg (char **cPP, int *regnop)
+get_gen_reg (cPP, regnop)
+     char **cPP;
+     int *regnop;
 {
   char *oldp;
   oldp = *cPP;
@@ -2373,18 +1586,7 @@ get_gen_reg (char **cPP, int *regnop)
       (*cPP)++;
 
       if ((**cPP == 'C' || **cPP == 'c')
-	  && ! ISALNUM ((*cPP)[1])
-	  /* Here's a little twist: For v32 and the compatibility mode,
-	     we only recognize PC as a register number if there's '+]'
-	     after.  We don't consume that, but the presence can only be
-	     valid after a register in a post-increment context, which
-	     is also the only valid context for PC as a register for
-	     v32.  Not that it's used very often, but saying "MOVE.D
-	     [PC+],R5" should remain valid.  It's not supported for
-	     jump-type insns or other insns with no [Rn+] mode, though.  */
-	  && ((cris_arch != arch_crisv32
-	       && cris_arch != arch_cris_common_v10_v32)
-	      || ((*cPP)[1] == '+' && (*cPP)[2] == ']')))
+	  && ! ISALNUM ((*cPP)[1]))
 	{
 	  /* It's "PC": consume the "c" and we're done.  */
 	  (*cPP)++;
@@ -2392,20 +1594,6 @@ get_gen_reg (char **cPP, int *regnop)
 	  return 1;
 	}
       break;
-
-      /* Like with PC, we recognize ACR, but only if it's *not* followed
-	 by '+', and only for v32.  */
-    case 'A':
-    case 'a':
-      if (cris_arch != arch_crisv32
-	  || ((*cPP)[1] != 'c' && (*cPP)[1] != 'C')
-	  || ((*cPP)[2] != 'r' && (*cPP)[2] != 'R')
-	  || ISALNUM ((*cPP)[3])
-	  || (*cPP)[3] == '+')
-	break;
-      (*cPP) += 3;
-      *regnop = 15;
-      return 1;
 
     case 'R':
     case 'r':
@@ -2477,7 +1665,9 @@ get_gen_reg (char **cPP, int *regnop)
    Return 1 iff a correct special register name is found.  */
 
 static int
-get_spec_reg (char **cPP, const struct cris_spec_reg **sregpp)
+get_spec_reg (cPP, sregpp)
+     char **cPP;
+     const struct cris_spec_reg **sregpp;
 {
   char *s1;
   const char *s2;
@@ -2507,69 +1697,11 @@ get_spec_reg (char **cPP, const struct cris_spec_reg **sregpp)
       /* For a match, we must have consumed the name in the table, and we
 	 must be outside what could be part of a name.	Assume here that a
 	 test for alphanumerics is sufficient for a name test.  */
-      if (*s2 == 0 && ! ISALNUM (*s1)
-	  && cris_insn_ver_valid_for_arch (sregp->applicable_version,
-					   cris_arch))
-	{
-	  /* We have a match.  Update the pointer and be done.  */
-	  *cPP = s1;
-	  *sregpp = sregp;
-	  return 1;
-	}
-    }
-
-  /* If we got here, we did not find any name.  */
-  return 0;
-}
-
-/* Get a support register from the string pointed out by *cPP. The
-   variable *cPP is advanced to the character following the support-
-   register name if one is found, and retains its original position
-   otherwise.
-
-   cPP	    Pointer to pointer to string starting with a support-register
-	    name.
-
-   sregpp   Pointer to int containing the register number.
-
-   Return 1 iff a correct support-register name is found.  */
-
-static int
-get_sup_reg (char **cPP, int *regnop)
-{
-  char *s1;
-  const char *s2;
-  char *name_begin = *cPP;
-
-  const struct cris_support_reg *sregp;
-
-  /* Handle a sometimes-mandatory dollar sign as register prefix.  */
-  if (*name_begin == REGISTER_PREFIX_CHAR)
-    name_begin++;
-  else if (demand_register_prefix)
-    return 0;
-
-  /* Loop over all support-registers.  */
-  for (sregp = cris_support_regs; sregp->name != NULL; sregp++)
-    {
-      /* Start over from beginning of the supposed name.  */
-      s1 = name_begin;
-      s2 = sregp->name;
-
-      while (*s2 != '\0' && TOLOWER (*s1) == *s2)
-	{
-	  s1++;
-	  s2++;
-	}
-
-      /* For a match, we must have consumed the name in the table, and we
-	 must be outside what could be part of a name.	Assume here that a
-	 test for alphanumerics is sufficient for a name test.  */
       if (*s2 == 0 && ! ISALNUM (*s1))
 	{
 	  /* We have a match.  Update the pointer and be done.  */
 	  *cPP = s1;
-	  *regnop = sregp->number;
+	  *sregpp = sregp;
 	  return 1;
 	}
     }
@@ -2604,9 +1736,14 @@ get_sup_reg (char **cPP, int *regnop)
    Return 1 iff a correct indirect operand is found.  */
 
 static int
-get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
-				int *is_autoincp, int *src_regnop,
-				int *imm_foundp, expressionS *imm_exprP)
+get_autoinc_prefix_or_indir_op (cPP, prefixp, is_autoincp, src_regnop,
+				imm_foundp, imm_exprP)
+     char **cPP;
+     struct cris_prefix *prefixp;
+     int *is_autoincp;
+     int *src_regnop;
+     int *imm_foundp;
+     expressionS *imm_exprP;
 {
   /* Assume there was no immediate mode expression.  */
   *imm_foundp = 0;
@@ -2650,12 +1787,7 @@ get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
 
 	    case '=':
 	      /* This must be indexed with assign, or offset with assign
-		 to match.  Not supported for crisv32 or in
-		 compatibility mode.  */
-	      if (cris_arch == arch_crisv32
-		  || cris_arch == arch_cris_common_v10_v32)
-		return 0;
-
+		 to match.  */
 	      (*cPP)++;
 
 	      /* Either way, the next thing must be a register.  */
@@ -2750,8 +1882,8 @@ get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
 
 			  /* We tentatively put an opcode corresponding to
 			     a 32-bit operand here, although it may be
-			     relaxed when there's no relocation
-			     specifier for the operand.  */
+			     relaxed when there's no PIC specifier for the
+			     operand.  */
 			  prefixp->opcode
 			    = (BDAP_INDIR_OPCODE
 			       | (prefixp->base_reg_number << 12)
@@ -2761,18 +1893,18 @@ get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
 
 			  /* This can have a PIC suffix, specifying reloc
 			     type to use.  */
-			  if ((pic || tls) && **cPP == RELOC_SUFFIX_CHAR)
+			  if (pic && **cPP == PIC_SUFFIX_CHAR)
 			    {
 			      unsigned int relocsize;
 
-			      cris_get_reloc_suffix (cPP, &prefixp->reloc,
-						     &prefixp->expr);
+			      cris_get_pic_suffix (cPP, &prefixp->reloc,
+						   &prefixp->expr);
 
 			      /* Tweak the size of the immediate operand
 				 in the prefix opcode if it isn't what we
 				 set.  */
 			      relocsize
-				= cris_get_specified_reloc_size (prefixp->reloc);
+				= cris_get_pic_reloc_size (prefixp->reloc);
 			      if (relocsize != 4)
 				prefixp->opcode
 				  = ((prefixp->opcode & ~(3 << 4))
@@ -2798,9 +1930,8 @@ get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
 			     in the blanks and break out to match the
 			     final ']'.
 
-			     Note that we don't allow a relocation
-			     suffix for an operand with a minus
-			     sign.  */
+			     Note that we don't allow a PIC suffix for an
+			     operand with a minus sign.  */
 			  prefixp->kind = PREFIX_BDAP_IMM;
 			  break;
 			}
@@ -2838,8 +1969,8 @@ get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
 
       /* This can have a PIC suffix, specifying reloc type to use.  The
 	 caller must check that the reloc size matches the operand size.  */
-      if ((pic || tls) && **cPP == RELOC_SUFFIX_CHAR)
-	cris_get_reloc_suffix (cPP, &prefixp->reloc, imm_exprP);
+      if (pic && **cPP == PIC_SUFFIX_CHAR)
+	cris_get_pic_suffix (cPP, &prefixp->reloc, imm_exprP);
 
       return 1;
     }
@@ -2853,7 +1984,7 @@ get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
    advanced to the character following the indirect operand on success, or
    has an unspecified value on failure.
 
-   cPP	     Pointer to pointer to string beginning
+   cPP	     Pointer to pointer to string begining
 	     with the operand
 
    prefixp   Pointer to structure containing an
@@ -2862,7 +1993,9 @@ get_autoinc_prefix_or_indir_op (char **cPP, struct cris_prefix *prefixp,
    Returns 1 iff a correct indirect operand is found.  */
 
 static int
-get_3op_or_dip_prefix_op (char **cPP, struct cris_prefix *prefixp)
+get_3op_or_dip_prefix_op (cPP, prefixp)
+     char **cPP;
+     struct cris_prefix *prefixp;
 {
   int reg_number;
 
@@ -2983,14 +2116,8 @@ get_3op_or_dip_prefix_op (char **cPP, struct cris_prefix *prefixp)
 		prefixp->opcode |= size_bits << 4;
 	    }
 	  /* Seen "[rN+", but not a '[' or a register, so then
-	     it must be a constant "I".
-
-	     As a quality of implementation improvement, we check for a
-	     closing ']', like in an erroneous "[rN+]".  If we don't,
-	     the expression parser will emit a confusing "bad
-	     expression" when it sees the ']', probably because it
-	     doesn't like seeing no expression.  */
-	  else if (**cPP != ']' && cris_get_expression (cPP, &prefixp->expr))
+	     it must be a constant "I".  */
+	  else if (cris_get_expression (cPP, &prefixp->expr))
 	    {
 	      /* Expression found, so fill in the bits of offset
 		 mode and drop down to check the closing ']'.  */
@@ -3007,15 +2134,15 @@ get_3op_or_dip_prefix_op (char **cPP, struct cris_prefix *prefixp)
 		   | REG_PC /* << 0 */);
 
 	      /* This can have a PIC suffix, specifying reloc type to use.  */
-	      if ((pic || tls) && **cPP == RELOC_SUFFIX_CHAR)
+	      if (pic && **cPP == PIC_SUFFIX_CHAR)
 		{
 		  unsigned int relocsize;
 
-		  cris_get_reloc_suffix (cPP, &prefixp->reloc, &prefixp->expr);
+		  cris_get_pic_suffix (cPP, &prefixp->reloc, &prefixp->expr);
 
 		  /* Tweak the size of the immediate operand in the prefix
 		     opcode if it isn't what we set.  */
-		  relocsize = cris_get_specified_reloc_size (prefixp->reloc);
+		  relocsize = cris_get_pic_reloc_size (prefixp->reloc);
 		  if (relocsize != 4)
 		    prefixp->opcode
 		      = ((prefixp->opcode & ~(3 << 4))
@@ -3071,10 +2198,6 @@ get_3op_or_dip_prefix_op (char **cPP, struct cris_prefix *prefixp)
       prefixp->kind = PREFIX_DIP;
       prefixp->opcode = DIP_OPCODE | (AUTOINCR_BIT << 8) | REG_PC;
       prefixp->reloc = BFD_RELOC_32;
-
-      /* For :GD and :IE, it makes sense to have TLS specifiers here.  */
-      if ((pic || tls) && **cPP == RELOC_SUFFIX_CHAR)
-	cris_get_reloc_suffix (cPP, &prefixp->reloc, &prefixp->expr);
     }
   else
     /* Neither '[' nor register nor expression.  We lose.  */
@@ -3102,9 +2225,12 @@ get_3op_or_dip_prefix_op (char **cPP, struct cris_prefix *prefixp)
    Return 1 iff a correct expression is found.  */
 
 static int
-cris_get_expression (char **cPP, expressionS *exprP)
+cris_get_expression (cPP, exprP)
+     char **cPP;
+     expressionS *exprP;
 {
   char *saved_input_line_pointer;
+  segT exp;
 
   /* The "expression" function expects to find an expression at the
      global variable input_line_pointer, so we have to save it to give
@@ -3112,18 +2238,7 @@ cris_get_expression (char **cPP, expressionS *exprP)
   saved_input_line_pointer = input_line_pointer;
   input_line_pointer = *cPP;
 
-  /* Avoid a common error, confusing addressing modes.  Beware that the
-     call to expression below does not signal that error; it treats []
-     as parentheses, unless #define NEED_INDEX_OPERATOR in which case it
-     gives them other confusing semantics rather than plain outlawing
-     them, which is what we want.  */
-  if (*input_line_pointer == '[')
-    {
-      input_line_pointer = saved_input_line_pointer;
-      return 0;
-    }
-
-  expression (exprP);
+  exp = expression (exprP);
   if (exprP->X_op == O_illegal || exprP->X_op == O_absent)
     {
       input_line_pointer = saved_input_line_pointer;
@@ -3148,7 +2263,9 @@ cris_get_expression (char **cPP, expressionS *exprP)
    Return 1 iff a correct flags expression is found.  */
 
 static int
-get_flags (char **cPP, int *flagsp)
+get_flags (cPP, flagsp)
+     char **cPP;
+     int *flagsp;
 {
   for (;;)
     {
@@ -3156,49 +2273,15 @@ get_flags (char **cPP, int *flagsp)
 	{
 	case 'd':
 	case 'D':
-	  if (! cris_insn_ver_valid_for_arch (cris_ver_v0_3,
-					      cris_arch))
-	    return 0;
-	  *flagsp |= 0x80;
-	  break;
-
 	case 'm':
 	case 'M':
-	  if (! cris_insn_ver_valid_for_arch (cris_ver_v8_10,
-					      cris_arch))
-	    return 0;
 	  *flagsp |= 0x80;
 	  break;
 
 	case 'e':
 	case 'E':
-	  if (! cris_insn_ver_valid_for_arch (cris_ver_v0_3,
-					      cris_arch))
-	    return 0;
-	  *flagsp |= 0x40;
-	  break;
-
 	case 'b':
 	case 'B':
-	  if (! cris_insn_ver_valid_for_arch (cris_ver_v8_10,
-					      cris_arch))
-	    return 0;
-	  *flagsp |= 0x40;
-	  break;
-
-	case 'p':
-	case 'P':
-	  if (! cris_insn_ver_valid_for_arch (cris_ver_v32p,
-					      cris_arch))
-	    return 0;
-	  *flagsp |= 0x80;
-	  break;
-
-	case 'u':
-	case 'U':
-	  if (! cris_insn_ver_valid_for_arch (cris_ver_v32p,
-					      cris_arch))
-	    return 0;
 	  *flagsp |= 0x40;
 	  break;
 
@@ -3249,15 +2332,15 @@ get_flags (char **cPP, int *flagsp)
 }
 
 /* Generate code and fixes for a BDAP prefix.
-   For v32, this handles ADDOQ because thankfully the opcodes are the
-   same.
 
    base_regno	Int containing the base register number.
 
    exprP	Pointer to structure containing the offset expression.  */
 
 static void
-gen_bdap (int base_regno, expressionS *exprP)
+gen_bdap (base_regno, exprP)
+     int base_regno;
+     expressionS *exprP;
 {
   unsigned int opcode;
   char *opcodep;
@@ -3303,10 +2386,10 @@ gen_bdap (int base_regno, expressionS *exprP)
     {
       /* Handle complex expressions.  */
       valueT addvalue
-	= SIMPLE_EXPR (exprP) ? exprP->X_add_number : 0;
+	= exprP->X_op_symbol != NULL ? 0 : exprP->X_add_number;
       symbolS *sym
-	= (SIMPLE_EXPR (exprP)
-	   ? exprP->X_add_symbol : make_expr_symbol (exprP));
+	= (exprP->X_op_symbol != NULL
+	   ? make_expr_symbol (exprP) : exprP->X_add_symbol);
 
       /* The expression is not defined yet but may become absolute.  We
 	 make it a relocation to be relaxed.  */
@@ -3322,13 +2405,10 @@ gen_bdap (int base_regno, expressionS *exprP)
    offset  The displacement value in bytes.  */
 
 static int
-branch_disp (int offset)
+branch_disp (offset)
+     int offset;
 {
   int disp;
-
-  /* Adjust all short branch offsets here.  */
-  if (cris_arch == arch_crisv32 || cris_arch == arch_cris_common_v10_v32)
-    offset += 2;
 
   disp = offset & 0xFE;
 
@@ -3354,36 +2434,14 @@ branch_disp (int offset)
    add_num.  */
 
 static void
-gen_cond_branch_32 (char *opcodep, char *writep, fragS *fragP,
-		    symbolS *add_symP, symbolS *sub_symP, long int add_num)
+gen_cond_branch_32 (opcodep, writep, fragP, add_symP, sub_symP, add_num)
+     char *opcodep;
+     char *writep;
+     fragS *fragP;
+     symbolS *add_symP;
+     symbolS *sub_symP;
+     long int add_num;
 {
-  int nop_opcode;
-  int opc_offset;
-  int branch_offset;
-
-  if (cris_arch == arch_crisv32)
-    {
-      nop_opcode = NOP_OPCODE_V32;
-      opc_offset = 10;
-      branch_offset = -2 - 8;
-    }
-  else if (pic)
-    {
-      nop_opcode = NOP_OPCODE;
-      opc_offset = 10;
-      branch_offset = -2 - 8;
-    }
-  else
-    {
-      nop_opcode = NOP_OPCODE;
-      opc_offset = 8;
-      branch_offset = -2 - 6;
-    }
-
-  /* We should never get here for compatibility mode.  */
-  if (cris_arch == arch_cris_common_v10_v32)
-    as_fatal (_("Calling gen_cond_branch_32 for .arch common_v10_v32\n"));
-
   if (warn_for_branch_expansion)
     as_warn_where (fragP->fr_file, fragP->fr_line,
 		   _("32-bit conditional branch generated"));
@@ -3399,8 +2457,8 @@ gen_cond_branch_32 (char *opcodep, char *writep, fragS *fragP,
      it's not the optimal extended construct, but we should get this
      rarely enough that it shouldn't matter.  */
 
-  writep[opc_offset] = branch_disp (branch_offset);
-  writep[opc_offset + 1] = opcodep[1];
+  writep[8] = branch_disp (-2 - 6);
+  writep[9] = opcodep[1];
 
   /* Then, we change the branch to an unconditional branch over the
      extended part, to the new location of the Bcc:
@@ -3410,21 +2468,16 @@ gen_cond_branch_32 (char *opcodep, char *writep, fragS *fragP,
      Note that these two writes are to currently different locations,
      merged later.  */
 
-  md_number_to_chars (opcodep, BA_QUICK_OPCODE
-		      + (cris_arch == arch_crisv32 ? 12 : (pic ? 10 : 8)),
-		      2);
-  md_number_to_chars (writep, nop_opcode, 2);
+  md_number_to_chars (opcodep, BA_QUICK_OPCODE + 8, 2);
+  md_number_to_chars (writep, NOP_OPCODE, 2);
 
   /* Then the extended thing, the 32-bit jump insn.
        opcodep+4: JUMP [PC+]
      or, in the PIC case,
-       opcodep+4: MOVE [PC=PC+N],P0.  */
+       opcodep+4: ADD [PC+],PC.  */
 
   md_number_to_chars (writep + 2,
-		      cris_arch == arch_crisv32
-		      ? BA_DWORD_OPCODE
-		      : (pic ? MOVE_PC_INCR_OPCODE_PREFIX
-			 : JUMP_PC_INCR_OPCODE), 2);
+		      pic ? ADD_PC_INCR_OPCODE : JUMP_PC_INCR_OPCODE, 2);
 
   /* We have to fill in the actual value too.
        opcodep+6: .DWORD
@@ -3434,12 +2487,10 @@ gen_cond_branch_32 (char *opcodep, char *writep, fragS *fragP,
   if (add_symP == NULL && sub_symP == NULL)
     {
       /* An absolute address.  */
-      if (pic || cris_arch == arch_crisv32)
+      if (pic)
 	fix_new (fragP, writep + 4 - fragP->fr_literal, 4,
 		 section_symbol (absolute_section),
-		 add_num
-		 + (cris_arch == arch_crisv32 ? 6 : 0),
-		 1, BFD_RELOC_32_PCREL);
+		 add_num, 1, BFD_RELOC_32_PCREL);
       else
 	md_number_to_chars (writep + 4, add_num, 4);
     }
@@ -3451,33 +2502,18 @@ gen_cond_branch_32 (char *opcodep, char *writep, fragS *fragP,
 
       /* Not absolute, we have to make it a frag for later evaluation.  */
       fix_new (fragP, writep + 4 - fragP->fr_literal, 4, add_symP,
-	       add_num + (cris_arch == arch_crisv32 ? 6 : 0),
-	       pic || cris_arch == arch_crisv32 ? 1 : 0,
-	       pic || cris_arch == arch_crisv32
-	       ? BFD_RELOC_32_PCREL : BFD_RELOC_32);
+	       add_num, pic ? 1 : 0, pic ? BFD_RELOC_32_PCREL : BFD_RELOC_32);
     }
-
-  if (cris_arch == arch_crisv32)
-    /* Follow it with a "NOP" for CRISv32.  */
-    md_number_to_chars (writep + 8, NOP_OPCODE_V32, 2);
-  else if (pic)
-    /* ...and the rest of the move-opcode for pre-v32 PIC.  */
-    md_number_to_chars (writep + 8, MOVE_PC_INCR_OPCODE_SUFFIX, 2);
 }
 
-/* Get the size of an immediate-reloc in bytes.  Only valid for
-   specified relocs (TLS, PIC).  */
+/* Get the size of an immediate-reloc in bytes.  Only valid for PIC
+   relocs.  */
 
 static unsigned int
-cris_get_specified_reloc_size (bfd_reloc_code_real_type reloc)
+cris_get_pic_reloc_size (reloc)
+     bfd_reloc_code_real_type reloc;
 {
-  return
-    reloc == BFD_RELOC_CRIS_16_GOTPLT
-    || reloc == BFD_RELOC_CRIS_16_GOT
-    || reloc == BFD_RELOC_CRIS_16_GOT_GD
-    || reloc == BFD_RELOC_CRIS_16_DTPREL
-    || reloc == BFD_RELOC_CRIS_16_GOT_TPREL
-    || reloc == BFD_RELOC_CRIS_16_TPREL
+  return reloc == BFD_RELOC_CRIS_16_GOTPLT || reloc == BFD_RELOC_CRIS_16_GOT
     ? 2 : 4;
 }
 
@@ -3485,8 +2521,10 @@ cris_get_specified_reloc_size (bfd_reloc_code_real_type reloc)
    Adjust *EXPRP with any addend found after the PIC suffix.  */
 
 static void
-cris_get_reloc_suffix (char **cPP, bfd_reloc_code_real_type *relocp,
-		       expressionS *exprP)
+cris_get_pic_suffix (cPP, relocp, exprP)
+     char **cPP;
+     bfd_reloc_code_real_type *relocp;
+     expressionS *exprP;
 {
   char *s = *cPP;
   unsigned int i;
@@ -3497,14 +2535,10 @@ cris_get_reloc_suffix (char **cPP, bfd_reloc_code_real_type *relocp,
     const char *const suffix;
     unsigned int len;
     bfd_reloc_code_real_type reloc;
-    bfd_boolean pic_p;
-    bfd_boolean tls_p;
   } pic_suffixes[] =
     {
 #undef PICMAP
-#define PICMAP(s, r) {s, sizeof (s) - 1, r, TRUE, FALSE}
-#define PICTLSMAP(s, r) {s, sizeof (s) - 1, r, TRUE, TRUE}
-#define TLSMAP(s, r) {s, sizeof (s) - 1, r, FALSE, TRUE}
+#define PICMAP(s, r) {s, sizeof (s) - 1, r}
       /* Keep this in order with longest unambiguous prefix first.  */
       PICMAP ("GOTPLT16", BFD_RELOC_CRIS_16_GOTPLT),
       PICMAP ("GOTPLT", BFD_RELOC_CRIS_32_GOTPLT),
@@ -3512,17 +2546,7 @@ cris_get_reloc_suffix (char **cPP, bfd_reloc_code_real_type *relocp,
       PICMAP ("PLT", BFD_RELOC_CRIS_32_PLT_PCREL),
       PICMAP ("GOTOFF", BFD_RELOC_CRIS_32_GOTREL),
       PICMAP ("GOT16", BFD_RELOC_CRIS_16_GOT),
-      PICMAP ("GOT", BFD_RELOC_CRIS_32_GOT),
-      PICTLSMAP ("GDGOTREL16", BFD_RELOC_CRIS_16_GOT_GD),
-      PICTLSMAP ("GDGOTREL", BFD_RELOC_CRIS_32_GOT_GD),
-      TLSMAP ("GD", BFD_RELOC_CRIS_32_GD),
-      PICTLSMAP ("DTPREL16", BFD_RELOC_CRIS_16_DTPREL),
-      PICTLSMAP ("DTPREL", BFD_RELOC_CRIS_32_DTPREL),
-      TLSMAP ("IE", BFD_RELOC_CRIS_32_IE),
-      PICTLSMAP ("TPOFFGOT16", BFD_RELOC_CRIS_16_GOT_TPREL),
-      PICTLSMAP ("TPOFFGOT", BFD_RELOC_CRIS_32_GOT_TPREL),
-      TLSMAP ("TPOFF16", BFD_RELOC_CRIS_16_TPREL),
-      TLSMAP ("TPOFF", BFD_RELOC_CRIS_32_TPREL)
+      PICMAP ("GOT", BFD_RELOC_CRIS_32_GOT)
     };
 
   /* We've already seen the ':', so consume it.  */
@@ -3531,11 +2555,7 @@ cris_get_reloc_suffix (char **cPP, bfd_reloc_code_real_type *relocp,
   for (i = 0; i < sizeof (pic_suffixes)/sizeof (pic_suffixes[0]); i++)
     {
       if (strncmp (s, pic_suffixes[i].suffix, pic_suffixes[i].len) == 0
-	  && ! is_part_of_name (s[pic_suffixes[i].len])
-	  /* PIC and non-PIC relocations are exclusive.  */
-	  && (pic != 0) == (pic_suffixes[i].pic_p != 0)
-	  /* But TLS can be active for non-TLS relocations too.  */
-	  && (pic_suffixes[i].tls_p == 0 || tls))
+	  && ! is_part_of_name (s[pic_suffixes[i].len]))
 	{
 	  /* We have a match.  Consume the suffix and set the relocation
 	     type.   */
@@ -3571,7 +2591,7 @@ cris_get_reloc_suffix (char **cPP, bfd_reloc_code_real_type *relocp,
      syntax error.  */
 }
 
-/* This *could* have been:
+/* This *could* be:
 
    Turn a string in input_line_pointer into a floating point constant
    of type TYPE, and store the appropriate bytes in *LITP.  The number
@@ -3591,9 +2611,11 @@ cris_get_reloc_suffix (char **cPP, bfd_reloc_code_real_type *relocp,
    code as assembly code, but if they do, they should be able enough to
    find out the correct bit patterns and use them.  */
 
-const char *
-md_atof (int type ATTRIBUTE_UNUSED, char *litp ATTRIBUTE_UNUSED,
-	 int *sizep ATTRIBUTE_UNUSED)
+char *
+md_atof (type, litp, sizep)
+     char type ATTRIBUTE_UNUSED;
+     char *litp ATTRIBUTE_UNUSED;
+     int *sizep ATTRIBUTE_UNUSED;
 {
   /* FIXME:  Is this function mentioned in the internals.texi manual?  If
      not, add it.  */
@@ -3616,7 +2638,12 @@ md_atof (int type ATTRIBUTE_UNUSED, char *litp ATTRIBUTE_UNUSED,
    seg	      The segment containing this number.  */
 
 static void
-cris_number_to_imm (char *bufp, long val, int n, fixS *fixP, segT seg)
+cris_number_to_imm (bufp, val, n, fixP, seg)
+     char *bufp;
+     long val;
+     int n;
+     fixS *fixP;
+     segT seg;
 {
   segT sym_seg;
 
@@ -3635,20 +2662,14 @@ cris_number_to_imm (char *bufp, long val, int n, fixS *fixP, segT seg)
     switch (fixP->fx_r_type)
       {
 	/* These must be fully resolved when getting here.  */
+      case BFD_RELOC_32_PCREL:
       case BFD_RELOC_16_PCREL:
       case BFD_RELOC_8_PCREL:
-	as_bad_where (fixP->fx_file, fixP->fx_line,
+	as_bad_where (fixP->fx_frag->fr_file, fixP->fx_frag->fr_line,
 		      _("PC-relative relocation must be trivially resolved"));
       default:
 	;
       }
-
-  /* Only use the computed value for old-arch binaries.  For all
-     others, where we're going to output a relocation, put 0 in the
-     code.  */
-  if (cris_arch != arch_cris_any_v0_v10
-      && (fixP->fx_addsy != NULL || fixP->fx_pcrel))
-    val = 0;
 
   switch (fixP->fx_r_type)
     {
@@ -3656,22 +2677,6 @@ cris_number_to_imm (char *bufp, long val, int n, fixS *fixP, segT seg)
 	 well as the reloc addend.  Keep it that way for now, to simplify
 	 regression tests on the object file contents.	FIXME:	Seems
 	 uninteresting now that we have a test suite.  */
-
-    case BFD_RELOC_CRIS_32_GOT_GD:
-    case BFD_RELOC_CRIS_16_GOT_GD:
-    case BFD_RELOC_CRIS_32_GD:
-    case BFD_RELOC_CRIS_32_IE:
-    case BFD_RELOC_CRIS_32_DTPREL:
-    case BFD_RELOC_CRIS_16_DTPREL:
-    case BFD_RELOC_CRIS_32_GOT_TPREL:
-    case BFD_RELOC_CRIS_16_GOT_TPREL:
-    case BFD_RELOC_CRIS_32_TPREL:
-    case BFD_RELOC_CRIS_16_TPREL:
-#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
-      if (IS_ELF && fixP->fx_addsy != NULL)
-	S_SET_THREAD_LOCAL (fixP->fx_addsy);
-#endif
-      /* Fall through.  */
 
     case BFD_RELOC_CRIS_16_GOT:
     case BFD_RELOC_CRIS_32_GOT:
@@ -3682,17 +2687,10 @@ cris_number_to_imm (char *bufp, long val, int n, fixS *fixP, segT seg)
     case BFD_RELOC_CRIS_32_PLT_PCREL:
       /* We don't want to put in any kind of non-zero bits in the data
 	 being relocated for these.  */
-      md_number_to_chars (bufp, 0, n);
       break;
 
-    case BFD_RELOC_32_PCREL:
-      /* If this one isn't fully resolved, we don't want to put non-zero
-	 in the object.  */
-      if (fixP->fx_addsy != NULL || fixP->fx_pcrel)
-	val = 0;
-
-      /* Fall through.  */
     case BFD_RELOC_32:
+    case BFD_RELOC_32_PCREL:
       /* No use having warnings here, since most hosts have a 32-bit type
 	 for "long" (which will probably change soon, now that I wrote
 	 this).  */
@@ -3704,72 +2702,60 @@ cris_number_to_imm (char *bufp, long val, int n, fixS *fixP, segT seg)
 
       /* FIXME: The 16 and 8-bit cases should have a way to check
 	 whether a signed or unsigned (or any signedness) number is
-	 accepted.  */
+	 accepted.
+	 FIXME: Does the as_bad calls find the line number by themselves,
+	 or should we change them into as_bad_where?  */
 
     case BFD_RELOC_16:
     case BFD_RELOC_16_PCREL:
       if (val > 0xffff || val < -32768)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("Value not in 16 bit range: %ld"), val);
-      bufp[1] = (val >> 8) & 0xFF;
-      bufp[0] = val & 0xFF;
-      break;
-
-    case BFD_RELOC_CRIS_SIGNED_16:
-      if (val > 32767 || val < -32768)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("Value not in 16 bit signed range: %ld"), val);
-      bufp[1] = (val >> 8) & 0xFF;
-      bufp[0] = val & 0xFF;
+	as_bad (_("Value not in 16 bit range: %ld"), val);
+      if (! fixP->fx_addsy)
+	{
+	  bufp[1] = (val >> 8) & 0xFF;
+	  bufp[0] = val & 0xFF;
+	}
       break;
 
     case BFD_RELOC_8:
     case BFD_RELOC_8_PCREL:
       if (val > 255 || val < -128)
-	as_bad_where (fixP->fx_file, fixP->fx_line, _("Value not in 8 bit range: %ld"), val);
-      bufp[0] = val & 0xFF;
+	as_bad (_("Value not in 8 bit range: %ld"), val);
+      if (! fixP->fx_addsy)
+	bufp[0] = val & 0xFF;
       break;
 
-    case BFD_RELOC_CRIS_SIGNED_8:
-      if (val > 127 || val < -128)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("Value not in 8 bit signed range: %ld"), val);
-      bufp[0] = val & 0xFF;
-      break;
-
-    case BFD_RELOC_CRIS_LAPCQ_OFFSET:
-      /* FIXME: Test-cases for out-of-range values.  Probably also need
-	 to use as_bad_where.  */
     case BFD_RELOC_CRIS_UNSIGNED_4:
       if (val > 15 || val < 0)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("Value not in 4 bit unsigned range: %ld"), val);
-      bufp[0] |= val & 0x0F;
+	as_bad (_("Value not in 4 bit unsigned range: %ld"), val);
+      if (! fixP->fx_addsy)
+	bufp[0] |= val & 0x0F;
       break;
 
     case BFD_RELOC_CRIS_UNSIGNED_5:
       if (val > 31 || val < 0)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("Value not in 5 bit unsigned range: %ld"), val);
-      bufp[0] |= val & 0x1F;
+	as_bad (_("Value not in 5 bit unsigned range: %ld"), val);
+      if (! fixP->fx_addsy)
+	bufp[0] |= val & 0x1F;
       break;
 
     case BFD_RELOC_CRIS_SIGNED_6:
       if (val > 31 || val < -32)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("Value not in 6 bit range: %ld"), val);
-      bufp[0] |= val & 0x3F;
+	as_bad (_("Value not in 6 bit range: %ld"), val);
+      if (! fixP->fx_addsy)
+	bufp[0] |= val & 0x3F;
       break;
 
     case BFD_RELOC_CRIS_UNSIGNED_6:
       if (val > 63 || val < 0)
-	as_bad_where (fixP->fx_file, fixP->fx_line,
-		      _("Value not in 6 bit unsigned range: %ld"), val);
-      bufp[0] |= val & 0x3F;
+	as_bad (_("Value not in 6 bit unsigned range: %ld"), val);
+      if (! fixP->fx_addsy)
+	bufp[0] |= val & 0x3F;
       break;
 
     case BFD_RELOC_CRIS_BDISP8:
-      bufp[0] = branch_disp (val);
+      if (! fixP->fx_addsy)
+	bufp[0] = branch_disp (val);
       break;
 
     case BFD_RELOC_NONE:
@@ -3802,7 +2788,9 @@ cris_number_to_imm (char *bufp, long val, int n, fixS *fixP, segT seg)
    GAS does not understand.  */
 
 int
-md_parse_option (int arg, const char *argp ATTRIBUTE_UNUSED)
+md_parse_option (arg, argp)
+     int arg;
+     char *argp ATTRIBUTE_UNUSED;
 {
   switch (arg)
     {
@@ -3814,75 +2802,36 @@ md_parse_option (int arg, const char *argp ATTRIBUTE_UNUSED)
 
     case 'N':
       warn_for_branch_expansion = 1;
-      break;
+      return 1;
 
     case OPTION_NO_US:
-      demand_register_prefix = TRUE;
+      demand_register_prefix = true;
 
       if (OUTPUT_FLAVOR == bfd_target_aout_flavour)
 	as_bad (_("--no-underscore is invalid with a.out format"));
       else
-	symbols_have_leading_underscore = FALSE;
-      break;
+	symbols_have_leading_underscore = false;
+      return 1;
 
     case OPTION_US:
-      demand_register_prefix = FALSE;
-      symbols_have_leading_underscore = TRUE;
-      break;
+      demand_register_prefix = false;
+      symbols_have_leading_underscore = true;
+      return 1;
 
     case OPTION_PIC:
-      if (OUTPUT_FLAVOR != bfd_target_elf_flavour)
-	as_bad (_("--pic is invalid for this object format"));
-      pic = TRUE;
-      if (cris_arch != arch_crisv32)
-	md_long_jump_size = cris_any_v0_v10_long_jump_size_pic;
-      else
-	md_long_jump_size = crisv32_long_jump_size;
-      break;
-
-    case OPTION_ARCH:
-      {
-	const char *str = argp;
-	enum cris_archs argarch = cris_arch_from_string (&str);
-
-	if (argarch == arch_cris_unknown)
-	    as_bad (_("invalid <arch> in --march=<arch>: %s"), argp);
-	else
-	  cris_arch = argarch;
-
-	if (argarch == arch_crisv32)
-	  {
-	    err_for_dangerous_mul_placement = 0;
-	    md_long_jump_size = crisv32_long_jump_size;
-	  }
-	else
-	  {
-	    if (pic)
-	      md_long_jump_size = cris_any_v0_v10_long_jump_size_pic;
-	    else
-	      md_long_jump_size = cris_any_v0_v10_long_jump_size;
-	  }
-      }
-      break;
-
-    case OPTION_MULBUG_ABORT_OFF:
-      err_for_dangerous_mul_placement = 0;
-      break;
-
-    case OPTION_MULBUG_ABORT_ON:
-      err_for_dangerous_mul_placement = 1;
-      break;
+      pic = true;
+      return 1;
 
     default:
       return 0;
     }
-
-  return 1;
 }
 
 /* Round up a section size to the appropriate boundary.  */
 valueT
-md_section_align (segT segment, valueT size)
+md_section_align (segment, size)
+     segT segment;
+     valueT size;
 {
   /* Round all sects to multiple of 4, except the bss section, which
      we'll round to word-size.
@@ -3910,21 +2859,15 @@ md_section_align (segT segment, valueT size)
 
 /* Generate a machine-dependent relocation.  */
 arelent *
-tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixP)
+tc_gen_reloc (section, fixP)
+     asection *section ATTRIBUTE_UNUSED;
+     fixS *fixP;
 {
   arelent *relP;
   bfd_reloc_code_real_type code;
 
   switch (fixP->fx_r_type)
     {
-    case BFD_RELOC_CRIS_SIGNED_8:
-      code = BFD_RELOC_8;
-      break;
-
-    case BFD_RELOC_CRIS_SIGNED_16:
-      code = BFD_RELOC_16;
-      break;
-
     case BFD_RELOC_CRIS_16_GOT:
     case BFD_RELOC_CRIS_32_GOT:
     case BFD_RELOC_CRIS_16_GOTPLT:
@@ -3933,24 +2876,10 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixP)
     case BFD_RELOC_CRIS_32_PLT_GOTREL:
     case BFD_RELOC_CRIS_32_PLT_PCREL:
     case BFD_RELOC_32:
-    case BFD_RELOC_32_PCREL:
     case BFD_RELOC_16:
     case BFD_RELOC_8:
     case BFD_RELOC_VTABLE_INHERIT:
     case BFD_RELOC_VTABLE_ENTRY:
-    case BFD_RELOC_CRIS_UNSIGNED_8:
-    case BFD_RELOC_CRIS_UNSIGNED_16:
-    case BFD_RELOC_CRIS_LAPCQ_OFFSET:
-    case BFD_RELOC_CRIS_32_GOT_GD:
-    case BFD_RELOC_CRIS_16_GOT_GD:
-    case BFD_RELOC_CRIS_32_GD:
-    case BFD_RELOC_CRIS_32_IE:
-    case BFD_RELOC_CRIS_32_DTPREL:
-    case BFD_RELOC_CRIS_16_DTPREL:
-    case BFD_RELOC_CRIS_32_GOT_TPREL:
-    case BFD_RELOC_CRIS_16_GOT_TPREL:
-    case BFD_RELOC_CRIS_32_TPREL:
-    case BFD_RELOC_CRIS_16_TPREL:
       code = fixP->fx_r_type;
       break;
     default:
@@ -3959,13 +2888,18 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixP)
       return 0;
     }
 
-  relP = XNEW (arelent);
-  gas_assert (relP != 0);
-  relP->sym_ptr_ptr = XNEW (asymbol *);
+  relP = (arelent *) xmalloc (sizeof (arelent));
+  assert (relP != 0);
+  relP->sym_ptr_ptr = (asymbol **) xmalloc (sizeof (asymbol *));
   *relP->sym_ptr_ptr = symbol_get_bfdsym (fixP->fx_addsy);
   relP->address = fixP->fx_frag->fr_address + fixP->fx_where;
 
-  relP->addend = fixP->fx_offset;
+  if (fixP->fx_pcrel)
+    /* FIXME: Is this correct?  */
+    relP->addend = fixP->fx_addnumber;
+  else
+    /* At least *this one* is correct.  */
+    relP->addend = fixP->fx_offset;
 
   /* This is the standard place for KLUDGEs to work around bugs in
      bfd_install_relocation (first such note in the documentation
@@ -4014,7 +2948,8 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixP)
 /* Machine-dependent usage-output.  */
 
 void
-md_show_usage (FILE *stream)
+md_show_usage (stream)
+     FILE *stream;
 {
   /* The messages are formatted to line up with the generic options.  */
   fprintf (stream, _("CRIS-specific options:\n"));
@@ -4030,20 +2965,18 @@ md_show_usage (FILE *stream)
 	   _("  --no-underscore         User symbols do not have any prefix.\n"));
   fprintf (stream, "%s",
 	   _("                          Registers will require a `$'-prefix.\n"));
-#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
   fprintf (stream, "%s",
 	   _("  --pic			Enable generation of position-independent code.\n"));
-#endif
-  fprintf (stream, "%s",
-	   _("  --march=<arch>		Generate code for <arch>.  Valid choices for <arch>\n\
-				are v0_v10, v10, v32 and common_v10_v32.\n"));
 }
 
 /* Apply a fixS (fixup of an instruction or data that we didn't have
    enough info to complete immediately) to the data in a frag.  */
 
 void
-md_apply_fix (fixS *fixP, valueT *valP, segT seg)
+md_apply_fix3 (fixP, valP, seg)
+     fixS *fixP;
+     valueT *valP;
+     segT seg;
 {
   /* This assignment truncates upper bits if valueT is 64 bits (as with
      --enable-64-bit-bfd), which is fine here, though we cast to avoid
@@ -4054,22 +2987,35 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
   if (fixP->fx_addsy == 0 && !fixP->fx_pcrel)
     fixP->fx_done = 1;
 
-  /* We can't actually support subtracting a symbol.  */
-  if (fixP->fx_subsy != (symbolS *) NULL)
-    as_bad_where (fixP->fx_file, fixP->fx_line,
-		  _("expression too complex"));
+  if (fixP->fx_bit_fixP || fixP->fx_im_disp != 0)
+    {
+      as_bad_where (fixP->fx_file, fixP->fx_line, _("Invalid relocation"));
+      fixP->fx_done = 1;
+    }
+  else
+    {
+      /* I took this from tc-arc.c, since we used to not support
+	 fx_subsy != NULL.  I'm not totally sure it's TRT.  */
+      if (fixP->fx_subsy != (symbolS *) NULL)
+	{
+	  if (S_GET_SEGMENT (fixP->fx_subsy) == absolute_section)
+	    val -= S_GET_VALUE (fixP->fx_subsy);
+	  else
+	    /* We can't actually support subtracting a symbol.  */
+	    as_bad_where (fixP->fx_file, fixP->fx_line,
+			  _("expression too complex"));
+	}
 
-  /* This operand-type is scaled.  */
-  if (fixP->fx_r_type == BFD_RELOC_CRIS_LAPCQ_OFFSET)
-    val /= 2;
-  cris_number_to_imm (buf, val, fixP->fx_size, fixP, seg);
+      cris_number_to_imm (buf, val, fixP->fx_size, fixP, seg);
+    }
 }
 
 /* All relocations are relative to the location just after the fixup;
    the address of the fixup plus its size.  */
 
 long
-md_pcrel_from (fixS *fixP)
+md_pcrel_from (fixP)
+     fixS *fixP;
 {
   valueT addr = fixP->fx_where + fixP->fx_frag->fr_address;
 
@@ -4082,8 +3028,7 @@ md_pcrel_from (fixS *fixP)
   if (OUTPUT_FLAVOR != bfd_target_elf_flavour
       || (fixP->fx_r_type != BFD_RELOC_8_PCREL
 	  && fixP->fx_r_type != BFD_RELOC_16_PCREL
-	  && fixP->fx_r_type != BFD_RELOC_32_PCREL
-	  && fixP->fx_r_type != BFD_RELOC_CRIS_LAPCQ_OFFSET))
+	  && fixP->fx_r_type != BFD_RELOC_32_PCREL))
     as_bad_where (fixP->fx_file, fixP->fx_line,
 		  _("Invalid pc-relative relocation"));
   return fixP->fx_size + addr;
@@ -4091,20 +3036,24 @@ md_pcrel_from (fixS *fixP)
 
 /* We have no need to give defaults for symbol-values.  */
 symbolS *
-md_undefined_symbol (char *name ATTRIBUTE_UNUSED)
+md_undefined_symbol (name)
+     char *name ATTRIBUTE_UNUSED;
 {
   return 0;
 }
 
-/* If this function returns non-zero, it prevents the relocation
-   against symbol(s) in the FIXP from being replaced with relocations
-   against section symbols, and guarantees that a relocation will be
-   emitted even when the value can be resolved locally.  */
+/* Definition of TC_FORCE_RELOCATION.
+   FIXME: Unsure of this.  Can we omit it?  Just copied from tc-i386.c
+   when doing multi-object format with ELF, since it's the only other
+   multi-object-format target with a.out and ELF.  */
 int
-md_cris_force_relocation (struct fix *fixp)
+md_cris_force_relocation (fixp)
+     struct fix *fixp;
 {
   switch (fixp->fx_r_type)
     {
+    case BFD_RELOC_VTABLE_INHERIT:
+    case BFD_RELOC_VTABLE_ENTRY:
     case BFD_RELOC_CRIS_16_GOT:
     case BFD_RELOC_CRIS_32_GOT:
     case BFD_RELOC_CRIS_16_GOTPLT:
@@ -4117,7 +3066,7 @@ md_cris_force_relocation (struct fix *fixp)
       ;
     }
 
-  return generic_force_reloc (fixp);
+  return 0;
 }
 
 /* Check and emit error if broken-word handling has failed to fix up a
@@ -4125,7 +3074,9 @@ md_cris_force_relocation (struct fix *fixp)
    knows about how to handle broken words.  */
 
 void
-tc_cris_check_adjusted_broken_word (offsetT new_offset, struct broken_word *brokwP)
+tc_cris_check_adjusted_broken_word (new_offset, brokwP)
+     offsetT new_offset;
+     struct broken_word *brokwP;
 {
   if (new_offset > 32767 || new_offset < -32768)
     /* We really want a genuine error, not a warning, so make it one.  */
@@ -4136,39 +3087,36 @@ tc_cris_check_adjusted_broken_word (offsetT new_offset, struct broken_word *brok
 
 /* Make a leading REGISTER_PREFIX_CHAR mandatory for all registers.  */
 
-static void
-cris_force_reg_prefix (void)
+static void cris_force_reg_prefix ()
 {
-  demand_register_prefix = TRUE;
+  demand_register_prefix = true;
 }
 
 /* Do not demand a leading REGISTER_PREFIX_CHAR for all registers.  */
 
-static void
-cris_relax_reg_prefix (void)
+static void cris_relax_reg_prefix ()
 {
-  demand_register_prefix = FALSE;
+  demand_register_prefix = false;
 }
 
 /* Adjust for having a leading '_' on all user symbols.  */
 
-static void
-cris_sym_leading_underscore (void)
+static void cris_sym_leading_underscore ()
 {
   /* We can't really do anything more than assert that what the program
      thinks symbol starts with agrees with the command-line options, since
      the bfd is already created.  */
 
-  if (!symbols_have_leading_underscore)
+  if (symbols_have_leading_underscore == false)
     as_bad (_(".syntax %s requires command-line option `--underscore'"),
 	    SYNTAX_USER_SYM_LEADING_UNDERSCORE);
 }
 
 /* Adjust for not having any particular prefix on user symbols.  */
 
-static void cris_sym_no_leading_underscore (void)
+static void cris_sym_no_leading_underscore ()
 {
-  if (symbols_have_leading_underscore)
+  if (symbols_have_leading_underscore == true)
     as_bad (_(".syntax %s requires command-line option `--no-underscore'"),
 	    SYNTAX_USER_SYM_NO_LEADING_UNDERSCORE);
 }
@@ -4177,12 +3125,13 @@ static void cris_sym_no_leading_underscore (void)
    syntax the assembly code has.  */
 
 static void
-s_syntax (int ignore ATTRIBUTE_UNUSED)
+s_syntax (ignore)
+     int ignore ATTRIBUTE_UNUSED;
 {
   static const struct syntaxes
   {
-    const char *const operand;
-    void (*fn) (void);
+    const char *operand;
+    void (*fn) PARAMS ((void));
   } syntax_table[] =
     {{SYNTAX_ENFORCE_REG_PREFIX, cris_force_reg_prefix},
      {SYNTAX_RELAX_REG_PREFIX, cris_relax_reg_prefix},
@@ -4213,7 +3162,8 @@ s_syntax (int ignore ATTRIBUTE_UNUSED)
    not emitting ELF.  */
 
 static void
-s_cris_file (int dummy)
+s_cris_file (dummy)
+     int dummy;
 {
   if (OUTPUT_FLAVOR != bfd_target_elf_flavour)
     as_bad (_("Pseudodirective .file is only valid when generating ELF"));
@@ -4225,190 +3175,13 @@ s_cris_file (int dummy)
    emitting ELF.  */
 
 static void
-s_cris_loc (int dummy)
+s_cris_loc (dummy)
+     int dummy;
 {
   if (OUTPUT_FLAVOR != bfd_target_elf_flavour)
     as_bad (_("Pseudodirective .loc is only valid when generating ELF"));
   else
     dwarf2_directive_loc (dummy);
-}
-
-/* Worker for .dtpoffd: generate a R_CRIS_32_DTPREL reloc, as for
-   expr:DTPREL but for use in debug info.  */
-
-static void
-s_cris_dtpoff (int bytes)
-{
-  expressionS ex;
-  char *p;
-
-  if (bytes != 4)
-    as_fatal (_("internal inconsistency problem: %s called for %d bytes"),
-	      __FUNCTION__, bytes);
-
-  expression (&ex);
-
-  p = frag_more (bytes);
-  md_number_to_chars (p, 0, bytes);
-  fix_new_exp (frag_now, p - frag_now->fr_literal, bytes, &ex, FALSE,
-	       BFD_RELOC_CRIS_32_DTPREL);
-
-  demand_empty_rest_of_line ();
-}
-
-
-/* Translate a <arch> string (as common to --march=<arch> and .arch <arch>)
-   into an enum.  If the string *STR is recognized, *STR is updated to point
-   to the end of the string.  If the string is not recognized,
-   arch_cris_unknown is returned.  */
-
-static enum cris_archs
-cris_arch_from_string (const char **str)
-{
-  static const struct cris_arch_struct
-  {
-    const char *const name;
-    enum cris_archs arch;
-  } arch_table[] =
-      /* Keep in order longest-first for choices where one is a prefix
-	 of another.  */
-    {{"v0_v10", arch_cris_any_v0_v10},
-     {"v10", arch_crisv10},
-     {"v32", arch_crisv32},
-     {"common_v10_v32", arch_cris_common_v10_v32}};
-
-  const struct cris_arch_struct *ap;
-
-  for (ap = arch_table;
-       ap < arch_table + sizeof (arch_table) / sizeof (arch_table[0]);
-       ap++)
-    {
-      int len = strlen (ap->name);
-
-      if (strncmp (*str, ap->name, len) == 0
-	  && (str[0][len] == 0 || ISSPACE (str[0][len])))
-	{
-	  *str += strlen (ap->name);
-	  return ap->arch;
-	}
-    }
-
-  return arch_cris_unknown;
-}
-
-/* Return nonzero if architecture version ARCH matches version range in
-   IVER.  */
-
-static int
-cris_insn_ver_valid_for_arch (enum cris_insn_version_usage iver,
-			      enum cris_archs arch)
-{
-  switch (arch)
-    {
-    case arch_cris_any_v0_v10:
-      return
-	(iver == cris_ver_version_all
-	 || iver == cris_ver_warning
-	 || iver == cris_ver_v0_3
-	 || iver == cris_ver_v3p
-	 || iver == cris_ver_v0_10
-	 || iver == cris_ver_sim_v0_10
-	 || iver == cris_ver_v3_10
-	 || iver == cris_ver_v8
-	 || iver == cris_ver_v8p
-	 || iver == cris_ver_v8_10
-	 || iver == cris_ver_v10
-	 || iver == cris_ver_v10p);
-
-    case arch_crisv32:
-      return
-	(iver == cris_ver_version_all
-	 || iver == cris_ver_v3p
-	 || iver == cris_ver_v8p
-	 || iver == cris_ver_v10p
-	 || iver == cris_ver_v32p);
-
-    case arch_cris_common_v10_v32:
-      return
-	(iver == cris_ver_version_all
-	 || iver == cris_ver_v3p
-	 || iver == cris_ver_v8p
-	 || iver == cris_ver_v10p);
-
-    case arch_crisv0:
-      return
-	(iver == cris_ver_version_all
-	 || iver == cris_ver_v0_3
-	 || iver == cris_ver_v0_10
-	 || iver == cris_ver_sim_v0_10);
-
-    case arch_crisv3:
-      return
-	(iver == cris_ver_version_all
-	 || iver == cris_ver_v0_3
-	 || iver == cris_ver_v3p
-	 || iver == cris_ver_v0_10
-	 || iver == cris_ver_sim_v0_10
-	 || iver == cris_ver_v3_10);
-
-    case arch_crisv8:
-      return
-	(iver == cris_ver_version_all
-	 || iver == cris_ver_v3p
-	 || iver == cris_ver_v0_10
-	 || iver == cris_ver_sim_v0_10
-	 || iver == cris_ver_v3_10
-	 || iver == cris_ver_v8
-	 || iver == cris_ver_v8p
-	 || iver == cris_ver_v8_10);
-
-    case arch_crisv10:
-      return
-	(iver == cris_ver_version_all
-	 || iver == cris_ver_v3p
-	 || iver == cris_ver_v0_10
-	 || iver == cris_ver_sim_v0_10
-	 || iver == cris_ver_v3_10
-	 || iver == cris_ver_v8p
-	 || iver == cris_ver_v8_10
-	 || iver == cris_ver_v10
-	 || iver == cris_ver_v10p);
-
-    default:
-      BAD_CASE (arch);
-   }
-}
-
-/* Assert that the .arch ARCHCHOICE1 is compatible with the specified or
-   default --march=<ARCHCHOICE2> option.  */
-
-static void
-s_cris_arch (int dummy ATTRIBUTE_UNUSED)
-{
-  /* Right now we take the easy route and check for sameness.  It's not
-     obvious that allowing e.g. --march=v32 and .arch common_v0_v32
-     would be more useful than confusing, implementation-wise and
-     user-wise.  */
-
-  const char *str = input_line_pointer;
-  enum cris_archs arch = cris_arch_from_string (&str);
-
-  if (arch == arch_cris_unknown)
-    {
-      as_bad (_("unknown operand to .arch"));
-
-      /* For this one, str does not reflect the end of the operand,
-	 since there was no matching arch.  Skip it manually; skip
-	 things that can be part of a word (a name).  */
-      while (is_part_of_name (*str))
-	str++;
-    }
-  else if (arch != cris_arch)
-    as_bad (_(".arch <arch> requires a matching --march=... option"));
-
-  input_line_pointer = (char *) str;
-  demand_empty_rest_of_line ();
-  return;
 }
 
 /*

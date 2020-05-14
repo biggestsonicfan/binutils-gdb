@@ -131,9 +131,9 @@ foo:
  mov    0x90909090[eax], edx
  mov    dl, 0x90909090[eax]
  mov    edx, 0x90909090[eax]
- mov    word ptr 0x90909090[eax], ss
+ mov    dword ptr 0x90909090[eax], ss
  lea    edx, 0x90909090[eax]
- mov    ss, word ptr 0x90909090[eax]
+ mov    ss, dword ptr 0x90909090[eax]
  pop    dword ptr 0x90909090[eax]
  xchg   eax, eax
  xchg   ecx, eax
@@ -145,16 +145,16 @@ foo:
  xchg   edi, eax
  cwde
  cdq
- call   0x9090:0x90909090
+ call   0x9090,0x90909090
  fwait
  pushf
  popf
  sahf
  lahf
- mov    al, FLAT:[0x90909090]
- mov    eax, FLAT:[0x90909090]
- mov    FLAT:[0x90909090], al
- mov    FLAT:[0x90909090], eax
+ mov    al, [0x90909090]
+ mov    eax, [0x90909090]
+ mov    [0x90909090], al
+ mov    [0x90909090], eax
  movs   byte ptr es:[edi], byte ptr ds:[esi]
  movs   dword ptr es:[edi], dword ptr ds:[esi]
  cmps   byte ptr ds:[esi], byte ptr es:[edi]
@@ -193,8 +193,6 @@ foo:
  mov    dword ptr 0x90909090[eax], 0x90909090
  enter  0x9090, 0x90
  leave
- retf   0x9090
- retf
  lret   0x9090
  lret
  int3
@@ -226,7 +224,7 @@ foo:
  out    0x90, eax
  call   .+5+0x90909090
  jmp    .+5+0x90909090
- jmp    0x9090:0x90909090
+ jmp    0x9090,0x90909090
  jmp    .+2-0x70
  in     al, dx
  in     eax, dx
@@ -353,7 +351,7 @@ foo:
  lgs    edx, 0x90909090[eax]
  movzx  edx, byte ptr 0x90909090[eax]
  movzx  edx, word ptr 0x90909090[eax]
- ud2
+ ud2b
  btc    0x90909090[eax], edx
  bsf    edx, 0x90909090[eax]
  bsr    edx, 0x90909090[eax]
@@ -486,13 +484,13 @@ foo:
  xchg   bp, ax
  xchg   si, ax
  xchg   di, ax
- cbw
- cwd
- callw  0x9090:0x9090
+ cbtw
+ cwtd
+ callw  0x9090,0x9090
  pushfw
  popfw
- mov    ax, FLAT:[0x90909090]
- mov    FLAT:[0x90909090], ax
+ mov    ax, [0x90909090]
+ mov    [0x90909090], ax
  movs   word ptr es:[edi], word ptr ds:[esi]
  cmps   word ptr ds:[esi], word ptr es:[edi]
  test   ax, 0x9090
@@ -515,8 +513,6 @@ foo:
  mov    word ptr 0x90909090[eax], 0x9090
  enterw 0x9090, 0x90
  leavew
- retfw  0x9090
- retfw
  lretw  0x9090
  lretw
  iretw
@@ -524,8 +520,8 @@ foo:
  rcl    word ptr 0x90909090[eax], cl
  in     ax, 0x90
  out    0x90, ax
- callw  .+3+0x9090
- jmpw   0x9090:0x9090
+ call   word ptr .+3+0x9090
+ jmpw   0x9090,0x9090
  in     ax, dx
  out    dx, ax
  not    word ptr 0x90909090[eax]
@@ -581,7 +577,7 @@ bar:
  call	gs_foo
  call	short_foo
  fstp   QWORD PTR [eax+edx*8]
- mov	ecx, OFFSET FLAT:xyz
+ mov	ecx, OFFSET FLAT:ss
  mov	BYTE PTR [esi+edx], al
  mov	BYTE PTR [edx+esi], al
  mov	BYTE PTR [edx*2+esi], al
@@ -599,13 +595,13 @@ rot5:
  mov	eax, [ebx*2]
  adc    BYTE PTR [eax*4+0x90909090], dl
  das
- jmp    0x9090:0x90909090
+ jmp    0x9090,0x90909090
  movs   WORD PTR es:[edi], WORD PTR ds:[esi]
  jo     .+2-0x70
 
 1:
  jne	1b
- movq	mm6, [QWORD PTR .LC5+40]		 
+ movq	mm6, [DWORD PTR .LC5+40]		 
  add	edi, dword ptr [ebx+8*eax]
  movd	mm0, dword ptr [ebx+8*eax+4]
  add	edi, dword ptr [ebx+8*ecx+((4095+1)*8)]
@@ -617,101 +613,6 @@ rot5:
  mov	ax,  word ptr [ebx+2*eax+(2*(4095+1)*2)]
  jmp 	eax
  jmp	[eax]
- jmp	FLAT:[bar]
+ jmp	[bar]
  jmp	bar
-
-	# Check arithmetic operators
-	mov	%eax,(( 17 ) + 1) 
-	and	%eax,~(1 << ( 18 )) 
-	and	%eax,0xFFFBFFFF
-	mov	%al, (( 0x4711  ) & 0xff) 
-	mov	%al, 0x11
-	mov	%bl, ((( 0x4711  ) >> 8) & 0xff) 
-	mov	%bl, 0x47
-
- shrd   eax, edx, cl
- shld   eax, edx, cl
-
-fadd
-fadd	st(3)
-fadd	st,st(3)
-fadd	st(3),st
-fadd   DWORD PTR [ebx]
-fadd   QWORD PTR [ebx]
-faddp
-faddp	st(3)
-faddp	st(3),st
-fdiv
-fdiv   st(3)
-fdiv   st,st(3)
-fdiv   st(3),st
-fdiv   DWORD PTR [ebx]
-fdiv   QWORD PTR [ebx]
-fdivp
-fdivp  st(3)
-fdivp  st(3),st
-fdiv  st,st(3)
-fdivr
-fdivr  st(3)
-fdivr  st,st(3)
-fdivr  st(3),st
-fdivr  DWORD PTR [ebx]
-fdivr  QWORD PTR [ebx]
-fdivrp
-fdivrp st(3)
-fdivrp st(3),st
-fdivr st,st(3)
-fmul
-fmul	st(3)
-fmul	st,st(3)
-fmul	st(3),st
-fmul   DWORD PTR [ebx]
-fmul   QWORD PTR [ebx]
-fmulp
-fmulp	st(3)
-fmulp	st(3),st
-fsub
-fsubr
-fsub   st(3)
-fsub   st,st(3)
-fsub   st(3),st
-fsub   DWORD PTR [ebx]
-fsub   QWORD PTR [ebx]
-fsubp
-fsubp  st(3)
-fsub  st,st(3)
-fsubp  st(3),st
-fsubr  st(3)
-fsubr  st,st(3)
-fsubr  st(3),st
-fsubr  DWORD PTR [ebx]
-fsubr  QWORD PTR [ebx]
-fsubrp
-fsubrp st(3)
-fsubrp st(3),st
-fsubr st,st(3)
-
-fidivr  word ptr [ebx]
-fidivr  dword ptr [ebx]
-
- cmovpe  edx, 0x90909090[eax]
- cmovpo edx, 0x90909090[eax]
- cmovpe  dx, 0x90909090[eax]
- cmovpo dx, 0x90909090[eax]
-
- # Check base/index swapping
-	.allow_index_reg
- mov    eax, [eax+esp]
- mov    eax, [eiz+eax]
- vgatherdps xmm0, [xmm1+eax], xmm2
-
-	# Test that disassembly of a partial instruction shows the partial byte:
-	# https://www.sourceware.org/ml/binutils/2015-08/msg00226.html
-	.byte 0x24
-	.byte 0x2f
-	.byte 0x0f
-barn:
-        .byte 0x0f
-        .byte 0xba
-        .byte 0xe2
-        .byte 0x03
+ .p2align 4,0

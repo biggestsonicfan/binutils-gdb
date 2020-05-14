@@ -1,6 +1,6 @@
 /* Libiberty basename.  Like basename, but is not overridden by the
    system C library.
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of the libiberty library.
 Libiberty is free software; you can redistribute it and/or
@@ -15,8 +15,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /*
 
@@ -37,48 +37,44 @@ and a path ending in @code{/} returns the empty string after it.
 
 */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "ansidecl.h"
 #include "libiberty.h"
 #include "safe-ctype.h"
-#include "filenames.h"
+
+#ifndef DIR_SEPARATOR
+#  define DIR_SEPARATOR '/'
+#endif
+
+#if defined (_WIN32) || defined (__MSDOS__) \
+    || defined (__DJGPP__) || defined (__OS2__)
+#  define HAVE_DOS_BASED_FILE_SYSTEM
+#  ifndef DIR_SEPARATOR_2 
+#    define DIR_SEPARATOR_2 '\\'
+#  endif
+#endif
+
+#ifndef DIR_SEPARATOR_2
+#  define IS_DIR_SEPARATOR(ch) ((ch) == DIR_SEPARATOR)
+#else
+#  define IS_DIR_SEPARATOR(ch) \
+	(((ch) == DIR_SEPARATOR) || ((ch) == DIR_SEPARATOR_2))
+#endif
 
 const char *
-unix_lbasename (const char *name)
+lbasename (name)
+     const char *name;
 {
   const char *base;
 
-  for (base = name; *name; name++)
-    if (IS_UNIX_DIR_SEPARATOR (*name))
-      base = name + 1;
-
-  return base;
-}
-
-const char *
-dos_lbasename (const char *name)
-{
-  const char *base;
-
+#if defined (HAVE_DOS_BASED_FILE_SYSTEM)
   /* Skip over a possible disk name.  */
   if (ISALPHA (name[0]) && name[1] == ':') 
     name += 2;
+#endif
 
   for (base = name; *name; name++)
-    if (IS_DOS_DIR_SEPARATOR (*name))
+    if (IS_DIR_SEPARATOR (*name))
       base = name + 1;
 
   return base;
-}
-
-const char *
-lbasename (const char *name)
-{
-#if defined (HAVE_DOS_BASED_FILE_SYSTEM)
-  return dos_lbasename (name);
-#else
-  return unix_lbasename (name);
-#endif
 }

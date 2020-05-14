@@ -1,9 +1,9 @@
 /* Header file for GDB CLI command implementation library.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -12,14 +12,12 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
-#ifndef CLI_CLI_CMDS_H
-#define CLI_CLI_CMDS_H
-
-#include "gdbsupport/filestuff.h"
-#include "gdbsupport/gdb_optional.h"
-#include "completer.h"
+#if !defined (CLI_CMDS_H)
+#define CLI_CMDS_H 1
 
 /* Chain containing all defined commands.  */
 
@@ -29,29 +27,29 @@ extern struct cmd_list_element *cmdlist;
 
 extern struct cmd_list_element *infolist;
 
-/* Chain containing all defined enable subcommands.  */
+/* Chain containing all defined enable subcommands. */
 
 extern struct cmd_list_element *enablelist;
 
-/* Chain containing all defined disable subcommands.  */
+/* Chain containing all defined disable subcommands. */
 
 extern struct cmd_list_element *disablelist;
 
-/* Chain containing all defined delete subcommands.  */
+/* Chain containing all defined delete subcommands. */
 
 extern struct cmd_list_element *deletelist;
 
-/* Chain containing all defined detach subcommands.  */
+/* Chain containing all defined toggle subcommands. */
 
-extern struct cmd_list_element *detachlist;
+extern struct cmd_list_element *togglelist;
 
-/* Chain containing all defined kill subcommands.  */
-
-extern struct cmd_list_element *killlist;
-
-/* Chain containing all defined stop subcommands.  */
+/* Chain containing all defined stop subcommands. */
 
 extern struct cmd_list_element *stoplist;
+
+/* Chain containing all defined "enable breakpoint" subcommands. */
+
+extern struct cmd_list_element *enablebreaklist;
 
 /* Chain containing all defined set subcommands */
 
@@ -77,15 +75,15 @@ extern struct cmd_list_element *showhistlist;
 
 extern struct cmd_list_element *unsethistlist;
 
-/* Chain containing all defined maintenance subcommands.  */
+/* Chain containing all defined maintenance subcommands. */
 
 extern struct cmd_list_element *maintenancelist;
 
-/* Chain containing all defined "maintenance info" subcommands.  */
+/* Chain containing all defined "maintenance info" subcommands. */
 
 extern struct cmd_list_element *maintenanceinfolist;
 
-/* Chain containing all defined "maintenance print" subcommands.  */
+/* Chain containing all defined "maintenance print" subcommands. */
 
 extern struct cmd_list_element *maintenanceprintlist;
 
@@ -101,63 +99,27 @@ extern struct cmd_list_element *setchecklist;
 
 extern struct cmd_list_element *showchecklist;
 
-/* Limit the call depth of user-defined commands */
-
-extern unsigned int max_user_call_depth;
-
 /* Exported to gdb/top.c */
 
 void init_cmd_lists (void);
+
+void init_cli_cmds (void);
 
 int is_complete_command (struct cmd_list_element *cmd);
 
 /* Exported to gdb/main.c */
 
-extern void cd_command (const char *, int);
+extern void cd_command (char *, int);
 
 /* Exported to gdb/top.c and gdb/main.c */
 
-extern void quit_command (const char *, int);
+extern void quit_command (char *, int);
 
-extern void source_script (const char *, int);
+extern void source_command (char *, int);
 
-/* Exported to objfiles.c.  */
+/* Used everywhere whenever at least one parameter is required and
+  none is specified. */
 
-/* The script that was opened.  */
-struct open_script
-{
-  gdb_file_up stream;
-  gdb::unique_xmalloc_ptr<char> full_path;
+extern NORETURN void error_no_arg (char *) ATTR_NORETURN;
 
-  open_script (gdb_file_up &&stream_,
-	       gdb::unique_xmalloc_ptr<char> &&full_path_)
-    : stream (std::move (stream_)),
-      full_path (std::move (full_path_))
-  {
-  }
-};
-
-extern gdb::optional<open_script>
-    find_and_open_script (const char *file, int search_path);
-
-/* Command tracing state.  */
-
-extern int source_verbose;
-extern bool trace_commands;
-
-/* Common code for the "with" and "maintenance with" commands.
-   SET_CMD_PREFIX is the spelling of the corresponding "set" command
-   prefix: i.e., "set " or "maintenance set ".  SETLIST is the command
-   element for the same "set" command prefix.  */
-extern void with_command_1 (const char *set_cmd_prefix,
-			    cmd_list_element *setlist,
-			    const char *args, int from_tty);
-
-/* Common code for the completers of the "with" and "maintenance with"
-   commands.  SET_CMD_PREFIX is the spelling of the corresponding
-   "set" command prefix: i.e., "set " or "maintenance set ".  */
-extern void with_command_completer_1 (const char *set_cmd_prefix,
-				      completion_tracker &tracker,
-				      const char *text);
-
-#endif /* CLI_CLI_CMDS_H */
+#endif /* !defined (CLI_CMDS_H) */

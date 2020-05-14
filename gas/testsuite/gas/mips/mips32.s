@@ -3,41 +3,52 @@
         .set noreorder
       .set noat
 
-      .text
+      .globl text_label .text
 text_label:
 
       # unprivileged CPU instructions
 
       clo     $1, $2
       clz     $3, $4
-	.ifndef r6
       madd    $5, $6
       maddu   $7, $8
       msub    $9, $10
       msubu   $11, $12
-	.endif
       mul     $13, $14, $15
       pref    4, ($16)
-	.ifndef r6
-      pref    4, 2047($17)
-      pref    4, -2048($18)
-	.endif
+      pref    4, 32767($17)
+      pref    4, -32768($18)
       ssnop
 
 
+      # unprivileged coprocessor instructions.
+      # these tests use cp2 to avoid other (cp0, fpu, prefetch) opcodes.
+
+      bc2f    text_label
+      nop
+      bc2fl   text_label
+      nop
+      bc2t    text_label
+      nop
+      bc2tl   text_label
+      nop
+      # XXX other BCzCond encodings not currently expressable
+      cfc2    $1, $2
+      cop2    0x1234567               # disassembles as c2 ...
+      ctc2    $2, $3
+      mfc2    $3, $4
+      mfc2    $4, $5, 0               # disassembles without sel
+      mfc2    $5, $6, 7
+      mtc2    $6, $7
+      mtc2    $7, $8, 0               # disassembles without sel
+      mtc2    $8, $9, 7
+
+      
       # privileged instructions
 
       cache   5, ($1)
-	.ifndef r6
-      cache   5, 2047($2)
-      cache   5, -2048($3)
-      .set at
-      cache   5, 32768($4)
-      cache   5, -32769($5)
-      cache   5, 32768
-      cache   5, -32769
-      .set noat
-	.endif
+      cache   5, 32767($2)
+      cache   5, -32768($3)
       eret
       tlbp
       tlbr
@@ -45,22 +56,16 @@ text_label:
       tlbwr
       wait
       wait    0                       # disassembles without code
-      wait    0x345
-
-      # For a while break for the mips32 ISA interpreted a single argument
-      # as a 20-bit code, placing it in the opcode differently to
-      # traditional ISAs.  This turned out to cause problems, so it has
-      # been removed.  This test is to assure consistent interpretation.
-      break
-      break   0                       # disassembles without code
-      break   0x345
-      break   0x48,0x345              # this still specifies a 20-bit code
+      wait    0x56789
 
       # Instructions in previous ISAs or CPUs which are now slightly
       # different.
+      break
+      break   0                       # disassembles without code
+      break   0x12345
       sdbbp
       sdbbp   0                       # disassembles without code
-      sdbbp   0x345
+      sdbbp   0x56789
 
 # Force at least 8 (non-delay-slot) zero bytes, to make 'objdump' print ...
       .space  8

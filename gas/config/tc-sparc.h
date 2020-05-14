@@ -1,11 +1,12 @@
 /* tc-sparc.h - Macros and type defines for the sparc.
-   Copyright (C) 1989-2020 Free Software Foundation, Inc.
+   Copyright 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
+   1999, 2000, 2001 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 3,
+   published by the Free Software Foundation; either version 2,
    or (at your option) any later version.
 
    GAS is distributed in the hope that it will be useful, but
@@ -15,13 +16,15 @@
 
    You should have received a copy of the GNU General Public
    License along with GAS; see the file COPYING.  If not, write
-   to the Free Software Foundation, 51 Franklin Street - Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   to the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef TC_SPARC
 #define TC_SPARC 1
 
+#ifdef ANSI_PROTOTYPES
 struct frag;
+#endif
 
 /* This is used to set the default value for `target_big_endian'.  */
 #define TARGET_BYTES_BIG_ENDIAN 1
@@ -30,33 +33,19 @@ struct frag;
 
 #define TARGET_ARCH bfd_arch_sparc
 
-extern unsigned long sparc_mach (void);
-#define TARGET_MACH sparc_mach ()
-
-#ifdef TE_FreeBSD
-#define ELF_TARGET_FORMAT	"elf32-sparc"
-#define ELF64_TARGET_FORMAT	"elf64-sparc-freebsd"
-#endif
-
-#ifdef TE_SOLARIS
-#define ELF_TARGET_FORMAT	"elf32-sparc-sol2"
-#define ELF64_TARGET_FORMAT	"elf64-sparc-sol2"
-#endif
-
-#ifndef ELF_TARGET_FORMAT
-#define ELF_TARGET_FORMAT	"elf32-sparc"
-#endif
-
-#ifndef ELF64_TARGET_FORMAT
-#define ELF64_TARGET_FORMAT	"elf64-sparc"
-#endif
-
-extern const char *sparc_target_format (void);
+extern const char *sparc_target_format PARAMS ((void));
 #define TARGET_FORMAT sparc_target_format ()
 
 #define RELOC_EXPANSION_POSSIBLE
 #define MAX_RELOC_EXPANSION 2
 
+#if 0
+#ifdef TE_SPARCAOUT
+/* Bi-endian support may eventually be unconditional, but until things are
+   working well it's only provided for targets that need it.  */
+#define SPARC_BIENDIAN
+#endif
+#endif
 /* Make it unconditional and check if -EL is valid after option parsing */
 #define SPARC_BIENDIAN
 
@@ -73,70 +62,118 @@ extern int sparc_pic_code;
 
 /* We require .word, et. al., to be aligned correctly.  */
 #define md_cons_align(nbytes) sparc_cons_align (nbytes)
-extern void sparc_cons_align (int);
+extern void sparc_cons_align PARAMS ((int));
 
 #define HANDLE_ALIGN(fragp) sparc_handle_align (fragp)
-extern void sparc_handle_align (struct frag *);
+extern void sparc_handle_align PARAMS ((struct frag *));
 
 #define MAX_MEM_FOR_RS_ALIGN_CODE  (3 + 4 + 4)
 
-#define DIFF_EXPR_OK    /* foo-. gets turned into PC relative relocs */
+#if defined (OBJ_ELF) || defined (OBJ_AOUT)
 
-/* Don't turn certain relocs into relocations against sections.  This
-   is required for the dynamic linker to operate properly.  When
-   generating PIC, we need to keep any non PC relative reloc.  The PIC
-   part of this test must be parallel to the code in tc_gen_reloc which
-   converts relocations to GOT relocations.  */
+/* This expression evaluates to false if the relocation is for a local
+   object for which we still want to do the relocation at runtime.
+   True if we are willing to perform this relocation while building
+   the .o file.
+
+   If the reloc is against an externally visible symbol, then the
+   a.out assembler should not do the relocation if generating PIC, and
+   the ELF assembler should never do the relocation.  */
+
+#ifdef OBJ_ELF
+#define obj_relocate_extern 0
+#else
+#define obj_relocate_extern (! sparc_pic_code)
+#endif
+
+#define TC_RELOC_RTSYM_LOC_FIXUP(FIX)  \
+  (obj_relocate_extern \
+   || (FIX)->fx_addsy == NULL \
+   || (! S_IS_EXTERNAL ((FIX)->fx_addsy) \
+       && ! S_IS_WEAK ((FIX)->fx_addsy) \
+       && S_IS_DEFINED ((FIX)->fx_addsy) \
+       && ! S_IS_COMMON ((FIX)->fx_addsy)))
+#endif
+
+/* I know that "call 0" fails in sparc-coff if this doesn't return 1.  I
+   don't know about other relocation types, or other formats, yet.  */
+#ifdef OBJ_COFF
+#define TC_FORCE_RELOCATION(FIXP)	\
+	((FIXP)->fx_r_type == BFD_RELOC_32_PCREL_S2 \
+	 && ((FIXP)->fx_addsy == 0 \
+	     || S_GET_SEGMENT ((FIXP)->fx_addsy) == absolute_section))
+#define RELOC_REQUIRES_SYMBOL
+#endif
+
+#ifdef OBJ_ELF
+#define TC_FORCE_RELOCATION(fixp) elf32_sparc_force_relocation(fixp)
+extern int elf32_sparc_force_relocation PARAMS ((struct fix *));
+#endif
+
+#ifdef OBJ_ELF
+/* Keep relocations against global symbols.  Don't turn them into
+   relocations against sections.  This is required for the dynamic
+   linker to operate properly.  When generating PIC, we need to keep
+   any non PC relative reloc.  The PIC part of this test must be
+   parallel to the code in tc_gen_reloc which converts relocations to
+   GOT relocations.  */
 #define tc_fix_adjustable(FIX)						\
-  ((FIX)->fx_r_type != BFD_RELOC_VTABLE_INHERIT				\
+  (! S_IS_EXTERNAL ((FIX)->fx_addsy)					\
+   && ! S_IS_WEAK ((FIX)->fx_addsy)					\
+   && (FIX)->fx_r_type != BFD_RELOC_VTABLE_INHERIT			\
    && (FIX)->fx_r_type != BFD_RELOC_VTABLE_ENTRY			\
-   && ((FIX)->fx_r_type < BFD_RELOC_SPARC_TLS_GD_HI22			\
-       || (FIX)->fx_r_type > BFD_RELOC_SPARC_TLS_TPOFF64)		\
    && (! sparc_pic_code							\
        || ((FIX)->fx_r_type != BFD_RELOC_HI22				\
 	   && (FIX)->fx_r_type != BFD_RELOC_LO10			\
 	   && (FIX)->fx_r_type != BFD_RELOC_SPARC13			\
 	   && ((FIX)->fx_r_type != BFD_RELOC_32_PCREL_S2		\
-	       || !generic_force_reloc (FIX))				\
+	       || (S_IS_DEFINED ((FIX)->fx_addsy)			\
+		   && ! S_IS_COMMON ((FIX)->fx_addsy)			\
+		   && ! S_IS_EXTERNAL ((FIX)->fx_addsy)			\
+		   && ! S_IS_WEAK ((FIX)->fx_addsy)))			\
 	   && ((FIX)->fx_pcrel						\
 	       || ((FIX)->fx_subsy != NULL				\
 		   && (S_GET_SEGMENT ((FIX)->fx_subsy)			\
 		       == S_GET_SEGMENT ((FIX)->fx_addsy)))		\
 	       || S_IS_LOCAL ((FIX)->fx_addsy)))))
 
-/* Values passed to md_apply_fix don't include the symbol value.  */
-#define MD_APPLY_SYM_VALUE(FIX) 0
-
 /* Finish up the entire symtab.  */
 #define tc_adjust_symtab() sparc_adjust_symtab ()
-extern void sparc_adjust_symtab (void);
+extern void sparc_adjust_symtab PARAMS ((void));
+#endif
 
-/* Don't allow the generic code to convert fixups involving the
-   subtraction of a label in the current section to pc-relative if we
-   don't have the necessary pc-relative relocation.  */
-#define TC_FORCE_RELOCATION_SUB_LOCAL(FIX, SEG)		\
-  (!((FIX)->fx_r_type == BFD_RELOC_64			\
-     || (FIX)->fx_r_type == BFD_RELOC_32		\
-     || (FIX)->fx_r_type == BFD_RELOC_16		\
-     || (FIX)->fx_r_type == BFD_RELOC_8))
+#ifdef OBJ_AOUT
+/* When generating PIC code, we must not adjust any reloc which will
+   turn into a reloc against the global offset table, nor any reloc
+   which we will need if a symbol is overridden.  */
+#define tc_fix_adjustable(FIX)						\
+  (! sparc_pic_code							\
+   || ((FIX)->fx_pcrel							\
+       && ((FIX)->fx_addsy == NULL					\
+	   || (! S_IS_EXTERNAL ((FIX)->fx_addsy)			\
+	       && ! S_IS_WEAK ((FIX)->fx_addsy))))			\
+   || (FIX)->fx_r_type == BFD_RELOC_16					\
+   || (FIX)->fx_r_type == BFD_RELOC_32)
+#endif
 
 #define elf_tc_final_processing sparc_elf_final_processing
-extern void sparc_elf_final_processing (void);
+extern void sparc_elf_final_processing PARAMS ((void));
 
 #define md_operand(x)
 
-extern void sparc_md_end (void);
+extern void sparc_md_end PARAMS ((void));
 #define md_end() sparc_md_end ()
 
-#define TC_PARSE_CONS_RETURN_TYPE const char *
-#define TC_PARSE_CONS_RETURN_NONE NULL
+#endif
 
+#ifdef OBJ_ELF
 #define TC_PARSE_CONS_EXPRESSION(EXP, NBYTES) sparc_cons (EXP, NBYTES)
-extern const char *sparc_cons (expressionS *, int);
+extern void sparc_cons PARAMS ((expressionS *, int));
+#endif
 
 #define TC_CONS_FIX_NEW cons_fix_new_sparc
 extern void cons_fix_new_sparc
-(struct frag *, int, unsigned int, struct expressionS *, const char *);
+  PARAMS ((struct frag *, int, unsigned int, struct expressionS *));
 
 #define TC_FIX_TYPE	valueT
 
@@ -147,35 +184,14 @@ extern void cons_fix_new_sparc
      }						\
   while (0)
 
-#define TC_FIX_DATA_PRINT(FILE, FIX)					\
+#define TC_FIX_DATA_PRINT(FILE, FIXP)					\
   do									\
     {									\
       fprintf ((FILE), "addend2=%ld\n",   				\
-	      (unsigned long) (FIX)->tc_fix_data);			\
+	      (unsigned long) (FIXP)->tc_fix_data);			\
     }									\
   while (0)
 
-#define TARGET_USE_CFIPOP 1
+#define DWARF2_LINE_MIN_INSN_LENGTH 4
 
-#define tc_cfi_frame_initial_instructions sparc_cfi_frame_initial_instructions
-extern void sparc_cfi_frame_initial_instructions (void);
-
-#define tc_regname_to_dw2regnum sparc_regname_to_dw2regnum
-extern int sparc_regname_to_dw2regnum (char *regname);
-
-#define tc_cfi_emit_pcrel_expr sparc_cfi_emit_pcrel_expr
-extern void sparc_cfi_emit_pcrel_expr (expressionS *, unsigned int);
-
-extern int sparc_cie_data_alignment;
-
-#define DWARF2_LINE_MIN_INSN_LENGTH     4
-#define DWARF2_DEFAULT_RETURN_COLUMN    15
-#define DWARF2_CIE_DATA_ALIGNMENT       sparc_cie_data_alignment
-
-/* cons_fix_new_sparc will chooose BFD_RELOC_SPARC_UA32 for the difference
-   expressions, but there is no corresponding PC-relative relocation; as this
-   is for debugging info though, alignment does not matter, so by disabling
-   this, BFD_RELOC_32_PCREL will be emitted directly instead.  */
-#define CFI_DIFF_EXPR_OK 0
-
-#endif
+/* end of tc-sparc.h */

@@ -1,31 +1,30 @@
 /*  armemu.c -- Main instruction emulation:  ARM7 Instruction Emulator.
     Copyright (C) 1994 Advanced RISC Machines Ltd.
     Modifications to add arch. v4 support by <jsmith@cygnus.com>.
-
+ 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+ 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+ 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.  */
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "armdefs.h"
 #include "armemu.h"
 #include "armos.h"
-#include "iwmmxt.h"
 
 static ARMword  GetDPRegRHS         (ARMul_State *, ARMword);
 static ARMword  GetDPSRegRHS        (ARMul_State *, ARMword);
 static void     WriteR15            (ARMul_State *, ARMword);
 static void     WriteSR15           (ARMul_State *, ARMword);
 static void     WriteR15Branch      (ARMul_State *, ARMword);
-static void     WriteR15Load        (ARMul_State *, ARMword);
 static ARMword  GetLSRegRHS         (ARMul_State *, ARMword);
 static ARMword  GetLS7RHS           (ARMul_State *, ARMword);
 static unsigned LoadWord            (ARMul_State *, ARMword, ARMword);
@@ -47,6 +46,17 @@ static void     Handle_Store_Double (ARMul_State *, ARMword);
 #define LSIGNED   (1)		/* signed operation */
 #define LDEFAULT  (0)		/* default : do nothing */
 #define LSCC      (1)		/* set condition codes on result */
+
+#ifdef NEED_UI_LOOP_HOOK
+/* How often to run the ui_loop update, when in use.  */
+#define UI_LOOP_POLL_INTERVAL 0x32000
+
+/* Counter for the ui_loop_hook update.  */
+static long ui_loop_hook_counter = UI_LOOP_POLL_INTERVAL;
+
+/* Actual hook to call to run through gdb's gui event loop.  */
+extern int (*ui_loop_hook) (int);
+#endif /* NEED_UI_LOOP_HOOK */
 
 extern int stop_simulator;
 
@@ -258,887 +268,11 @@ extern int stop_simulator;
      break;                                            		\
 }
 
-/* Attempt to emulate an ARMv6 instruction.
-   Returns non-zero upon success.  */
-
-#ifdef MODE32
-static int
-handle_v6_insn (ARMul_State * state, ARMword instr)
-{
-  ARMword val;
-  ARMword Rd;
-  ARMword Rm;
-  ARMword Rn;
-
-  switch (BITS (20, 27))
-    {
-#if 0
-    case 0x03: printf ("Unhandled v6 insn: ldr\n"); break;
-    case 0x04: printf ("Unhandled v6 insn: umaal\n"); break;
-    case 0x06: printf ("Unhandled v6 insn: mls/str\n"); break;
-    case 0x16: printf ("Unhandled v6 insn: smi\n"); break;
-    case 0x18: printf ("Unhandled v6 insn: strex\n"); break;
-    case 0x19: printf ("Unhandled v6 insn: ldrex\n"); break;
-    case 0x1a: printf ("Unhandled v6 insn: strexd\n"); break;
-    case 0x1b: printf ("Unhandled v6 insn: ldrexd\n"); break;
-    case 0x1c: printf ("Unhandled v6 insn: strexb\n"); break;
-    case 0x1d: printf ("Unhandled v6 insn: ldrexb\n"); break;
-    case 0x1e: printf ("Unhandled v6 insn: strexh\n"); break;
-    case 0x1f: printf ("Unhandled v6 insn: ldrexh\n"); break;
-    case 0x32: printf ("Unhandled v6 insn: nop/sev/wfe/wfi/yield\n"); break;
-    case 0x3f: printf ("Unhandled v6 insn: rbit\n"); break;
-#endif
-    case 0x61: printf ("Unhandled v6 insn: sadd/ssub\n"); break;
-    case 0x63: printf ("Unhandled v6 insn: shadd/shsub\n"); break;
-    case 0x6c: printf ("Unhandled v6 insn: uxtb16/uxtab16\n"); break;
-    case 0x70: printf ("Unhandled v6 insn: smuad/smusd/smlad/smlsd\n"); break;
-    case 0x74: printf ("Unhandled v6 insn: smlald/smlsld\n"); break;
-    case 0x75: printf ("Unhandled v6 insn: smmla/smmls/smmul\n"); break;
-    case 0x78: printf ("Unhandled v6 insn: usad/usada8\n"); break;
-
-    case 0x30:
-      {
-	/* MOVW<c> <Rd>,#<imm16>
-	   instr[31,28] = cond
-	   instr[27,20] = 0011 0000
-	   instr[19,16] = imm4
-	   instr[15,12] = Rd
-	   instr[11, 0] = imm12.  */
-	Rd = BITS (12, 15);
-	val = (BITS (16, 19) << 12) | BITS (0, 11);
-	state->Reg[Rd] = val;
-	return 1;
-      }
-
-    case 0x34:
-      {
-	/* MOVT<c> <Rd>,#<imm16>
-	   instr[31,28] = cond
-	   instr[27,20] = 0011 0100
-	   instr[19,16] = imm4
-	   instr[15,12] = Rd
-	   instr[11, 0] = imm12.  */
-	Rd = BITS (12, 15);
-	val = (BITS (16, 19) << 12) | BITS (0, 11);
-	state->Reg[Rd] &= 0xFFFF;
-	state->Reg[Rd] |= val << 16;
-	return 1;
-      }
-
-    case 0x62:
-      {
-	ARMword val1;
-	ARMword val2;
-	ARMsword n, m, r;
-	int i;
-
-	Rd = BITS (12, 15);
-	Rn = BITS (16, 19);
-	Rm = BITS (0, 3);
-
-	if (Rd == 15 || Rn == 15 || Rm == 15)
-	  break;
-
-	val1 = state->Reg[Rn];
-	val2 = state->Reg[Rm];
-
-	switch (BITS (4, 11))
-	  {
-	  case 0xF1: /* QADD16<c> <Rd>,<Rn>,<Rm>.  */
-	    state->Reg[Rd] = 0;
-
-	    for (i = 0; i < 32; i+= 16)
-	      {
-		n = (val1 >> i) & 0xFFFF;
-		if (n & 0x8000)
-		  n |= -(1 << 16);
-
-		m = (val2 >> i) & 0xFFFF;
-		if (m & 0x8000)
-		  m |= -(1 << 16);
-
-		r = n + m;
-
-		if (r > 0x7FFF)
-		  r = 0x7FFF;
-		else if (r < -(0x8000))
-		  r = - 0x8000;
-
-		state->Reg[Rd] |= (r & 0xFFFF) << i;
-	      }	
-	    return 1;
-
-	  case 0xF3: /* QASX<c> <Rd>,<Rn>,<Rm>.  */
-	    n = val1 & 0xFFFF;
-	    if (n & 0x8000)
-	      n |= -(1 << 16);
-
-	    m = (val2 >> 16) & 0xFFFF;
-	    if (m & 0x8000)
-	      m |= -(1 << 16);
-
-	    r = n - m;
-
-	    if (r > 0x7FFF)
-	      r = 0x7FFF;
-	    else if (r < -(0x8000))
-	      r = - 0x8000;
-
-	    state->Reg[Rd] = (r & 0xFFFF);
-
-	    n = (val1 >> 16) & 0xFFFF;
-	    if (n & 0x8000)
-	      n |= -(1 << 16);
-
-	    m = val2 & 0xFFFF;
-	    if (m & 0x8000)
-	      m |= -(1 << 16);
-
-	    r = n + m;
-
-	    if (r > 0x7FFF)
-	      r = 0x7FFF;
-	    else if (r < -(0x8000))
-	      r = - 0x8000;
-
-	    state->Reg[Rd] |= (r & 0xFFFF) << 16;
-	    return 1;
-
-	  case 0xF5: /* QSAX<c> <Rd>,<Rn>,<Rm>.  */
-	    n = val1 & 0xFFFF;
-	    if (n & 0x8000)
-	      n |= -(1 << 16);
-
-	    m = (val2 >> 16) & 0xFFFF;
-	    if (m & 0x8000)
-	      m |= -(1 << 16);
-
-	    r = n + m;
-
-	    if (r > 0x7FFF)
-	      r = 0x7FFF;
-	    else if (r < -(0x8000))
-	      r = - 0x8000;
-
-	    state->Reg[Rd] = (r & 0xFFFF);
-
-	    n = (val1 >> 16) & 0xFFFF;
-	    if (n & 0x8000)
-	      n |= -(1 << 16);
-
-	    m = val2 & 0xFFFF;
-	    if (m & 0x8000)
-	      m |= -(1 << 16);
-
-	    r = n - m;
-
-	    if (r > 0x7FFF)
-	      r = 0x7FFF;
-	    else if (r < -(0x8000))
-	      r = - 0x8000;
-
-	    state->Reg[Rd] |= (r & 0xFFFF) << 16;
-	    return 1;
-
-	  case 0xF7: /* QSUB16<c> <Rd>,<Rn>,<Rm>.  */
-	    state->Reg[Rd] = 0;
-
-	    for (i = 0; i < 32; i+= 16)
-	      {
-		n = (val1 >> i) & 0xFFFF;
-		if (n & 0x8000)
-		  n |= -(1 << 16);
-
-		m = (val2 >> i) & 0xFFFF;
-		if (m & 0x8000)
-		  m |= -(1 << 16);
-
-		r = n - m;
-
-		if (r > 0x7FFF)
-		  r = 0x7FFF;
-		else if (r < -(0x8000))
-		  r = - 0x8000;
-
-		state->Reg[Rd] |= (r & 0xFFFF) << i;
-	      }	
-	    return 1;
-
-	  case 0xF9: /* QADD8<c> <Rd>,<Rn>,<Rm>.  */
-	    state->Reg[Rd] = 0;
-
-	    for (i = 0; i < 32; i+= 8)
-	      {
-		n = (val1 >> i) & 0xFF;
-		if (n & 0x80)
-		  n |= - (1 << 8);
-
-		m = (val2 >> i) & 0xFF;
-		if (m & 0x80)
-		  m |= - (1 << 8);
-
-		r = n + m;
-
-		if (r > 127)
-		  r = 127;
-		else if (r < -128)
-		  r = -128;
-
-		state->Reg[Rd] |= (r & 0xFF) << i;
-	      }	
-	    return 1;
-
-	  case 0xFF: /* QSUB8<c> <Rd>,<Rn>,<Rm>.  */
-	    state->Reg[Rd] = 0;
-
-	    for (i = 0; i < 32; i+= 8)
-	      {
-		n = (val1 >> i) & 0xFF;
-		if (n & 0x80)
-		  n |= - (1 << 8);
-
-		m = (val2 >> i) & 0xFF;
-		if (m & 0x80)
-		  m |= - (1 << 8);
-
-		r = n - m;
-
-		if (r > 127)
-		  r = 127;
-		else if (r < -128)
-		  r = -128;
-
-		state->Reg[Rd] |= (r & 0xFF) << i;
-	      }	
-	    return 1;
-
-	  default:
-	    break;
-	  }
-	break;
-      }
-
-    case 0x65:
-      {
-	ARMword valn;
-	ARMword valm;
-	ARMword res1, res2, res3, res4;
-
-	/* U{ADD|SUB}{8|16}<c> <Rd>, <Rn>, <Rm>
-	   instr[31,28] = cond
-	   instr[27,20] = 0110 0101
-	   instr[19,16] = Rn
-	   instr[15,12] = Rd
-	   instr[11, 8] = 1111
-	   instr[ 7, 4] = opcode: UADD8 (1001), UADD16 (0001), USUB8 (1111), USUB16 (0111)
-	   instr[ 3, 0] = Rm.  */
-	if (BITS (8, 11) != 0xF)
-	  break;
-
-	Rn = BITS (16, 19);
-	Rd = BITS (12, 15);
-	Rm = BITS (0, 3);
-
-	if (Rn == 15 || Rd == 15 || Rm == 15)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	    break;
-	  }
-
-	valn = state->Reg[Rn];
-	valm = state->Reg[Rm];
-	
-	switch (BITS (4, 7))
-	  {
-	  case 1:  /* UADD16.  */
-	    res1 = (valn & 0xFFFF) + (valm & 0xFFFF);
-	    if (res1 > 0xFFFF)
-	      state->Cpsr |= (GE0 | GE1);
-	    else
-	      state->Cpsr &= ~ (GE0 | GE1);
-
-	    res2 = (valn >> 16) + (valm >> 16);
-	    if (res2 > 0xFFFF)
-	      state->Cpsr |= (GE2 | GE3);
-	    else
-	      state->Cpsr &= ~ (GE2 | GE3);
-
-	    state->Reg[Rd] = (res1 & 0xFFFF) | (res2 << 16);
-	    return 1;
-
-	  case 7:  /* USUB16.  */
-	    res1 = (valn & 0xFFFF) - (valm & 0xFFFF);
-	    if (res1 & 0x800000)
-	      state->Cpsr |= (GE0 | GE1);
-	    else
-	      state->Cpsr &= ~ (GE0 | GE1);
-
-	    res2 = (valn >> 16) - (valm >> 16);
-	    if (res2 & 0x800000)
-	      state->Cpsr |= (GE2 | GE3);
-	    else
-	      state->Cpsr &= ~ (GE2 | GE3);
-
-	    state->Reg[Rd] = (res1 & 0xFFFF) | (res2 << 16);
-	    return 1;
-
-	  case 9:  /* UADD8.  */
-	    res1 = (valn & 0xFF) + (valm & 0xFF);
-	    if (res1 > 0xFF)
-	      state->Cpsr |= GE0;
-	    else
-	      state->Cpsr &= ~ GE0;
-
-	    res2 = ((valn >> 8) & 0xFF) + ((valm >> 8) & 0xFF);
-	    if (res2 > 0xFF)
-	      state->Cpsr |= GE1;
-	    else
-	      state->Cpsr &= ~ GE1;
-
-	    res3 = ((valn >> 16) & 0xFF) + ((valm >> 16) & 0xFF);
-	    if (res3 > 0xFF)
-	      state->Cpsr |= GE2;
-	    else
-	      state->Cpsr &= ~ GE2;
-
-	    res4 = (valn >> 24) + (valm >> 24);
-	    if (res4 > 0xFF)
-	      state->Cpsr |= GE3;
-	    else
-	      state->Cpsr &= ~ GE3;
-
-	    state->Reg[Rd] = (res1 & 0xFF) | ((res2 << 8) & 0xFF00)
-	      | ((res3 << 16) & 0xFF0000) | (res4 << 24);
-	    return 1;
-
-	  case 15: /* USUB8.  */
-	    res1 = (valn & 0xFF) - (valm & 0xFF);
-	    if (res1 & 0x800000)
-	      state->Cpsr |= GE0;
-	    else
-	      state->Cpsr &= ~ GE0;
-
-	    res2 = ((valn >> 8) & 0XFF) - ((valm >> 8) & 0xFF);
-	    if (res2 & 0x800000)
-	      state->Cpsr |= GE1;
-	    else
-	      state->Cpsr &= ~ GE1;
-
-	    res3 = ((valn >> 16) & 0XFF) - ((valm >> 16) & 0xFF);
-	    if (res3 & 0x800000)
-	      state->Cpsr |= GE2;
-	    else
-	      state->Cpsr &= ~ GE2;
-
-	    res4 = (valn >> 24) - (valm >> 24) ;
-	    if (res4 & 0x800000)
-	      state->Cpsr |= GE3;
-	    else
-	      state->Cpsr &= ~ GE3;
-
-	    state->Reg[Rd] = (res1 & 0xFF) | ((res2 << 8) & 0xFF00)
-	      | ((res3 << 16) & 0xFF0000) | (res4 << 24);
-	    return 1;
-
-	  default:
-	    break;
-	  }
-	break;
-      }
-
-    case 0x68:
-      {
-	ARMword res;
-
-	/* PKHBT<c> <Rd>,<Rn>,<Rm>{,LSL #<imm>}
-	   PKHTB<c> <Rd>,<Rn>,<Rm>{,ASR #<imm>}
-	   SXTAB16<c> <Rd>,<Rn>,<Rm>{,<rotation>}
-	   SXTB16<c> <Rd>,<Rm>{,<rotation>}
-	   SEL<c> <Rd>,<Rn>,<Rm>
-
-	   instr[31,28] = cond
-	   instr[27,20] = 0110 1000
-	   instr[19,16] = Rn
-	   instr[15,12] = Rd
-	   instr[11, 7] = imm5 (PKH), 11111 (SEL), rr000 (SXTAB16 & SXTB16),
-	   instr[6]     = tb (PKH), 0 (SEL), 1 (SXT)
-	   instr[5]     = opcode: PKH (0), SEL/SXT (1)
-	   instr[4]     = 1
-	   instr[ 3, 0] = Rm.  */
-
-	if (BIT (4) != 1)
-	  break;
-
-	if (BIT (5) == 0)
-	  {
-	    /* FIXME: Add implementation of PKH.  */
-	    fprintf (stderr, "PKH: NOT YET IMPLEMENTED\n");
-	    ARMul_UndefInstr (state, instr);
-	    break;
-	  }
-
-	if (BIT (6) == 1)
-	  {
-	    /* FIXME: Add implementation of SXT.  */
-	    fprintf (stderr, "SXT: NOT YET IMPLEMENTED\n");
-	    ARMul_UndefInstr (state, instr);
-	    break;
-	  }
-
-	Rn = BITS (16, 19);
-	Rd = BITS (12, 15);
-	Rm = BITS (0, 3);
-	if (Rn == 15 || Rm == 15 || Rd == 15)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	    break;
-	  }
-
-	res  = (state->Reg[(state->Cpsr & GE0) ? Rn : Rm]) & 0xFF;
-	res |= (state->Reg[(state->Cpsr & GE1) ? Rn : Rm]) & 0xFF00;
-	res |= (state->Reg[(state->Cpsr & GE2) ? Rn : Rm]) & 0xFF0000;
-	res |= (state->Reg[(state->Cpsr & GE3) ? Rn : Rm]) & 0xFF000000;
-	state->Reg[Rd] = res;
-	return 1;
-      }
-
-    case 0x6a:
-      {
-	int ror = -1;
-
-	switch (BITS (4, 11))
-	  {
-	  case 0x07: ror = 0; break;
-	  case 0x47: ror = 8; break;
-	  case 0x87: ror = 16; break;
-	  case 0xc7: ror = 24; break;
-
-	  case 0x01:
-	  case 0xf3:
-	    printf ("Unhandled v6 insn: ssat\n");
-	    return 0;
-
-	  default:
-	    break;
-	  }
-	
-	if (ror == -1)
-	  {
-	    if (BITS (4, 6) == 0x7)
-	      {
-		printf ("Unhandled v6 insn: ssat\n");
-		return 0;
-	      }
-	    break;
-	  }
-
-	Rm = ((state->Reg[BITS (0, 3)] >> ror) & 0xFF);
-	if (Rm & 0x80)
-	  Rm |= 0xffffff00;
-
-	if (BITS (16, 19) == 0xf)
-	   /* SXTB */
-	  state->Reg[BITS (12, 15)] = Rm;
-	else
-	  /* SXTAB */
-	  state->Reg[BITS (12, 15)] += Rm;
-      }
-      return 1;
-
-    case 0x6b:
-      {
-	int ror = -1;
-
-	switch (BITS (4, 11))
-	  {
-	  case 0x07: ror = 0; break;
-	  case 0x47: ror = 8; break;
-	  case 0x87: ror = 16; break;
-	  case 0xc7: ror = 24; break;
-
-	  case 0xf3:
-	    {
-	      /* REV<c> <Rd>,<Rm>
-	         instr[31,28] = cond
-	         instr[27,20] = 0110 1011
-	         instr[19,16] = 1111
-	         instr[15,12] = Rd
-	         instr[11, 4] = 1111 0011
-	         instr[ 3, 0] = Rm.  */
-	      if (BITS (16, 19) != 0xF)
-		break;
-
-	      Rd = BITS (12, 15);
-	      Rm = BITS (0, 3);
-	      if (Rd == 15 || Rm == 15)
-		{
-		  ARMul_UndefInstr (state, instr);
-		  state->Emulate = FALSE;
-		  break;
-		}
-
-	      val = state->Reg[Rm] << 24;
-	      val |= ((state->Reg[Rm] << 8) & 0xFF0000);
-	      val |= ((state->Reg[Rm] >> 8) & 0xFF00);
-	      val |= ((state->Reg[Rm] >> 24));
-	      state->Reg[Rd] = val;
-	      return 1;
-	    }
-
-	  case 0xfb:
-	    {
-	      /* REV16<c> <Rd>,<Rm>.  */
-	      if (BITS (16, 19) != 0xF)
-		break;
-
-	      Rd = BITS (12, 15);
-	      Rm = BITS (0, 3);
-	      if (Rd == 15 || Rm == 15)
-		{
-		  ARMul_UndefInstr (state, instr);
-		  state->Emulate = FALSE;
-		  break;
-		}
-
-	      val = 0;
-	      val |= ((state->Reg[Rm] >> 8) & 0x00FF00FF);
-	      val |= ((state->Reg[Rm] << 8) & 0xFF00FF00);
-	      state->Reg[Rd] = val;
-	      return 1;
-	    }
-
-	  default:
-	    break;
-	  }
-	
-	if (ror == -1)
-	  break;
-
-	Rm = ((state->Reg[BITS (0, 3)] >> ror) & 0xFFFF);
-	if (Rm & 0x8000)
-	  Rm |= 0xffff0000;
-
-	if (BITS (16, 19) == 0xf)
-	  /* SXTH */
-	  state->Reg[BITS (12, 15)] = Rm;
-	else
-	  /* SXTAH */
-	  state->Reg[BITS (12, 15)] = state->Reg[BITS (16, 19)] + Rm;
-      }
-      return 1;
-
-    case 0x6e:
-      {
-	int ror = -1;
-
-	switch (BITS (4, 11))
-	  {
-	  case 0x07: ror = 0; break;
-	  case 0x47: ror = 8; break;
-	  case 0x87: ror = 16; break;
-	  case 0xc7: ror = 24; break;
-
-	  case 0x01:
-	  case 0xf3:
-	    printf ("Unhandled v6 insn: usat\n");
-	    return 0;
-
-	  default:
-	    break;
-	  }
-	
-	if (ror == -1)
-	  {
-	    if (BITS (4, 6) == 0x7)
-	      {
-		printf ("Unhandled v6 insn: usat\n");
-		return 0;
-	      }
-	    break;
-	  }
-
-	Rm = ((state->Reg[BITS (0, 3)] >> ror) & 0xFF);
-
-	if (BITS (16, 19) == 0xf)
-	  /* UXTB */
-	  state->Reg[BITS (12, 15)] = Rm;
-	else
-	  /* UXTAB */
-	  state->Reg[BITS (12, 15)] = state->Reg[BITS (16, 19)] + Rm;
-      }
-      return 1;
-
-    case 0x6f:
-      {
-	int i;
-	int ror = -1;
-
-	switch (BITS (4, 11))
-	  {
-	  case 0x07: ror = 0; break;
-	  case 0x47: ror = 8; break;
-	  case 0x87: ror = 16; break;
-	  case 0xc7: ror = 24; break;
-
-	  case 0xf3: /* RBIT */
-	    if (BITS (16, 19) != 0xF)
-	      break;
-	    Rd = BITS (12, 15);
-	    state->Reg[Rd] = 0;
-	    Rm = state->Reg[BITS (0, 3)];
-	    for (i = 0; i < 32; i++)
-	      if (Rm & (1 << i))
-		state->Reg[Rd] |= (1 << (31 - i));
-	    return 1;
-
-	  case 0xfb:
-	    printf ("Unhandled v6 insn: revsh\n");
-	    return 0;
-
-	  default:
-	    break;
-	  }
-	
-	if (ror == -1)
-	  break;
-
-	Rm = ((state->Reg[BITS (0, 3)] >> ror) & 0xFFFF);
-
-	if (BITS (16, 19) == 0xf)
-	  /* UXT */
-	  state->Reg[BITS (12, 15)] = Rm;
-	else
-	  /* UXTAH */
-	  state->Reg[BITS (12, 15)] = state->Reg [BITS (16, 19)] + Rm;
-      }
-      return 1;
-
-    case 0x7c:
-    case 0x7d:
-      {
-	int lsb;
-	int msb;
-	ARMword mask;
-
-	/* BFC<c> <Rd>,#<lsb>,#<width>
-	   BFI<c> <Rd>,<Rn>,#<lsb>,#<width>
-
-	   instr[31,28] = cond
-	   instr[27,21] = 0111 110
-	   instr[20,16] = msb
-	   instr[15,12] = Rd
-	   instr[11, 7] = lsb
-	   instr[ 6, 4] = 001 1111
-	   instr[ 3, 0] = Rn (BFI) / 1111 (BFC).  */
-
-	if (BITS (4, 6) != 0x1)
-	  break;
-
-	Rd = BITS (12, 15);
-	if (Rd == 15)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	  }
-
-	lsb = BITS (7, 11);
-	msb = BITS (16, 20);
-	if (lsb > msb)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	  }
-
-	mask = -(1 << lsb);
-	mask &= ~(-(1 << (msb + 1)));
-	state->Reg[Rd] &= ~ mask;
-
-	Rn = BITS (0, 3);
-	if (Rn != 0xF)
-	  {
-	    ARMword val = state->Reg[Rn] & ~(-(1 << ((msb + 1) - lsb)));
-	    state->Reg[Rd] |= val << lsb;
-	  }
-	return 1;
-      }
-
-    case 0x7b:
-    case 0x7a: /* SBFX<c> <Rd>,<Rn>,#<lsb>,#<width>.  */
-      {
-	int lsb;
-	int widthm1;
-	ARMsword sval;
-
-	if (BITS (4, 6) != 0x5)
-	  break;
-
-	Rd = BITS (12, 15);
-	if (Rd == 15)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	  }
-
-	Rn = BITS (0, 3);
-	if (Rn == 15)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	  }
-
-	lsb = BITS (7, 11);
-	widthm1 = BITS (16, 20);
-
-	sval = state->Reg[Rn];
-	sval <<= (31 - (lsb + widthm1));
-	sval >>= (31 - widthm1);
-	state->Reg[Rd] = sval;
-	
-	return 1;
-      }
-
-    case 0x7f:
-    case 0x7e:
-      {
-	int lsb;
-	int widthm1;
-
-	/* UBFX<c> <Rd>,<Rn>,#<lsb>,#<width>
-	   instr[31,28] = cond
-	   instr[27,21] = 0111 111
-	   instr[20,16] = widthm1
-	   instr[15,12] = Rd
-	   instr[11, 7] = lsb
-	   instr[ 6, 4] = 101
-	   instr[ 3, 0] = Rn.  */
-
-	if (BITS (4, 6) != 0x5)
-	  break;
-
-	Rd = BITS (12, 15);
-	if (Rd == 15)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	  }
-
-	Rn = BITS (0, 3);
-	if (Rn == 15)
-	  {
-	    ARMul_UndefInstr (state, instr);
-	    state->Emulate = FALSE;
-	  }
-
-	lsb = BITS (7, 11);
-	widthm1 = BITS (16, 20);
-
-	val = state->Reg[Rn];
-	val >>= lsb;
-	val &= ~(-(1 << (widthm1 + 1)));
-
-	state->Reg[Rd] = val;
-	
-	return 1;
-      }
-#if 0
-    case 0x84: printf ("Unhandled v6 insn: srs\n"); break;
-#endif
-    default:
-      break;
-    }
-  printf ("Unhandled v6 insn: UNKNOWN: %08x\n", instr);
-  return 0;
-}
-#endif
-
-static void
-handle_VFP_move (ARMul_State * state, ARMword instr)
-{
-  switch (BITS (20, 27))
-    {
-    case 0xC4:
-    case 0xC5:
-      switch (BITS (4, 11))
-	{
-	case 0xA1:
-	case 0xA3:
-	  {
-	    /* VMOV two core <-> two VFP single precision.  */
-	    int sreg = (BITS (0, 3) << 1) | BIT (5);
-
-	    if (BIT (20))
-	      {
-		state->Reg[BITS (12, 15)] = VFP_uword (sreg);
-		state->Reg[BITS (16, 19)] = VFP_uword (sreg + 1);
-	      }
-	    else
-	      {
-		VFP_uword (sreg)     = state->Reg[BITS (12, 15)];
-		VFP_uword (sreg + 1) = state->Reg[BITS (16, 19)];
-	      }
-	  }
-	  break;
-
-	case 0xB1:
-	case 0xB3:
-	  {
-	    /* VMOV two core <-> VFP double precision.  */
-	    int dreg = BITS (0, 3) | (BIT (5) << 4);
-
-	    if (BIT (20))
-	      {
-		if (trace)
-		  fprintf (stderr, " VFP: VMOV: r%d r%d <= d%d\n",
-			   BITS (12, 15), BITS (16, 19), dreg);
-
-		state->Reg[BITS (12, 15)] = VFP_dword (dreg);
-		state->Reg[BITS (16, 19)] = VFP_dword (dreg) >> 32;
-	      }
-	    else
-	      {
-		VFP_dword (dreg) = state->Reg[BITS (16, 19)];
-		VFP_dword (dreg) <<= 32;
-		VFP_dword (dreg) |= state->Reg[BITS (12, 15)];
-
-		if (trace)
-		  fprintf (stderr, " VFP: VMOV: d%d <= r%d r%d : %g\n",
-			   dreg, BITS (16, 19), BITS (12, 15),
-			   VFP_dval (dreg));
-	      }
-	  }
-	  break;
-
-	default:
-	  fprintf (stderr, "SIM: VFP: Unimplemented move insn %x\n", BITS (20, 27));
-	  break;
-	}
-      break;
-
-    case 0xe0:
-    case 0xe1:
-      /* VMOV single core <-> VFP single precision.  */
-      if (BITS (0, 6) != 0x10 || BITS (8, 11) != 0xA)
-	fprintf (stderr, "SIM: VFP: Unimplemented move insn %x\n", BITS (20, 27));
-      else
-	{
-	  int sreg = (BITS (16, 19) << 1) | BIT (7);
-
-	  if (BIT (20))
-	    state->Reg[DESTReg] = VFP_uword (sreg);
-	  else
-	    VFP_uword (sreg) = state->Reg[DESTReg];
-	}
-      break;
-
-    default:
-      fprintf (stderr, "SIM: VFP: Unimplemented move insn %x\n", BITS (20, 27));
-      return;
-    }
-}
-
 /* EMULATION of ARM6.  */
+
+/* The PC pipeline value depends on whether ARM
+   or Thumb instructions are being executed.  */
+ARMword isize;
 
 ARMword
 #ifdef MODE32
@@ -1240,31 +374,11 @@ ARMul_Emulate26 (ARMul_State * state)
 
       if (state->EventSet)
 	ARMul_EnvokeEvent (state);
-
-      if (! TFLAG && trace)
-	{
-	  fprintf (stderr, "pc: %x, ", pc & ~1);
-	  if (! disas)
-	    fprintf (stderr, "instr: %x\n", instr);
-	}
-
-      if (instr == 0 || pc < 0x10)
-	{
-	  ARMul_Abort (state, ARMUndefinedInstrV);
-	  state->Emulate = FALSE;
-	}
-
-#if 0 /* Enable this code to help track down stack alignment bugs.  */
-      {
-	static ARMword old_sp = -1;
-
-	if (old_sp != state->Reg[13])
-	  {
-	    old_sp = state->Reg[13];
-	    fprintf (stderr, "pc: %08x: SP set to %08x%s\n",
-		     pc & ~1, old_sp, (old_sp % 8) ? " [UNALIGNED!]" : "");
-	  }
-      }
+#if 0
+      /* Enable this for a helpful bit of debugging when tracing is needed.  */
+      fprintf (stderr, "pc: %x, instr: %x\n", pc & ~1, instr);
+      if (instr == 0)
+	abort ();
 #endif
 
       if (state->Exception)
@@ -1289,6 +403,7 @@ ARMul_Emulate26 (ARMul_State * state)
 
       if (state->CallDebug > 0)
 	{
+	  instr = ARMul_Debug (state, pc, instr);
 	  if (state->Emulate < ONCE)
 	    {
 	      state->NextInstr = RESUME;
@@ -1296,8 +411,8 @@ ARMul_Emulate26 (ARMul_State * state)
 	    }
 	  if (state->Debug)
 	    {
-	      fprintf (stderr, "sim: At %08lx Instr %08lx Mode %02lx\n",
-		       (long) pc, (long) instr, (long) state->Mode);
+	      fprintf (stderr, "sim: At %08lx Instr %08lx Mode %02lx\n", pc, instr,
+		       state->Mode);
 	      (void) fgetc (stdin);
 	    }
 	}
@@ -1335,14 +450,6 @@ ARMul_Emulate26 (ARMul_State * state)
 
 	    case t_decoded:
 	      /* ARM instruction available.  */
-	      if (disas || trace)
-		{
-		  fprintf (stderr, "  emulate as: ");
-		  if (trace)
-		    fprintf (stderr, "%08x ", new);
-		  if (! disas)
-		    fprintf (stderr, "\n");
-		}
 	      instr = new;
 	      /* So continue instruction decoding.  */
 	      break;
@@ -1351,8 +458,6 @@ ARMul_Emulate26 (ARMul_State * state)
 	    }
 	}
 #endif
-      if (disas)
-	print_insn (instr);
 
       /* Check the condition codes.  */
       if ((temp = TOPBITS (28)) == AL)
@@ -1371,9 +476,9 @@ ARMul_Emulate26 (ARMul_State * state)
 	      if (BITS (25, 27) == 5) /* BLX(1) */
 		{
 		  ARMword dest;
-
+		  
 		  state->Reg[14] = pc + 4;
-
+		  
 		  /* Force entry into Thumb mode.  */
 		  dest = pc + 8 + 1;
 		  if (BIT (23))
@@ -1387,10 +492,6 @@ ARMul_Emulate26 (ARMul_State * state)
 	      else if ((instr & 0xFC70F000) == 0xF450F000)
 		/* The PLD instruction.  Ignored.  */
 		goto donext;
-	      else if (   ((instr & 0xfe500f00) == 0xfc100100)
-		       || ((instr & 0xfe500f00) == 0xfc000100))
-		/* wldrw and wstrw are unconditional.  */
-		goto mainswitch;
 	      else
 		/* UNDEFINED in v5, UNPREDICTABLE in v3, v4, non executed in v1, v2.  */
 		ARMul_UndefInstr (state, instr);
@@ -1476,11 +577,10 @@ ARMul_Emulate26 (ARMul_State * state)
 	      else
 		{
 		  ARMword cp14r1;
-		  int do_int;
+		  int do_int = 0;
 
 		  state->CP14R0_CCD = -1;
 check_PMUintr:
-		  do_int = 0;
 		  cp14r0 |= ARMul_CP14_R0_FLAG2;
 		  (void) state->CPWrite[14] (state, 0, cp14r0);
 
@@ -1543,7 +643,7 @@ check_PMUintr:
 		      ARMword temp = GetLS7RHS (state, instr);
 		      ARMword temp2 = BIT (23) ? LHS + temp : LHS - temp;
 		      ARMword addr = BIT (24) ? temp2 : LHS;
-
+		      
 		      if (BIT (12))
 			ARMul_UndefInstr (state, instr);
 		      else if (addr & 7)
@@ -1552,7 +652,7 @@ check_PMUintr:
 		      else
 			{
 			  int wb = BIT (21) || (! BIT (24));
-
+			  
 			  state->Reg[BITS (12, 15)] =
 			    ARMul_LoadWordN (state, addr);
 			  state->Reg[BITS (12, 15) + 1] =
@@ -1589,9 +689,6 @@ check_PMUintr:
 		      goto donext;
 		    }
 		}
-
-	      if (ARMul_HandleIwmmxt (state, instr))
-		goto donext;
 	    }
 
 	  switch ((int) BITS (20, 27))
@@ -2124,7 +1221,7 @@ check_PMUintr:
 		      ARMword op1 = state->Reg[BITS (0, 3)];
 		      ARMword op2 = state->Reg[BITS (8, 11)];
 		      ARMword Rn = state->Reg[BITS (12, 15)];
-
+		      
 		      if (BIT (5))
 			op1 >>= 16;
 		      if (BIT (6))
@@ -2136,7 +1233,7 @@ check_PMUintr:
 		      if (op2 & 0x8000)
 			op2 -= 65536;
 		      op1 *= op2;
-
+		      
 		      if (AddOverflow (op1, Rn, op1 + Rn))
 			SETS;
 		      state->Reg[BITS (16, 19)] = op1 + Rn;
@@ -2206,11 +1303,6 @@ check_PMUintr:
 		}
 	      else
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  UNDEF_Test;
 		}
 	      break;
@@ -2268,9 +1360,9 @@ check_PMUintr:
 		      && (BIT (5) == 0 || BITS (12, 15) == 0))
 		    {
 		      /* ElSegundo SMLAWy/SMULWy insn.  */
-		      ARMdword op1 = state->Reg[BITS (0, 3)];
-		      ARMdword op2 = state->Reg[BITS (8, 11)];
-		      ARMdword result;
+		      unsigned long long op1 = state->Reg[BITS (0, 3)];
+		      unsigned long long op2 = state->Reg[BITS (8, 11)];
+		      unsigned long long result;
 
 		      if (BIT (6))
 			op2 >>= 16;
@@ -2284,7 +1376,7 @@ check_PMUintr:
 		      if (BIT (5) == 0)
 			{
 			  ARMword Rn = state->Reg[BITS (12, 15)];
-
+			  
 			  if (AddOverflow (result, Rn, result + Rn))
 			    SETS;
 			  result += Rn;
@@ -2338,6 +1430,7 @@ check_PMUintr:
 		{
 		  if (BITS (4, 7) == 0x7)
 		    {
+		      ARMword value;
 		      extern int SWI_vector_installed;
 
 		      /* Hardware is allowed to optionally override this
@@ -2377,11 +1470,6 @@ check_PMUintr:
 #endif
 		  ARMul_FixCPSR (state, instr, temp);
 		}
-#ifdef MODE32
-	      else if (state->is_v6
-		       && handle_v6_insn (state, instr))
-		break;
-#endif
 	      else
 		UNDEF_Test;
 
@@ -2421,9 +1509,10 @@ check_PMUintr:
 		  if (BIT (4) == 0 && BIT (7) == 1)
 		    {
 		      /* ElSegundo SMLALxy insn.  */
-		      ARMdword op1 = state->Reg[BITS (0, 3)];
-		      ARMdword op2 = state->Reg[BITS (8, 11)];
-		      ARMdword dest;
+		      unsigned long long op1 = state->Reg[BITS (0, 3)];
+		      unsigned long long op2 = state->Reg[BITS (8, 11)];
+		      unsigned long long dest;
+		      unsigned long long result;
 
 		      if (BIT (5))
 			op1 >>= 16;
@@ -2436,7 +1525,7 @@ check_PMUintr:
 		      if (op2 & 0x8000)
 			op2 -= 65536;
 
-		      dest = (ARMdword) state->Reg[BITS (16, 19)] << 32;
+		      dest = (unsigned long long) state->Reg[BITS (16, 19)] << 32;
 		      dest |= state->Reg[BITS (12, 15)];
 		      dest += op1 * op2;
 		      state->Reg[BITS (12, 15)] = dest;
@@ -2512,11 +1601,6 @@ check_PMUintr:
 		  UNDEF_MRSPC;
 		  DEST = GETSPSR (state->Bank);
 		}
-#ifdef MODE32
-	      else if (state->is_v6
-		       && handle_v6_insn (state, instr))
-		break;
-#endif
 	      else
 		UNDEF_Test;
 
@@ -2569,6 +1653,7 @@ check_PMUintr:
 		      /* ElSegundo SMULxy insn.  */
 		      ARMword op1 = state->Reg[BITS (0, 3)];
 		      ARMword op2 = state->Reg[BITS (8, 11)];
+		      ARMword Rn = state->Reg[BITS (12, 15)];
 
 		      if (BIT (5))
 			op1 >>= 16;
@@ -2653,11 +1738,6 @@ check_PMUintr:
 		}
 	      else
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  UNDEF_Test;
 		}
 	      break;
@@ -3012,15 +2092,8 @@ check_PMUintr:
 	      WRITESDEST (dest);
 	      break;
 
-	    case 0x30:		/* MOVW immed */
-#ifdef MODE32
-	      if (state->is_v6
-		  && handle_v6_insn (state, instr))
-		break;
-#endif
-	      dest = BITS (0, 11);
-	      dest |= (BITS (16, 19) << 12);
-	      WRITEDEST (dest);
+	    case 0x30:		/* TST immed */
+	      UNDEF_Test;
 	      break;
 
 	    case 0x31:		/* TSTP immed */
@@ -3048,11 +2121,6 @@ check_PMUintr:
 	      if (DESTReg == 15)
 		/* MSR immed to CPSR.  */
 		ARMul_FixCPSR (state, instr, DPImmRHS);
-#ifdef MODE32
-	      else if (state->is_v6
-		       && handle_v6_insn (state, instr))
-		break;
-#endif
 	      else
 		UNDEF_Test;
 	      break;
@@ -3077,16 +2145,8 @@ check_PMUintr:
 		}
 	      break;
 
-	    case 0x34:		/* MOVT immed */
-#ifdef MODE32
-	      if (state->is_v6
-		  && handle_v6_insn (state, instr))
-		break;
-#endif
-	      DEST &= 0xFFFF;
-	      dest  = BITS (0, 11);
-	      dest |= (BITS (16, 19) << 12);
-	      DEST |= (dest << 16);
+	    case 0x34:		/* CMP immed */
+	      UNDEF_Test;
 	      break;
 
 	    case 0x35:		/* CMPP immed */
@@ -3126,11 +2186,6 @@ check_PMUintr:
 	    case 0x36:		/* CMN immed and MSR immed to SPSR */
 	      if (DESTReg == 15)
 		ARMul_FixSPSR (state, instr, DPImmRHS);
-#ifdef MODE32
-	      else if (state->is_v6
-		       && handle_v6_insn (state, instr))
-		break;
-#endif
 	      else
 		UNDEF_Test;
 	      break;
@@ -3448,11 +2503,6 @@ check_PMUintr:
 	    case 0x60:		/* Store Word, No WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3468,11 +2518,6 @@ check_PMUintr:
 	    case 0x61:		/* Load Word, No WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3489,11 +2534,6 @@ check_PMUintr:
 	    case 0x62:		/* Store Word, WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3511,11 +2551,6 @@ check_PMUintr:
 	    case 0x63:		/* Load Word, WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3534,11 +2569,6 @@ check_PMUintr:
 	    case 0x64:		/* Store Byte, No WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3554,11 +2584,6 @@ check_PMUintr:
 	    case 0x65:		/* Load Byte, No WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3575,11 +2600,6 @@ check_PMUintr:
 	    case 0x66:		/* Store Byte, WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3597,11 +2617,6 @@ check_PMUintr:
 	    case 0x67:		/* Load Byte, WriteBack, Post Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3620,11 +2635,6 @@ check_PMUintr:
 	    case 0x68:		/* Store Word, No WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3640,11 +2650,6 @@ check_PMUintr:
 	    case 0x69:		/* Load Word, No WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3661,11 +2666,6 @@ check_PMUintr:
 	    case 0x6a:		/* Store Word, WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3683,11 +2683,6 @@ check_PMUintr:
 	    case 0x6b:		/* Load Word, WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3706,11 +2701,6 @@ check_PMUintr:
 	    case 0x6c:		/* Store Byte, No WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3726,11 +2716,6 @@ check_PMUintr:
 	    case 0x6d:		/* Load Byte, No WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3747,11 +2732,6 @@ check_PMUintr:
 	    case 0x6e:		/* Store Byte, WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3769,11 +2749,6 @@ check_PMUintr:
 	    case 0x6f:		/* Load Byte, WriteBack, Post Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3793,11 +2768,6 @@ check_PMUintr:
 	    case 0x70:		/* Store Word, No WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3807,11 +2777,6 @@ check_PMUintr:
 	    case 0x71:		/* Load Word, No WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3821,11 +2786,6 @@ check_PMUintr:
 	    case 0x72:		/* Store Word, WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3841,11 +2801,6 @@ check_PMUintr:
 	    case 0x73:		/* Load Word, WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3861,11 +2816,6 @@ check_PMUintr:
 	    case 0x74:		/* Store Byte, No WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3875,11 +2825,6 @@ check_PMUintr:
 	    case 0x75:		/* Load Byte, No WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3889,11 +2834,6 @@ check_PMUintr:
 	    case 0x76:		/* Store Byte, WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3909,11 +2849,6 @@ check_PMUintr:
 	    case 0x77:		/* Load Byte, WriteBack, Pre Dec, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3929,11 +2864,6 @@ check_PMUintr:
 	    case 0x78:		/* Store Word, No WriteBack, Pre Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3943,11 +2873,6 @@ check_PMUintr:
 	    case 0x79:		/* Load Word, No WriteBack, Pre Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3957,11 +2882,6 @@ check_PMUintr:
 	    case 0x7a:		/* Store Word, WriteBack, Pre Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3977,11 +2897,6 @@ check_PMUintr:
 	    case 0x7b:		/* Load Word, WriteBack, Pre Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -3997,11 +2912,6 @@ check_PMUintr:
 	    case 0x7c:		/* Store Byte, No WriteBack, Pre Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -4011,11 +2921,6 @@ check_PMUintr:
 	    case 0x7d:		/* Load Byte, No WriteBack, Pre Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -4025,11 +2930,6 @@ check_PMUintr:
 	    case 0x7e:		/* Store Byte, WriteBack, Pre Inc, Reg.  */
 	      if (BIT (4))
 		{
-#ifdef MODE32
-		  if (state->is_v6
-		      && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  ARMul_UndefInstr (state, instr);
 		  break;
 		}
@@ -4053,11 +2953,6 @@ check_PMUintr:
 		      if (!ARMul_OSHandleSWI (state, SWI_Breakpoint))
 			ARMul_Abort (state, ARMul_SWIV);
 		    }
-#ifdef MODE32
-		  else if (state->is_v6
-			   && handle_v6_insn (state, instr))
-		    break;
-#endif
 		  else
 		    ARMul_UndefInstr (state, instr);
 		  break;
@@ -4246,6 +3141,7 @@ check_PMUintr:
 	      FLUSHPIPE;
 	      break;
 
+
 	      /* Branch and Link forward.  */
 	    case 0xb0:
 	    case 0xb1:
@@ -4263,9 +3159,8 @@ check_PMUintr:
 #endif
 	      state->Reg[15] = pc + 8 + POSBRANCH;
 	      FLUSHPIPE;
-	      if (trace_funcs)
-		fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 	      break;
+
 
 	      /* Branch and Link backward.  */
 	    case 0xb8:
@@ -4284,18 +3179,15 @@ check_PMUintr:
 #endif
 	      state->Reg[15] = pc + 8 + NEGBRANCH;
 	      FLUSHPIPE;
-	      if (trace_funcs)
-		fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 	      break;
+
 
 	      /* Co-Processor Data Transfers.  */
 	    case 0xc4:
 	      if (state->is_v5)
 		{
-		  if (CPNum == 10 || CPNum == 11)
-		    handle_VFP_move (state, instr);
 		  /* Reading from R15 is UNPREDICTABLE.  */
-		  else if (BITS (12, 15) == 15 || BITS (16, 19) == 15)
+		  if (BITS (12, 15) == 15 || BITS (16, 19) == 15)
 		    ARMul_UndefInstr (state, instr);
 		  /* Is access to coprocessor 0 allowed ?  */
 		  else if (! CP_ACCESS_ALLOWED (state, CPNum))
@@ -4321,11 +3213,11 @@ check_PMUintr:
 		    }
 		  else
 		    /* FIXME: Not sure what to do for other v5 processors.  */
-		    ARMul_UndefInstr (state, instr);
+		    ARMul_UndefInstr (state, instr);		    
 		  break;
 		}
 	      /* Drop through.  */
-
+	      
 	    case 0xc0:		/* Store , No WriteBack , Post Dec.  */
 	      ARMul_STC (state, instr, LHS);
 	      break;
@@ -4333,10 +3225,8 @@ check_PMUintr:
 	    case 0xc5:
 	      if (state->is_v5)
 		{
-		  if (CPNum == 10 || CPNum == 11)
-		    handle_VFP_move (state, instr);
 		  /* Writes to R15 are UNPREDICATABLE.  */
-		  else if (DESTReg == 15 || LHSReg == 15)
+		  if (DESTReg == 15 || LHSReg == 15)
 		    ARMul_UndefInstr (state, instr);
 		  /* Is access to the coprocessor allowed ?  */
 		  else if (! CP_ACCESS_ALLOWED (state, CPNum))
@@ -4480,8 +3370,8 @@ check_PMUintr:
 		      {
 			/* XScale MIA instruction.  Signed multiplication of
 			   two 32 bit values and addition to 40 bit accumulator.  */
-			ARMsdword Rm = state->Reg[MULLHSReg];
-			ARMsdword Rs = state->Reg[MULACCReg];
+			long long Rm = state->Reg[MULLHSReg];
+			long long Rs = state->Reg[MULACCReg];
 
 			if (Rm & (1 << 31))
 			  Rm -= 1ULL << 32;
@@ -4500,7 +3390,7 @@ check_PMUintr:
 			ARMword t2 = state->Reg[MULACCReg] >> 16;
 			ARMword t3 = state->Reg[MULLHSReg] & 0xffff;
 			ARMword t4 = state->Reg[MULACCReg] & 0xffff;
-			ARMsdword t5;
+			long long t5;
 
 			if (t1 & (1 << 15))
 			  t1 -= 1 << 16;
@@ -4530,7 +3420,7 @@ check_PMUintr:
 			/* XScale MIAxy instruction.  */
 			ARMword t1;
 			ARMword t2;
-			ARMsdword t5;
+			long long t5;
 
 			if (BIT (17))
 			  t1 = state->Reg[MULLHSReg] >> 16;
@@ -4569,10 +3459,8 @@ check_PMUintr:
 	    case 0xee:
 	      if (BIT (4))
 		{
-		  if (CPNum == 10 || CPNum == 11)
-		    handle_VFP_move (state, instr);
 		  /* MCR.  */
-		  else if (DESTReg == 15)
+		  if (DESTReg == 15)
 		    {
 		      UNDEF_MCRPC;
 #ifdef MODE32
@@ -4602,69 +3490,17 @@ check_PMUintr:
 	    case 0xef:
 	      if (BIT (4))
 		{
-		  if (CPNum == 10 || CPNum == 11)
+		  /* MRC */
+		  temp = ARMul_MRC (state, instr);
+		  if (DESTReg == 15)
 		    {
-		      switch (BITS (20, 27))
-			{
-			case 0xEF:
-			  if (BITS (16, 19) == 0x1
-			      && BITS (0, 11) == 0xA10)
-			    {
-			      /* VMRS  */
-			      if (DESTReg == 15)
-				{
-				  ARMul_SetCPSR (state, (state->FPSCR & 0xF0000000)
-						 | (ARMul_GetCPSR (state) & 0x0FFFFFFF));
-
-				  if (trace)
-				    fprintf (stderr, " VFP: VMRS: set flags to %c%c%c%c\n",
-					     ARMul_GetCPSR (state) & NBIT ? 'N' : '-',
-					     ARMul_GetCPSR (state) & ZBIT ? 'Z' : '-',
-					     ARMul_GetCPSR (state) & CBIT ? 'C' : '-',
-					     ARMul_GetCPSR (state) & VBIT ? 'V' : '-');
-				}
-			      else
-				{
-				  state->Reg[DESTReg] = state->FPSCR;
-
-				  if (trace)
-				    fprintf (stderr, " VFP: VMRS: r%d = %x\n", DESTReg, state->Reg[DESTReg]);
-				}
-			    }
-			  else
-			    fprintf (stderr, "SIM: VFP: Unimplemented: Compare op\n");
-			  break;
-
-			case 0xE0:
-			case 0xE1:
-			  /* VMOV reg <-> single precision.  */
-			  if (BITS (0,6) != 0x10 || BITS (8,11) != 0xA)
-			    fprintf (stderr, "SIM: VFP: Unimplemented: move op\n");
-			  else if (BIT (20))
-			    state->Reg[BITS (12, 15)] = VFP_uword (BITS (16, 19) << 1 | BIT (7));
-			  else
-			    VFP_uword (BITS (16, 19) << 1 | BIT (7)) = state->Reg[BITS (12, 15)];
-			  break;
-
-			default:
-			  fprintf (stderr, "SIM: VFP: Unimplemented: CDP op\n");
-			  break;
-			}
+		      ASSIGNN ((temp & NBIT) != 0);
+		      ASSIGNZ ((temp & ZBIT) != 0);
+		      ASSIGNC ((temp & CBIT) != 0);
+		      ASSIGNV ((temp & VBIT) != 0);
 		    }
 		  else
-		    {
-		      /* MRC */
-		      temp = ARMul_MRC (state, instr);
-		      if (DESTReg == 15)
-			{
-			  ASSIGNN ((temp & NBIT) != 0);
-			  ASSIGNZ ((temp & ZBIT) != 0);
-			  ASSIGNC ((temp & CBIT) != 0);
-			  ASSIGNV ((temp & VBIT) != 0);
-			}
-		      else
-			DEST = temp;
-		    }
+		    DEST = temp;
 		}
 	      else
 		/* CDP Part 2.  */
@@ -4707,6 +3543,14 @@ check_PMUintr:
 #ifdef MODET
     donext:
 #endif
+
+#ifdef NEED_UI_LOOP_HOOK
+      if (ui_loop_hook != NULL && ui_loop_hook_counter-- < 0)
+	{
+	  ui_loop_hook_counter = UI_LOOP_POLL_INTERVAL;
+	  ui_loop_hook (0);
+	}
+#endif /* NEED_UI_LOOP_HOOK */
 
       if (state->Emulate == ONCE)
 	state->Emulate = STOP;
@@ -4768,9 +3612,9 @@ GetDPRegRHS (ARMul_State * state, ARMword instr)
 	  if (shamt == 0)
 	    return (base);
 	  else if (shamt >= 32)
-	    return ((ARMword) ((ARMsword) base >> 31L));
+	    return ((ARMword) ((long int) base >> 31L));
 	  else
-	    return ((ARMword) ((ARMsword) base >> (int) shamt));
+	    return ((ARMword) ((long int) base >> (int) shamt));
 	case ROR:
 	  shamt &= 0x1f;
 	  if (shamt == 0)
@@ -4800,9 +3644,9 @@ GetDPRegRHS (ARMul_State * state, ARMword instr)
 	    return (base >> shamt);
 	case ASR:
 	  if (shamt == 0)
-	    return ((ARMword) ((ARMsword) base >> 31L));
+	    return ((ARMword) ((long int) base >> 31L));
 	  else
-	    return ((ARMword) ((ARMsword) base >> (int) shamt));
+	    return ((ARMword) ((long int) base >> (int) shamt));
 	case ROR:
 	  if (shamt == 0)
 	    /* It's an RRX.  */
@@ -4883,12 +3727,12 @@ GetDPSRegRHS (ARMul_State * state, ARMword instr)
 	  else if (shamt >= 32)
 	    {
 	      ASSIGNC (base >> 31L);
-	      return ((ARMword) ((ARMsword) base >> 31L));
+	      return ((ARMword) ((long int) base >> 31L));
 	    }
 	  else
 	    {
-	      ASSIGNC ((ARMword) ((ARMsword) base >> (int) (shamt - 1)) & 1);
-	      return ((ARMword) ((ARMsword) base >> (int) shamt));
+	      ASSIGNC ((ARMword) ((long int) base >> (int) (shamt - 1)) & 1);
+	      return ((ARMword) ((long int) base >> (int) shamt));
 	    }
 	case ROR:
 	  if (shamt == 0)
@@ -4937,12 +3781,12 @@ GetDPSRegRHS (ARMul_State * state, ARMword instr)
 	  if (shamt == 0)
 	    {
 	      ASSIGNC (base >> 31L);
-	      return ((ARMword) ((ARMsword) base >> 31L));
+	      return ((ARMword) ((long int) base >> 31L));
 	    }
 	  else
 	    {
-	      ASSIGNC ((ARMword) ((ARMsword) base >> (int) (shamt - 1)) & 1);
-	      return ((ARMword) ((ARMsword) base >> (int) shamt));
+	      ASSIGNC ((ARMword) ((long int) base >> (int) (shamt - 1)) & 1);
+	      return ((ARMword) ((long int) base >> (int) shamt));
 	    }
 	case ROR:
 	  if (shamt == 0)
@@ -4988,8 +3832,6 @@ WriteR15 (ARMul_State * state, ARMword src)
 #endif
 
   FLUSHPIPE;
-  if (trace_funcs)
-    fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 }
 
 /* This routine handles writes to register 15 when the S bit is set.  */
@@ -5027,8 +3869,6 @@ WriteSR15 (ARMul_State * state, ARMword src)
   ARMul_R15Altered (state);
 #endif
   FLUSHPIPE;
-  if (trace_funcs)
-    fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 }
 
 /* In machines capable of running in Thumb mode, BX, BLX, LDR and LDM
@@ -5050,22 +3890,9 @@ WriteR15Branch (ARMul_State * state, ARMword src)
       state->Reg[15] = src & 0xfffffffc;
     }
   FLUSHPIPE;
-  if (trace_funcs)
-    fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 #else
   WriteR15 (state, src);
 #endif
-}
-
-/* Before ARM_v5 LDR and LDM of pc did not change mode.  */
-
-static void
-WriteR15Load (ARMul_State * state, ARMword src)
-{
-  if (state->is_v5)
-    WriteR15Branch (state, src);
-  else
-    WriteR15 (state, src);
 }
 
 /* This routine evaluates most Load and Store register RHS's.  It is
@@ -5098,9 +3925,9 @@ GetLSRegRHS (ARMul_State * state, ARMword instr)
 	return (base >> shamt);
     case ASR:
       if (shamt == 0)
-	return ((ARMword) ((ARMsword) base >> 31L));
+	return ((ARMword) ((long int) base >> 31L));
       else
-	return ((ARMword) ((ARMsword) base >> (int) shamt));
+	return ((ARMword) ((long int) base >> (int) shamt));
     case ROR:
       if (shamt == 0)
 	/* It's an RRX.  */
@@ -5231,7 +4058,7 @@ Handle_Load_Double (ARMul_State * state, ARMword instr)
   ARMword addr_reg;
   ARMword write_back  = BIT (21);
   ARMword immediate   = BIT (22);
-  ARMword add_to_base = BIT (23);
+  ARMword add_to_base = BIT (23);        
   ARMword pre_indexed = BIT (24);
   ARMword offset;
   ARMword addr;
@@ -5239,7 +4066,7 @@ Handle_Load_Double (ARMul_State * state, ARMword instr)
   ARMword base;
   ARMword value1;
   ARMword value2;
-
+  
   BUSUSEDINCPCS;
 
   /* If the writeback bit is set, the pre-index bit must be clear.  */
@@ -5248,13 +4075,13 @@ Handle_Load_Double (ARMul_State * state, ARMword instr)
       ARMul_UndefInstr (state, instr);
       return;
     }
-
+  
   /* Extract the base address register.  */
   addr_reg = LHSReg;
-
+  
   /* Extract the destination register and check it.  */
   dest_reg = DESTReg;
-
+  
   /* Destination register must be even.  */
   if ((dest_reg & 1)
     /* Destination register cannot be LR.  */
@@ -5275,18 +4102,15 @@ Handle_Load_Double (ARMul_State * state, ARMword instr)
     sum = base + offset;
   else
     sum = base - offset;
-
+  
   /* If this is a pre-indexed mode use the sum.  */
   if (pre_indexed)
     addr = sum;
   else
     addr = base;
 
-  if (state->is_v6 && (addr & 0x3) == 0)
-    /* Word alignment is enough for v6.  */
-    ;
   /* The address must be aligned on a 8 byte boundary.  */
-  else if (addr & 0x7)
+  if (addr & 0x7)
     {
 #ifdef ABORTS
       ARMul_DATAABORT (addr);
@@ -5317,17 +4141,17 @@ Handle_Load_Double (ARMul_State * state, ARMword instr)
       TAKEABORT;
       return;
     }
-
+  
   ARMul_Icycles (state, 2, 0L);
 
   /* Store the values.  */
   state->Reg[dest_reg] = value1;
   state->Reg[dest_reg + 1] = value2;
-
+  
   /* Do the post addressing and writeback.  */
   if (! pre_indexed)
     addr = sum;
-
+  
   if (! pre_indexed || write_back)
     state->Reg[addr_reg] = addr;
 }
@@ -5341,7 +4165,7 @@ Handle_Store_Double (ARMul_State * state, ARMword instr)
   ARMword addr_reg;
   ARMword write_back  = BIT (21);
   ARMword immediate   = BIT (22);
-  ARMword add_to_base = BIT (23);
+  ARMword add_to_base = BIT (23);        
   ARMword pre_indexed = BIT (24);
   ARMword offset;
   ARMword addr;
@@ -5356,20 +4180,20 @@ Handle_Store_Double (ARMul_State * state, ARMword instr)
       ARMul_UndefInstr (state, instr);
       return;
     }
-
+  
   /* Extract the base address register.  */
   addr_reg = LHSReg;
-
+  
   /* Base register cannot be PC.  */
   if (addr_reg == 15)
     {
       ARMul_UndefInstr (state, instr);
       return;
     }
-
+  
   /* Extract the source register.  */
   src_reg = DESTReg;
-
+  
   /* Source register must be even.  */
   if (src_reg & 1)
     {
@@ -5388,7 +4212,7 @@ Handle_Store_Double (ARMul_State * state, ARMword instr)
     sum = base + offset;
   else
     sum = base - offset;
-
+  
   /* If this is a pre-indexed mode use the sum.  */
   if (pre_indexed)
     addr = sum;
@@ -5420,17 +4244,17 @@ Handle_Store_Double (ARMul_State * state, ARMword instr)
   /* Load the words.  */
   ARMul_StoreWordN (state, addr, state->Reg[src_reg]);
   ARMul_StoreWordN (state, addr + 4, state->Reg[src_reg + 1]);
-
+  
   if (state->Aborted)
     {
       TAKEABORT;
       return;
     }
-
+  
   /* Do the post addressing and writeback.  */
   if (! pre_indexed)
     addr = sum;
-
+  
   if (! pre_indexed || write_back)
     state->Reg[addr_reg] = addr;
 }
@@ -5583,7 +4407,7 @@ LoadMult (ARMul_State * state, ARMword instr, ARMword address, ARMword WBBase)
 
   if (BIT (15) && !state->Aborted)
     /* PC is in the reg list.  */
-    WriteR15Load (state, PC);
+    WriteR15Branch (state, PC);
 
   /* To write back the final register.  */
   ARMul_Icycles (state, 1, 0L);
@@ -5827,7 +4651,7 @@ StoreSMult (ARMul_State * state,
 
   for (temp = 0; !BIT (temp); temp++)
     ;	/* N cycle first.  */
-
+  
 #ifdef MODE32
   ARMul_StoreWordN (state, address, state->Reg[temp++]);
 #else
@@ -5933,7 +4757,9 @@ Multiply64 (ARMul_State * state, ARMword instr, int msigned, int scc)
       && nRdLo != 15
       && nRs   != 15
       && nRm   != 15
-      && nRdHi != nRdLo)
+      && nRdHi != nRdLo
+      && nRdHi != nRm
+      && nRdLo != nRm)
     {
       /* Intermediate results.  */
       ARMword lo, mid1, mid2, hi;
@@ -5941,24 +4767,15 @@ Multiply64 (ARMul_State * state, ARMword instr, int msigned, int scc)
       ARMword Rs = state->Reg[nRs];
       int sign = 0;
 
-#ifdef MODE32
-      if (state->is_v6)
-	;
-      else
-#endif
-	/* BAD code can trigger this result.  So only complain if debugging.  */
-	if (state->Debug && (nRdHi == nRm || nRdLo == nRm))
-	  fprintf (stderr, "sim: MULTIPLY64 - INVALID ARGUMENTS: %d %d %d\n",
-		   nRdHi, nRdLo, nRm);
       if (msigned)
 	{
 	  /* Compute sign of result and adjust operands if necessary.  */
 	  sign = (Rm ^ Rs) & 0x80000000;
 
-	  if (((ARMsword) Rm) < 0)
+	  if (((signed long) Rm) < 0)
 	    Rm = -Rm;
 
-	  if (((ARMsword) Rs) < 0)
+	  if (((signed long) Rs) < 0)
 	    Rs = -Rs;
 	}
 
@@ -5994,7 +4811,7 @@ Multiply64 (ARMul_State * state, ARMword instr, int msigned, int scc)
       state->Reg[nRdLo] = RdLo;
       state->Reg[nRdHi] = RdHi;
     }
-  else if (state->Debug)
+  else
     fprintf (stderr, "sim: MULTIPLY64 - INVALID ARGUMENTS\n");
 
   if (scc)

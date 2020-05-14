@@ -1,12 +1,12 @@
 /* Interface to C preprocessor macro tables for GDB.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,19 +15,15 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef MACROTAB_H
 #define MACROTAB_H
 
-#include "gdbsupport/function-view.h"
-
 struct obstack;
-struct compunit_symtab;
-
-namespace gdb {
 struct bcache;
-}
 
 /* How do we represent a source location?  I mean, how should we
    represent them within GDB; the user wants to use all sorts of
@@ -78,8 +74,6 @@ struct bcache;
 /* A table of all the macro definitions for a given compilation unit.  */
 struct macro_table;
 
-/* The definition of a single macro.  */
-struct macro_definition;
 
 /* A source file that participated in a compilation unit --- either a
    main file, or an #included file.  If a file is #included more than
@@ -88,15 +82,6 @@ struct macro_definition;
    for each #inclusion.  Taken as a group, these structures form a
    tree mapping the #inclusions that contributed to the compilation
    unit, with the main source file as its root.
-
-   Beware --- not every source file mentioned in a compilation unit's
-   symtab structures will appear in the #inclusion tree!  As of Oct
-   2002, GCC does record the effect of #line directives in the source
-   line info, but not in macro info.  This means that GDB's symtabs
-   (built from the former, among other things) may mention filenames
-   that the #inclusion tree (built from the latter) doesn't have any
-   record of.  See macroscope.c:sal_macro_scope for how to accomodate
-   this.
 
    It's worth noting that libcpp has a simpler way of representing all
    this, which we should consider switching to.  It might even be
@@ -131,9 +116,7 @@ struct macro_source_file
      a part of.  */
   struct macro_table *table;
 
-  /* A source file --- possibly a header file.  This filename is relative to
-     the compilation directory (table->comp_dir), it exactly matches the
-     symtab->filename content.  */
+  /* A source file --- possibly a header file.  */
   const char *filename;
 
   /* The location we were #included from, or zero if we are the
@@ -160,21 +143,19 @@ struct macro_source_file
    xmalloc if OBSTACK is zero.  Use BCACHE to store all macro names,
    arguments, definitions, and anything else that might be the same
    amongst compilation units in an executable file; if BCACHE is zero,
-   don't cache these things.  CUST is a pointer to the containing
-   compilation unit, or NULL if there isn't one.
+   don't cache these things.
 
-   Note that, if either OBSTACK or BCACHE are non-zero, then removing
-   information from the table may leak memory.  Neither obstacks nor
-   bcaches really allow you to remove information, so although we can
-   update the data structure to record the change, we can't free the
-   old data.  At the moment, since we only provide obstacks and
-   bcaches for macro tables for symtabs, this isn't a problem; only
-   odd debugging information makes a definition and then deletes it at
-   the same source location (although 'gcc -DFOO -UFOO -DFOO=2' does
-   do that in GCC 4.1.2.).  */
+   Note that, if either OBSTACK or BCACHE are non-zero, then you
+   should only ever add information the macro table --- you should
+   never remove things from it.  You'll get an error if you try.  At
+   the moment, since we only provide obstacks and bcaches for macro
+   tables for symtabs, this restriction makes a nice sanity check.
+   Obstacks and bcaches are pretty much grow-only structures anyway.
+   However, if we find that it's occasionally useful to delete things
+   even from the symtab's tables, and the storage leak isn't a
+   problem, this restriction could be lifted.  */
 struct macro_table *new_macro_table (struct obstack *obstack,
-                                     gdb::bcache *bcache,
-				     struct compunit_symtab *cust);
+                                     struct bcache *bcache);
 
 
 /* Free TABLE, and any macro definitions, source file structures,
@@ -201,11 +182,6 @@ struct macro_source_file *macro_set_main (struct macro_table *table,
 /* Return the main source file of the macro table TABLE.  */
 struct macro_source_file *macro_main (struct macro_table *table);
 
-/* Mark the macro table TABLE so that macros defined in this table can
-   be redefined without error.  Note that it invalid to call this if
-   TABLE is allocated on an obstack.  */
-void macro_allow_redefinitions (struct macro_table *table);
-
 
 /* Record a #inclusion.
    Record in SOURCE's macro table that, at line number LINE in SOURCE,
@@ -222,10 +198,6 @@ struct macro_source_file *macro_include (struct macro_source_file *source,
                                          int line,
                                          const char *included);
 
-/* Define any special macros, like __FILE__ or __LINE__.  This should
-   be called once, on the main source file.  */
-
-void macro_define_special (struct macro_table *table);
 
 /* Find any source file structure for a file named NAME, either
    included into SOURCE, or SOURCE itself.  Return zero if we have
@@ -233,9 +205,9 @@ void macro_define_special (struct macro_table *table);
    path.  e.g., `stdio.h', not `/usr/include/stdio.h'.  If NAME
    appears more than once in the inclusion tree, return the
    least-nested inclusion --- the one closest to the main source file.  */
-struct macro_source_file *macro_lookup_inclusion
-                          (struct macro_source_file *source,
-                           const char *name);
+struct macro_source_file *(macro_lookup_inclusion
+                           (struct macro_source_file *source,
+                            const char *name));
 
 
 /* Record an object-like #definition (i.e., one with no parameter list).
@@ -268,6 +240,7 @@ void macro_define_function (struct macro_source_file *source, int line,
 void macro_undef (struct macro_source_file *source, int line,
                   const char *name);
 
+
 /* Different kinds of macro definitions.  */
 enum macro_kind
 {
@@ -275,17 +248,6 @@ enum macro_kind
   macro_function_like
 };
 
-/* Different kinds of special macros.  */
-
-enum macro_special_kind
-{
-  /* Ordinary.  */
-  macro_ordinary,
-  /* The special macro __FILE__.  */
-  macro_FILE,
-  /* The special macro __LINE__.  */
-  macro_LINE
-};
 
 /* A preprocessor symbol definition.  */
 struct macro_definition
@@ -294,21 +256,16 @@ struct macro_definition
   struct macro_table *table;
 
   /* What kind of macro it is.  */
-  ENUM_BITFIELD (macro_kind) kind : 1;
+  enum macro_kind kind;
 
   /* If `kind' is `macro_function_like', the number of arguments it
      takes, and their names.  The names, and the array of pointers to
-     them, are in the table's bcache, if it has one.  If `kind' is
-     `macro_object_like', then this is actually a `macro_special_kind'
-     describing the macro.  */
-  int argc : 30;
+     them, are in the table's bcache, if it has one.  */
+  int argc;
   const char * const *argv;
 
-  /* The replacement string (body) of the macro.  For ordinary macros,
-     this is in the table's bcache, if it has one.  For special macros
-     like __FILE__, this value is only valid until the next use of any
-     special macro definition; that is, it is reset each time any
-     special macro is looked up or iterated over.  */
+  /* The replacement string (body) of the macro.  This is in the
+     table's bcache, if it has one.  */
   const char *replacement;
 };
 
@@ -318,9 +275,9 @@ struct macro_definition
    effect at the end of the file.  The macro table owns the structure;
    the caller need not free it.  Return zero if NAME is not #defined
    at that point.  */
-struct macro_definition *macro_lookup_definition
-                         (struct macro_source_file *source,
-                          int line, const char *name);
+struct macro_definition *(macro_lookup_definition
+                          (struct macro_source_file *source,
+                           int line, const char *name));
 
 
 /* Return the source location of the definition for NAME in scope at
@@ -328,37 +285,11 @@ struct macro_definition *macro_lookup_definition
    number of the definition, and return a source file structure for
    the file.  Return zero if NAME has no definition in scope at that
    point, and leave *DEFINITION_LINE unchanged.  */
-struct macro_source_file *macro_definition_location
-                          (struct macro_source_file *source,
-                           int line,
-                           const char *name,
-                           int *definition_line);
+struct macro_source_file *(macro_definition_location
+                           (struct macro_source_file *source,
+                            int line,
+                            const char *name,
+                            int *definition_line));
 
-/* Prototype for a callback callable when walking a macro table.  NAME
-   is the name of the macro, and DEFINITION is the definition.  SOURCE
-   is the file at the start of the include path, and LINE is the line
-   number of the SOURCE file where the macro was defined.  */
-typedef void (macro_callback_fn) (const char *name,
-				  const struct macro_definition *definition,
-				  struct macro_source_file *source,
-				  int line);
-
-/* Call the callable FN for each macro in the macro table TABLE.  */
-void macro_for_each (struct macro_table *table,
-		     gdb::function_view<macro_callback_fn> fn);
-
-/* Call FN for each macro that is visible in a given scope.  The scope
-   is represented by FILE and LINE.  */
-void macro_for_each_in_scope (struct macro_source_file *file, int line,
-			      gdb::function_view<macro_callback_fn> fn);
-
-/* Return FILE->filename with possibly prepended compilation directory name.
-   This is raw concatenation without the "set substitute-path" and gdb_realpath
-   applications done by symtab_to_fullname.
-
-   THis function ignores the "set filename-display" setting.  Its default
-   setting is "relative" which is backward compatible but the former behavior
-   of macro filenames printing was "absolute".  */
-extern std::string macro_source_fullname (struct macro_source_file *file);
 
 #endif /* MACROTAB_H */

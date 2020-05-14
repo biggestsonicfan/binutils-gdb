@@ -9,6 +9,4 @@ SECTIONS
   .text : { *(.text) } > TEXTMEM
   .data : { *(.data) } > DATAMEM
   .bss  : { *(.bss)  } > DATAMEM
-
-  /DISCARD/ : { *(.MIPS.abiflags) *(.gnu.attributes) }
 }

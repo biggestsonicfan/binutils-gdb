@@ -1,21 +1,21 @@
-/* This program is used to test objcopy, readelf and strip.  */
+/* This program is used to test objcopy and strip.  */
 
-extern int strcmp (const char *, const char *);
-extern int printf (const char *, ...);
+#include <stdio.h>
+#include <string.h>
 
 int common;
 int global = 1;
 static int local = 2;
-static const char string[] = "string";
+static char string[] = "string";
 
 int
-fn (void)
+fn ()
 {
   return 3;
 }
 
 int
-main (void)
+main ()
 {
   if (common != 0
       || global != 1
@@ -23,9 +23,9 @@ main (void)
       || strcmp (string, "string") != 0)
     {
       printf ("failed\n");
-      return 1;
+      return (1);
     }
 
   printf ("ok\n");
-  return 0;
+  return (0);
 }

@@ -1,6 +1,17 @@
+#ifdef PROTOTYPES
 int main (int argc, char **argv, char **envp)
+#else
+main (argc, argv, envp)
+     int argc;
+     char **argv;
+     char **envp;
+#endif
 {
     extern void dummy();
+#ifdef usestubs
+    set_debug_traps();
+    breakpoint();
+#endif
     dummy();
     return 0;
     
@@ -64,11 +75,6 @@ unsigned long	v_unsigned_long_array[2];
 
 float		v_float_array[2];
 double		v_double_array[2];
-
-/**** initialized array *******/
-
-int		v_int_array_init[2] = { 10, 20 };
-
 /**** pointers *******/
 
 char		*v_char_pointer;
@@ -178,7 +184,6 @@ union tu_link {
 enum colors {red, green, blue} color;
 enum cars {chevy, ford, porsche} clunker;
 
-struct t_struct *null_t_struct;
 
 void dummy()
 {

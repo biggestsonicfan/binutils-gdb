@@ -35,8 +35,3 @@ foo:
 	str	r2, [r3]
 
 	msr	cpsr_ctl, #0x11
-
-	# Add two nop instructions to ensure that the
-	# output is 32-byte aligned as required for arm-aout.
-	nop
-	nop

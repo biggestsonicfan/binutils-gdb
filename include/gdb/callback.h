@@ -1,21 +1,22 @@
 /* Remote target system call callback support.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright 1997 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
-   This file is part of GDB.
+This file is part of GDB.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* This interface isn't intended to be specific to any particular kind
    of remote (hardware, simulator, whatever).  As such, support for it
@@ -49,17 +50,18 @@
 
 #ifndef va_start
 #include <ansidecl.h>
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
 #endif
-/* Needed for enum bfd_endian.  */
-#include "bfd.h"
+#endif
 
 /* Mapping of host/target values.  */
 /* ??? For debugging purposes, one might want to add a string of the
    name of the symbol.  */
 
 typedef struct {
-  const char *name;
   int host_val;
   int target_val;
 } CB_TARGET_DEFS_MAP;
@@ -73,92 +75,54 @@ typedef struct host_callback_struct host_callback;
 
 struct host_callback_struct 
 {
-  int (*close) (host_callback *,int);
-  int (*get_errno) (host_callback *);
-  int (*isatty) (host_callback *, int);
-  int (*lseek) (host_callback *, int, long , int);
-  int (*open) (host_callback *, const char*, int mode);
-  int (*read) (host_callback *,int,  char *, int);
-  int (*read_stdin) ( host_callback *, char *, int);
-  int (*rename) (host_callback *, const char *, const char *);
-  int (*system) (host_callback *, const char *);
-  long (*time) (host_callback *, long *);
-  int (*unlink) (host_callback *, const char *);
-  int (*write) (host_callback *,int, const char *, int);
-  int (*write_stdout) (host_callback *, const char *, int);
-  void (*flush_stdout) (host_callback *);
-  int (*write_stderr) (host_callback *, const char *, int);
-  void (*flush_stderr) (host_callback *);
-  int (*to_stat) (host_callback *, const char *, struct stat *);
-  int (*to_fstat) (host_callback *, int, struct stat *);
-  int (*to_lstat) (host_callback *, const char *, struct stat *);
-  int (*ftruncate) (host_callback *, int, long);
-  int (*truncate) (host_callback *, const char *, long);
-  int (*pipe) (host_callback *, int *);
-
-  /* Called by the framework when a read call has emptied a pipe buffer.  */
-  void (*pipe_empty) (host_callback *, int read_fd, int write_fd);
-
-  /* Called by the framework when a write call makes a pipe buffer
-     non-empty.  */
-  void (*pipe_nonempty) (host_callback *, int read_fd, int write_fd);
+  int (*close) PARAMS ((host_callback *,int));
+  int (*get_errno) PARAMS ((host_callback *));
+  int (*isatty) PARAMS ((host_callback *, int));
+  int (*lseek) PARAMS ((host_callback *, int, long , int));
+  int (*open) PARAMS ((host_callback *, const char*, int mode));
+  int (*read) PARAMS ((host_callback *,int,  char *, int));
+  int (*read_stdin) PARAMS (( host_callback *, char *, int));
+  int (*rename) PARAMS ((host_callback *, const char *, const char *));
+  int (*system) PARAMS ((host_callback *, const char *));
+  long (*time) PARAMS ((host_callback *, long *));
+  int (*unlink) PARAMS ((host_callback *, const char *));
+  int (*write) PARAMS ((host_callback *,int, const char *, int));
+  int (*write_stdout) PARAMS ((host_callback *, const char *, int));
+  void (*flush_stdout) PARAMS ((host_callback *));
+  int (*write_stderr) PARAMS ((host_callback *, const char *, int));
+  void (*flush_stderr) PARAMS ((host_callback *));
+  int (*stat) PARAMS ((host_callback *, const char *, struct stat *));
+  int (*fstat) PARAMS ((host_callback *, int, struct stat *));
 
   /* When present, call to the client to give it the oportunity to
      poll any io devices for a request to quit (indicated by a nonzero
      return value). */
-  int (*poll_quit) (host_callback *);
+  int (*poll_quit) PARAMS ((host_callback *));
 
   /* Used when the target has gone away, so we can close open
      handles and free memory etc etc.  */
-  int (*shutdown) (host_callback *);
-  int (*init)     (host_callback *);
+  int (*shutdown) PARAMS ((host_callback *));
+  int (*init)     PARAMS ((host_callback *));
 
   /* depreciated, use vprintf_filtered - Talk to the user on a console.  */
-  void (*printf_filtered) (host_callback *, const char *, ...);
+  void (*printf_filtered) PARAMS ((host_callback *, const char *, ...));
 
   /* Talk to the user on a console.  */
-  void (*vprintf_filtered) (host_callback *, const char *, va_list);
+  void (*vprintf_filtered) PARAMS ((host_callback *, const char *, va_list));
 
   /* Same as vprintf_filtered but to stderr.  */
-  void (*evprintf_filtered) (host_callback *, const char *, va_list);
+  void (*evprintf_filtered) PARAMS ((host_callback *, const char *, va_list));
 
   /* Print an error message and "exit".
      In the case of gdb "exiting" means doing a longjmp back to the main
      command loop.  */
-  void (*error) (host_callback *, const char *, ...)
-#ifdef __GNUC__
-    __attribute__ ((__noreturn__))
-#endif
-    ;
+  void (*error) PARAMS ((host_callback *, const char *, ...));
 
   int last_errno;		/* host format */
 
   int fdmap[MAX_CALLBACK_FDS];
-  /* fd_buddy is used to contruct circular lists of target fds that point to
-     the same host fd.  A uniquely mapped fd points to itself; for a closed
-     one, fd_buddy has the value -1.  The host file descriptors for stdin /
-     stdout / stderr are never closed by the simulators, so they are put
-     in a special fd_buddy circular list which also has MAX_CALLBACK_FDS
-     as a member.  */
-  /* ??? We don't have a callback entry for dup, although it is trival to
-     implement now.  */
-  short fd_buddy[MAX_CALLBACK_FDS+1];
-
-  /* 0 = none, >0 = reader (index of writer),
-     <0 = writer (negative index of reader).
-     If abs (ispipe[N]) == N, then N is an end of a pipe whose other
-     end is closed.  */
-  short ispipe[MAX_CALLBACK_FDS];
-
-  /* A writer stores the buffer at its index.  Consecutive writes
-     realloc the buffer and add to the size.  The reader indicates the
-     read part in its .size, until it has consumed it all, at which
-     point it deallocates the buffer and zeroes out both sizes.  */
-  struct pipe_write_buffer
-  {
-    int size;
-    char *buffer;
-  } pipe_buffer[MAX_CALLBACK_FDS];
+  char fdopen[MAX_CALLBACK_FDS];
+  char alwaysopen[MAX_CALLBACK_FDS];
 
   /* System call numbers.  */
   CB_TARGET_DEFS_MAP *syscall_map;
@@ -176,16 +140,6 @@ struct host_callback_struct
      use "name.bits".
      Example: "st_dev,4:st_ino,4:st_mode,4:..."  */
   const char *stat_map;
-
-  enum bfd_endian target_endian;
-
-  /* Size of an "int" on the target (for syscalls whose ABI uses "int").
-     This must include padding, and only padding-at-higher-address is
-     supported.  For example, a 64-bit target with 32-bit int:s which
-     are padded to 64 bits when in an array, should supposedly set this
-     to 8.  The default is 4 which matches ILP32 targets and 64-bit
-     targets with 32-bit ints and no padding.  */
-  int target_sizeof_int;
 
   /* Marker for those wanting to do sanity checks.
      This should remain the last member of this struct to help catch
@@ -225,18 +179,6 @@ extern host_callback default_callback;
 #define CB_SYS_chmod 	16
 #define CB_SYS_utime 	17
 #define CB_SYS_time 	18
-
-/* More standard syscalls.  */
-#define CB_SYS_lstat    19
-#define CB_SYS_rename	20
-#define CB_SYS_truncate	21
-#define CB_SYS_ftruncate 22
-#define CB_SYS_pipe 	23
-
-/* New ARGV support.  */
-#define CB_SYS_argc	24
-#define CB_SYS_argnlen	25
-#define CB_SYS_argn	26
 
 /* Struct use to pass and return information necessary to perform a
    system call.  */
@@ -266,12 +208,12 @@ typedef struct cb_syscall {
      argument here.  We mimic sim_{read,write} for now.  Be careful to
      test any changes with -Wall -Werror, mixed signed comparisons
      will get you.  */
-  int (*read_mem) (host_callback * /*cb*/, struct cb_syscall * /*sc*/,
-		   unsigned long /*taddr*/, char * /*buf*/,
-		   int /*bytes*/);
-  int (*write_mem) (host_callback * /*cb*/, struct cb_syscall * /*sc*/,
-		    unsigned long /*taddr*/, const char * /*buf*/,
-		    int /*bytes*/);
+  int (*read_mem) PARAMS ((host_callback * /*cb*/, struct cb_syscall * /*sc*/,
+			   unsigned long /*taddr*/, char * /*buf*/,
+			   int /*bytes*/));
+  int (*write_mem) PARAMS ((host_callback * /*cb*/, struct cb_syscall * /*sc*/,
+			    unsigned long /*taddr*/, const char * /*buf*/,
+			    int /*bytes*/));
 
   /* For sanity checking, should be last entry.  */
   int magic;
@@ -300,48 +242,29 @@ typedef enum {
 } CB_RC;
 
 /* Read in target values for system call numbers, errno values, signals.  */
-CB_RC cb_read_target_syscall_maps (host_callback *, const char *);
+CB_RC cb_read_target_syscall_maps PARAMS ((host_callback *, const char *));
 
 /* Translate target to host syscall function numbers.  */
-int cb_target_to_host_syscall (host_callback *, int);
+int cb_target_to_host_syscall PARAMS ((host_callback *, int));
 
 /* Translate host to target errno value.  */
-int cb_host_to_target_errno (host_callback *, int);
+int cb_host_to_target_errno PARAMS ((host_callback *, int));
 
 /* Translate target to host open flags.  */
-int cb_target_to_host_open (host_callback *, int);
+int cb_target_to_host_open PARAMS ((host_callback *, int));
 
 /* Translate target signal number to host.  */
-int cb_target_to_host_signal (host_callback *, int);
+int cb_target_to_host_signal PARAMS ((host_callback *, int));
 
 /* Translate host signal number to target.  */
-int cb_host_to_gdb_signal (host_callback *, int);
-
-/* Translate symbols into human readable strings.  */
-const char *cb_host_str_syscall (host_callback *, int);
-const char *cb_host_str_errno (host_callback *, int);
-const char *cb_host_str_signal (host_callback *, int);
-const char *cb_target_str_syscall (host_callback *, int);
-const char *cb_target_str_errno (host_callback *, int);
-const char *cb_target_str_signal (host_callback *, int);
+int cb_host_to_target_signal PARAMS ((host_callback *, int));
 
 /* Translate host stat struct to target.
    If stat struct ptr is NULL, just compute target stat struct size.
    Result is size of target stat struct or 0 if error.  */
-int cb_host_to_target_stat (host_callback *, const struct stat *, PTR);
-
-/* Translate a value to target endian.  */
-void cb_store_target_endian (host_callback *, char *, int, long);
-
-/* Tests for special fds.  */
-int cb_is_stdin (host_callback *, int);
-int cb_is_stdout (host_callback *, int);
-int cb_is_stderr (host_callback *, int);
-
-/* Read a string out of the target.  */
-int cb_get_string (host_callback *, CB_SYSCALL *, char *, int, unsigned long);
+int cb_host_to_target_stat PARAMS ((host_callback *, const struct stat *, PTR));
 
 /* Perform a system call.  */
-CB_RC cb_syscall (host_callback *, CB_SYSCALL *);
+CB_RC cb_syscall PARAMS ((host_callback *, CB_SYSCALL *));
 
 #endif

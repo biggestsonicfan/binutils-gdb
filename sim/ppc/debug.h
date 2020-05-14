@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -50,8 +51,6 @@ typedef enum {
   trace_pal_device,
   trace_pass_device,
   trace_phb_device,
-  trace_sem_device,
-  trace_shm_device,
   trace_stack_device,
   trace_register_device,
   trace_vm_device,
@@ -87,8 +86,8 @@ extern int ppc_trace[nr_trace_options];
 do { \
   if (WITH_TRACE) { \
     if (ppc_trace[OBJECT]) { \
-      sim_io_printf_filtered("%s:%d: ", filter_filename(__FILE__), __LINE__); \
-      sim_io_printf_filtered ARGS; \
+      printf_filtered("%s:%d: ", filter_filename(__FILE__), __LINE__); \
+      printf_filtered ARGS; \
     } \
   } \
 } while (0)
@@ -98,8 +97,8 @@ do { \
 do { \
   if (WITH_TRACE) { \
     if (ppc_trace[OBJECT]) { \
-      sim_io_printf_filtered("%s:%d:0x%08lx:%s ", itable[MY_INDEX].file, itable[MY_INDEX].line_nr, (long)cia, itable[MY_INDEX].name); \
-      sim_io_printf_filtered ARGS; \
+      printf_filtered("%s:%d:0x%08lx:%s ", itable[MY_INDEX].file, itable[MY_INDEX].line_nr, (long)cia, itable[MY_INDEX].name); \
+      printf_filtered ARGS; \
     } \
   } \
 } while (0)
@@ -112,11 +111,11 @@ do { \
     if (ppc_trace[trace_devices] \
 	|| ppc_trace[trace_##OBJECT##_device] \
 	|| trace_device) { \
-      sim_io_printf_filtered("%s:%d:%s:%s%s ",					\
-			     filter_filename(__FILE__), __LINE__, #OBJECT, \
-			     trace_device ? device_path(me) : "",	\
-			     trace_device ? ":" : "");			\
-      sim_io_printf_filtered ARGS; \
+      printf_filtered("%s:%d:%s:%s%s ", \
+		      filter_filename(__FILE__), __LINE__, #OBJECT, \
+		      trace_device ? device_path(me) : "", \
+		      trace_device ? ":" : ""); \
+      printf_filtered ARGS; \
     } \
   } \
 } while (0)
@@ -130,11 +129,11 @@ do { \
     if (ppc_trace[trace_devices] \
 	|| ppc_trace[trace_##OBJECT##_device] \
 	|| trace_device) { \
-      sim_io_printf_filtered("%s:%d:%s:%s%s ", \
-			     filter_filename(__FILE__), __LINE__, #OBJECT, \
-			     trace_device ? device_path(me) : "",	\
-			     trace_device ? ":" : "");			\
-      sim_io_printf_filtered ARGS; \
+      printf_filtered("%s:%d:%s:%s%s ", \
+		      filter_filename(__FILE__), __LINE__, #OBJECT, \
+		      trace_device ? device_path(me) : "", \
+		      trace_device ? ":" : ""); \
+      printf_filtered ARGS; \
     } \
   } \
 } while (0)
@@ -144,8 +143,8 @@ do { \
 do { \
   if (WITH_TRACE) { \
     if (ppc_trace[trace_##OBJECT##_package]) { \
-      sim_io_printf_filtered("%s:%d:%s: ", filter_filename(__FILE__), __LINE__, #OBJECT); \
-      sim_io_printf_filtered ARGS; \
+      printf_filtered("%s:%d:%s: ", filter_filename(__FILE__), __LINE__, #OBJECT); \
+      printf_filtered ARGS; \
     } \
   } \
 } while (0)

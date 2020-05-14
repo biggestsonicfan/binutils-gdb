@@ -1,5 +1,5 @@
 /* Return time used so far, in microseconds.
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright (C) 1994, 1999, 2002 Free Software Foundation, Inc.
 
 This file is part of the libiberty library.
 Libiberty is free software; you can redistribute it and/or
@@ -14,8 +14,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 
@@ -65,10 +65,6 @@ Boston, MA 02110-1301, USA.  */
 #define CLOCKS_PER_SEC 1
 #endif
 
-#ifndef RUSAGE_SELF
-#define RUSAGE_SELF 0
-#endif
-
 #ifdef _SC_CLK_TCK
 #define GNU_HZ  sysconf(_SC_CLK_TCK)
 #else
@@ -94,12 +90,12 @@ process started.
 */
 
 long
-get_run_time (void)
+get_run_time ()
 {
 #if defined (HAVE_GETRUSAGE) && defined (HAVE_SYS_RESOURCE_H)
   struct rusage rusage;
 
-  getrusage (RUSAGE_SELF, &rusage);
+  getrusage (0, &rusage);
   return (rusage.ru_utime.tv_sec * 1000000 + rusage.ru_utime.tv_usec
 	  + rusage.ru_stime.tv_sec * 1000000 + rusage.ru_stime.tv_usec);
 #else /* ! HAVE_GETRUSAGE */

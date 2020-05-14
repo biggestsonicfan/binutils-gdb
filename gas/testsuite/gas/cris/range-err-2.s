@@ -3,7 +3,6 @@
 ;  { dg-do assemble { target cris-*-* } }
 
  .text
- .syntax no_register_prefix
 start:
  moveq external_symbol,r0 ; { dg-error "Semantics error" }
  addq external_symbol,r0 ; { dg-error "Semantics error" }

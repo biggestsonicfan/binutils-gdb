@@ -1,21 +1,22 @@
 /* interrupts.h -- 68HC11 Interrupts Emulation
-   Copyright 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    Written by Stephane Carrez (stcarrez@worldnet.fr)
 
 This file is part of GDB, GAS, and the GNU binutils.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef _M6811_SIM_INTERRUPTS_H
 #define _M6811_SIM_INTERRUPTS_H
@@ -122,7 +123,7 @@ struct interrupt
       are masked; second it checks for pending interrupts and raise one if
       interrupts are enabled.  */
 struct interrupts {
-  sim_cpu           *cpu;
+  struct _sim_cpu   *cpu;
 
   /* Mask of current pending interrupts.  */
   unsigned long     pending_mask;
@@ -159,7 +160,7 @@ struct interrupts {
   struct interrupt_history interrupts_history[MAX_INT_HISTORY];
 };
 
-extern void interrupts_initialize     (SIM_DESC sd, sim_cpu *cpu);
+extern void interrupts_initialize     (SIM_DESC sd, struct _sim_cpu* cpu);
 extern void interrupts_reset          (struct interrupts* interrupts);
 extern void interrupts_update_pending (struct interrupts* interrupts);
 extern int  interrupts_get_current    (struct interrupts* interrupts);

@@ -6,7 +6,7 @@
 
 Disassembly of section .text:
 
-0+000 <start>:
+00000000 <start>:
        0:	e300.*
        1:	e304.*
        2:	e308.*
@@ -219145,7 +219145,7 @@ Disassembly of section .text:
    357ff:	6629.*
    35800:	1df8.*
    35801:	662a.*
-0+035802 <testend>:
+00035802 <testend>:
    35802:	f073.*
    35803:	5802.*
 .*35803: ARELEXT16.*

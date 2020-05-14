@@ -1,46 +1,59 @@
-# Copyright 1997-2020 Free Software Foundation, Inc.
+# Copyright 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This test was written by Rich Title. 
 # Purpose is to test conditional breakpoints.
 # Modeled after "break.exp".
 
+if $tracelevel then {
+	strace $tracelevel
+	}
+
+global usestubs
+
 #
 # test running programs
 #
+set prms_id 0
+set bug_id 0
 
-standard_testfile break.c break1.c
+set testfile "break"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
 
-if {[prepare_for_testing "failed to prepare" $testfile [list $srcfile $srcfile2] \
-	 {debug nowarnings}]} {
-    return -1
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug additional_flags=-w}] != "" } {
+    gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
 }
 
-if [get_compiler_info] {
-    return -1
+if [get_compiler_info ${binfile}] {
+    return -1;
 }
 
-clean_restart ${binfile}
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
 
 
-set bp_location1  [gdb_get_line_number "set breakpoint 1 here"]
-set bp_location6  [gdb_get_line_number "set breakpoint 6 here"]
-set bp_location8  [gdb_get_line_number "set breakpoint 8 here" $srcfile2]
-set bp_location14 [gdb_get_line_number "set breakpoint 14 here" $srcfile2]
-set bp_location15 [gdb_get_line_number "set breakpoint 15 here" $srcfile2]
-set bp_location17 [gdb_get_line_number "set breakpoint 17 here" $srcfile2]
+if [target_info exists gdb_stub] {
+    gdb_step_for_stub;
+}
 
 #
 # test break at function
@@ -53,57 +66,55 @@ gdb_test "break main" \
 # test conditional break at function
 #
 gdb_test "break marker1 if 1==1" \
-    "Breakpoint.*at.* file .*$srcfile2, line.*"
+    "Breakpoint.*at.* file .*$srcfile, line.*"
 
-gdb_test_no_output "delete 2"
+gdb_test "delete 2" ""
 
 #
 # test conditional break at line number
 #
-gdb_test "break $srcfile:$bp_location1 if 1==1" \
-    "Breakpoint.*at.* file .*$srcfile, line $bp_location1\\."
+gdb_test "break 79 if 1==1" \
+    "Breakpoint.*at.* file .*$srcfile, line 79\\."
 
-gdb_test_no_output "delete 3"
+gdb_test "delete 3" ""
 
 # 
 # test conditional break at function
 #
 gdb_test "break marker1 if (1==1)" \
-    "Breakpoint.*at.* file .*$srcfile2, line.*"
+    "Breakpoint.*at.* file .*$srcfile, line.*"
 
 #
 # test conditional break at line number
 #
-gdb_test "break $srcfile:$bp_location1 if (1==1)" \
-    "Breakpoint.*at.* file .*$srcfile, line $bp_location1\\."
+gdb_test "break 79 if (1==1)" \
+    "Breakpoint.*at.* file .*$srcfile, line 79\\."
 
 gdb_test "break marker2 if (a==43)" \
-    "Breakpoint.*at.* file .*$srcfile2, line.*"
-
-#
-# Check break involving inferior function call.
-# Ensure there is at least one additional breakpoint with higher VMA.
-#
-gdb_test "break marker3 if (multi_line_if_conditional(1,1,1)==0)" \
-    "Breakpoint.*at.* file .*$srcfile2, line.*"
-gdb_test "break marker4" \
-    "Breakpoint.*at.* file .*$srcfile2, line.*"
+    "Breakpoint.*at.* file .*$srcfile, line.*"
 
 #
 # check to see what breakpoints are set
 #
+
+if {$hp_aCC_compiler} {
+    set marker1_proto "\\(void\\)"
+    set marker2_proto "\\(int\\)"
+} else {
+    set marker1_proto ""
+    set marker2_proto ""
+}
+
+set main_line 75
 gdb_test "info break" \
-    "Num     Type\[ \]+Disp Enb Address\[ \]+What.*
-\[0-9\]+\[\t \]+breakpoint     keep y.* in main at .*$srcfile:$bp_location6.*
-\[0-9\]+\[\t \]+breakpoint     keep y.* in marker1 at .*$srcfile2:$bp_location15.*
-\[\t \]+stop only if \\(1==1\\).*
-\[0-9\]+\[\t \]+breakpoint     keep y.* in main at .*$srcfile:$bp_location1.*
-\[\t \]+stop only if \\(1==1\\).*
-\[0-9\]+\[\t \]+breakpoint     keep y.* in marker2 at .*$srcfile2:$bp_location8.*
-\[\t \]+stop only if \\(a==43\\).*
-\[0-9\]+\[\t \]+breakpoint     keep y.* in marker3 at .*$srcfile2:$bp_location17.*
-\[\t \]+stop only if \\(multi_line_if_conditional\\(1,1,1\\)==0\\).*
-\[0-9\]+\[\t \]+breakpoint     keep y.* in marker4 at .*$srcfile2:$bp_location14.*" \
+    "Num Type\[ \]+Disp Enb Address\[ \]+What.*
+\[0-9\]+\[\t \]+breakpoint     keep y.* in main at .*$srcfile:$main_line.*
+\[0-9\]+\[\t \]+breakpoint     keep y.* in marker1$marker1_proto at .*$srcfile:4\[38\].*
+\[\t \]+stop only if 1 == 1.*
+\[0-9\]+\[\t \]+breakpoint     keep y.* in main at .*$srcfile:79.*
+\[\t \]+stop only if 1 == 1.*
+\[0-9\]+\[\t \]+breakpoint     keep y.* in marker2$marker2_proto at .*$srcfile:4\[49\].*
+\[\t \]+stop only if a == 43.*" \
     "breakpoint info"
 
 
@@ -117,7 +128,7 @@ rerun_to_main
 #
 # run until the breakpoint at a line number
 #
-gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, main \\(argc=.*, argv=.*, envp=.*\\) at .*$srcfile:$bp_location1.*$bp_location1\[\t \]+printf.*factorial.*" \
+gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, main \\(argc=.*, argv=.*, envp=.*\\) at .*$srcfile:79.*79\[\t \]+printf.*factorial.*" \
 			"run until breakpoint set at a line number"
 
 #
@@ -160,75 +171,37 @@ gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, main \\(argc=.*, argv=.
 # take precedence over real code.
 #
 # Until the Dwarf2 writer gets fixed, I'm going to XFAIL its behavior.
-gdb_test_multiple "continue" "run until breakpoint at marker1" {
-    -re  "Continuing\\..*Breakpoint \[0-9\]+, marker1 \\(\\) at .*$srcfile2:$bp_location15.*$bp_location15\[\t \]+.*$gdb_prompt $" {
+send_gdb "continue\n"
+gdb_expect {
+    -re  "Continuing\\..*Breakpoint \[0-9\]+, marker1 \\(\\) at .*$srcfile:4\[38\].*4\[38\]\[\t \]+.*$gdb_prompt $" {
 	pass "run until breakpoint at marker1"
     }
-    -re  "Continuing\\..*Breakpoint \[0-9\]+, $hex in marker1 \\(\\) at .*$srcfile2:$bp_location15.*$bp_location15\[\t \]+.*$gdb_prompt $" {
+    -re  "Continuing\\..*Breakpoint \[0-9\]+, $hex in marker1 \\(\\) at .*$srcfile:4\[38\].*4\[38\]\[\t \]+.*$gdb_prompt $" {
 	xfail "run until breakpoint at marker1"
+    }
+    -re "$gdb_prompt $" {
+	fail "run until breakpoint at marker1"
+    }
+    timeout {
+	fail "(timeout) run until breakpoint at marker1"
     }
 }
 
 # run until the breakpoint at marker2
 # Same issues here as above.
 setup_xfail hppa2.0w-*-* 11512CLLbs
-gdb_test_multiple "continue" "run until breakpoint at marker2" {
-    -re "Continuing\\..*Breakpoint \[0-9\]+, marker2 \\(a=43\\) at .*$srcfile2:$bp_location8.*$bp_location8\[\t \]+.*$gdb_prompt $" {
+send_gdb "continue\n"
+gdb_expect {
+    -re "Continuing\\..*Breakpoint \[0-9\]+, marker2 \\(a=43\\) at .*$srcfile:4\[49\].*4\[49\]\[\t \]+.*" {
 	pass "run until breakpoint at marker2"
     }
-    -re "Continuing\\..*Breakpoint \[0-9\]+, $hex in marker2 \\(a=43\\) at .*$srcfile2:$bp_location8.*$bp_location8\[\t \]+.*$gdb_prompt $" {
+    -re "Continuing\\..*Breakpoint \[0-9\]+, $hex in marker2 \\(a=43\\) at .*$srcfile:4\[49\].*4\[49\]\[\t \]+.*" {
 	xfail "run until breakpoint at marker2"
     }
-}
-
-# Test combinations of conditional and thread-specific breakpoints.
-gdb_test "break main if (1==1) thread 999" \
-    "Unknown thread 999\\."
-gdb_test "break main thread 999 if (1==1)" \
-    "Unknown thread 999\\."
-
-# Verify that both if and thread can be distinguished from a breakpoint
-# address expression.
-gdb_test "break *main if (1==1) thread 999" \
-    "Unknown thread 999\\."
-gdb_test "break *main thread 999 if (1==1)" \
-    "Unknown thread 999\\."
-
-# Similarly for task.
-gdb_test "break *main if (1==1) task 999" \
-    "Unknown task 999\\."
-gdb_test "break *main task 999 if (1==1)" \
-    "Unknown task 999\\."
-
-# GDB accepts abbreviations for "thread" and "task".
-gdb_test "break *main if (1==1) t 999" \
-    "Unknown thread 999\\."
-gdb_test "break *main if (1==1) th 999" \
-    "Unknown thread 999\\."
-gdb_test "break *main if (1==1) ta 999" \
-    "Unknown task 999\\."
-
-set test "run until breakpoint at marker3"
-gdb_test_multiple "continue" $test {
-    -re "Continuing\\..*Breakpoint \[0-9\]+, marker3 \\(a=$hex \"stack\", b=$hex \"trace\"\\) at .*$srcfile2:$bp_location17.*$bp_location17\[\t \]+.*$gdb_prompt $" {
-	pass $test
+    -re "$gdb_prompt $" {
+	fail "run until breakpoint at marker2"
     }
-    -re "Continuing\\..*Breakpoint \[0-9\]+, $hex in marker3 \\(a=$hex \"stack\", b=$hex \"trace\"\\) at .*$srcfile2:$bp_location17.*$bp_location17\[\t \]+.*$gdb_prompt $" {
-	xfail $test
+    timeout {
+	fail "(timeout) run until breakpoint at marker2"
     }
 }
-
-set test "run until breakpoint at marker4"
-gdb_test_multiple "continue" $test {
-    -re "Continuing\\..*Breakpoint \[0-9\]+, marker4 \\(d=177601976\\) at .*$srcfile2:$bp_location14.*$bp_location14\[\t \]+.*$gdb_prompt $" {
-	pass $test
-    }
-    -re "Continuing\\..*Breakpoint \[0-9\]+, $hex in marker4 \\(d=177601976\\) at .*$srcfile2:$bp_location14.*$bp_location14\[\t \]+.*$gdb_prompt $" {
-	xfail $test
-    }
-}
-
-gdb_test "complete cond 1" "cond 1"
-gdb_test "set variable \$var = 1"
-gdb_test "complete cond \$v" "cond \\\$var"
-gdb_test "complete cond 1 values\[0\].a" "cond 1 values.0..a_field"

@@ -1,9 +1,8 @@
-TEMPLATE_NAME=elf
+TEMPLATE_NAME=elf32
 GENERATE_SHLIB_SCRIPT=yes
 ELFSIZE=64
 SCRIPT_NAME=elf
 OUTPUT_FORMAT="elf64-mmix"
-NO_REL_RELOCS=yes
 ENTRY=_start.
 
 # Default to 0 as mmixal does.
@@ -13,7 +12,11 @@ TEXT_START_ADDR='DEFINED (__.MMIX.start..text) ? __.MMIX.start..text : 0'
 TEXT_BASE_ADDRESS=$TEXT_START_ADDR
 DATA_ADDR='DEFINED (__.MMIX.start..data) ? __.MMIX.start..data : 0x2000000000000000'
 
-MAXPAGESIZE="CONSTANT (MAXPAGESIZE)"
+# Setting this anywhere near the quite reasonable value of 0x10000
+# causes the binary to bloat to reach page alignment between segments.
+# Let's just have a 256-byte default page alignment.  Having some
+# alignment at all gives a warm feeling but not much more.
+MAXPAGESIZE=256
 ARCH=mmix
 MACHINE=
 COMPILE_IN=yes
@@ -35,14 +38,11 @@ EXTRA_EM_FILE=mmixelf
 # DEFINED wouldn't find the symbol if it was at the top; presumably
 # before the definition, if the definition is not in the first file.
 # FIXME: Arguably a linker bug.
-# Only do this for a final link, or else we'll mess up e.g. error
-# messages.
-OTHER_TEXT_SECTIONS="
-${RELOCATING+
+OTHER_TEXT_SECTIONS='
  _start. = (DEFINED (_start) ? _start
-	    : (DEFINED (Main) ? Main : (DEFINED (.text) ? .text : 0)));
+            : (DEFINED (Main) ? Main : (DEFINED (.text) ? .text : 0)));
  PROVIDE (Main = DEFINED (Main) ? Main : (DEFINED (_start) ? _start : _start.));
-}"
+'
 
 OTHER_SECTIONS='
  .MMIX.reg_contents :
@@ -58,4 +58,4 @@ OTHER_SECTIONS='
 # EXECUTABLE_SYMBOLS.
 # By default, put the high end of the stack where the register stack
 # begins.  They grow in opposite directions.  */
-OTHER_SYMBOLS="PROVIDE (__Stack_start = 0x6000000000000000);"
+OTHER_END_SYMBOLS="PROVIDE (__Stack_start = 0x6000000000000000);"

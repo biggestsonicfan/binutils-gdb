@@ -1,12 +1,12 @@
 /* BFD support for the s390 processor.
-   Copyright (C) 2000-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2002 Free Software Foundation, Inc.
    Contributed by Carl B. Pedersen and Martin Schwidefsky.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,39 +16,41 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
+#include "sysdep.h"
 #include "libbfd.h"
 
-#define N(bits, number, print, is_default, next)	\
-  {							\
-    bits,	       /* Bits in a word.  */		\
-    bits,	       /* Bits in an address.  */	\
-    8,		       /* Bits in a byte.  */		\
-    bfd_arch_s390,					\
-    number,						\
-    "s390",						\
-    print,						\
-    3,		       /* Section alignment power */	\
-    is_default,						\
-    bfd_default_compatible,				\
-    bfd_default_scan,					\
-    bfd_arch_default_fill,				\
-    next,						\
-    0 /* Maximum offset of a reloc from the start of an insn.  */ \
-  }
+const bfd_arch_info_type bfd_s390_64_arch =
+{
+    64,        /* bits in a word */
+    64,        /* bits in an address */
+    8, /* bits in a byte */
+    bfd_arch_s390,
+    bfd_mach_s390_64,
+    "s390",
+    "s390:64-bit",
+    3, /* section alignment power */
+    true, /* the default */
+    bfd_default_compatible,
+    bfd_default_scan,
+    NULL
+};
 
-#if BFD_DEFAULT_TARGET_SIZE == 64
-static const bfd_arch_info_type bfd_s390_31_arch =
-  N (32, bfd_mach_s390_31, "s390:31-bit", FALSE, NULL);
 const bfd_arch_info_type bfd_s390_arch =
-  N (64, bfd_mach_s390_64, "s390:64-bit", TRUE, &bfd_s390_31_arch);
-#else
-static const bfd_arch_info_type bfd_s390_64_arch =
-  N (64, bfd_mach_s390_64, "s390:64-bit", FALSE, NULL);
-const bfd_arch_info_type bfd_s390_arch =
-  N (32, bfd_mach_s390_31, "s390:31-bit", TRUE, &bfd_s390_64_arch);
-#endif
+{
+    32,	/* bits in a word */
+    32,	/* bits in an address */
+    8,	/* bits in a byte */
+    bfd_arch_s390,
+    bfd_mach_s390_31,
+    "s390",
+    "s390:31-bit",
+    3, /* section alignment power */
+    true, /* the default */
+    bfd_default_compatible,
+    bfd_default_scan,
+    &bfd_s390_64_arch
+};

@@ -1,38 +1,43 @@
-# Copyright 1992-2020 Free Software Foundation, Inc.
+# Copyright 1992, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2002
+# Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@prep.ai.mit.edu
 
 # This file was written by Fred Fish. (fnf@cygnus.com)
 
+if $tracelevel {
+    strace $tracelevel
+}
 
-standard_testfile
+set prms_id 0
+set bug_id 0
 
-set compile_flags {debug nowarnings quiet}
-if [support_complex_tests] {
-    lappend compile_flags "additional_flags=-DTEST_COMPLEX"
+set testfile "funcargs"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
 }
 
 # Create and source the file that provides information about the compiler
 # used to compile the test case.
-if [get_compiler_info] {
-    return -1
-}
-
-set skip_float_test [gdb_skip_float_test]
-
-if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
-    return -1
+if [get_compiler_info ${binfile}] {
+    return -1;
 }
 
 #
@@ -55,7 +60,13 @@ proc integral_args {} {
     # Run; should stop at call0a and print actual arguments.
     if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" }
     gdb_run_cmd
-    gdb_test "" " call0a \\(c=97 'a', s=1, i=2, l=3\\) .*" "run to call0a"
+    gdb_expect {
+	 -re ".* call0a \\(c=97 'a', s=1, i=2, l=3\\) .*$gdb_prompt $" {
+	    pass "run to call0a"
+	}
+	 -re "$gdb_prompt $"  { fail "run to call0a" ; gdb_suppress_tests }
+	 timeout { fail "(timeout) run to call0a" ; gdb_suppress_tests }
+    }
 
     # Print each arg as a double check to see if we can print
     # them here as well as with backtrace.
@@ -66,24 +77,24 @@ proc integral_args {} {
 
     # Continue; should stop at call0b and print actual arguments.
     if [gdb_test "cont" ".* call0b \\(s=1, i=2, l=3, c=97 'a'\\) .*" "continue to call0b"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call0c and print actual arguments.
     if [gdb_test "cont" ".* call0c \\(i=2, l=3, c=97 'a', s=1\\) .*" "continue to call0c"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call0d and print actual arguments.
     if [gdb_test "cont" ".* call0d \\(l=3, c=97 'a', s=1, i=2\\) .*" "continue to call0d";] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call0e and print actual arguments.
     if [gdb_test "cont" ".* call0e \\(c1=97 'a', l=3, c2=97 'a', i=2, c3=97 'a', s=1, c4=97 'a', c5=97 'a'\\) .*" "continue to call0e" ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -97,16 +108,22 @@ proc unsigned_integral_args {} {
 
     delete_breakpoints
 
-    gdb_breakpoint call1a
-    gdb_breakpoint call1b
-    gdb_breakpoint call1c
-    gdb_breakpoint call1d
-    gdb_breakpoint call1e
+    gdb_breakpoint call1a;
+    gdb_breakpoint call1b;
+    gdb_breakpoint call1c;
+    gdb_breakpoint call1d;
+    gdb_breakpoint call1e;
 
     # Run; should stop at call1a and print actual arguments.
     if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" }
     gdb_run_cmd
-    gdb_test "" " call1a \\(uc=98 'b', us=6, ui=7, ul=8\\) .*" "run to call1a"
+    gdb_expect {
+	 -re ".* call1a \\(uc=98 'b', us=6, ui=7, ul=8\\) .*$gdb_prompt $" {
+	    pass "run to call1a"
+	}
+	 -re "$gdb_prompt $" { fail "run to call1a" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to call1a" ; gdb_suppress_tests; }
+    }
 
     # Print each arg as a double check to see if we can print
     # them here as well as with backtrace.
@@ -117,24 +134,24 @@ proc unsigned_integral_args {} {
     
     # Continue; should stop at call1b and print actual arguments.
     if [gdb_test "cont" ".* call1b \\(us=6, ui=7, ul=8, uc=98 'b'\\) .*" "continue to call1b"] {
-	gdb_suppress_tests
+	gdb_suppress_tests; 
     }
 
     # Continue; should stop at call1c and print actual arguments.
     if [gdb_test "cont" ".* call1c \\(ui=7, ul=8, uc=98 'b', us=6\\) .*" "continue to call1c"] {
-	gdb_suppress_tests
+	gdb_suppress_tests; 
     }
 
     # Continue; should stop at call1d and print actual arguments.
     if [gdb_test "cont" ".* call1d \\(ul=8, uc=98 'b', us=6, ui=7\\) .*" "continue to call1d"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call1e and print actual arguments.
     if [gdb_test "cont" ".* call1e \\(uc1=98 'b', ul=8, uc2=98 'b', ui=7, uc3=98 'b', us=6, uc4=98 'b', uc5=98 'b'\\) .*" "continue to call1e"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -145,6 +162,7 @@ proc float_and_integral_args {} {
     global gdb_prompt
     global det_file
     global gcc_compiled
+    global hp_cc_compiler
 
     delete_breakpoints
 
@@ -159,62 +177,72 @@ proc float_and_integral_args {} {
 
     # Run; should stop at call2a and print actual arguments.
 
-    if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" }
+    setup_xfail "i960-*-*" 1813
+    if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" "mips-sgi-irix5*" }
+    # The debug info. for "f" is not correct. It's a known bug.
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     gdb_run_cmd
-    set test "run to call2a"
-    gdb_test_multiple "" $test {
-	 -re ".* call2a \\(c=97 'a', f1=4, s=1, d1=5, i=2, f2=4, l=3, d2=5\\) .*$gdb_prompt $" {
-	     pass $test
-	 }
-	 -re ".* call2a \\(c=97 'a', f1=.*, s=1, d1=5, i=2, f2=4, l=3, d2=5\\) .*$gdb_prompt $" {
-	     xfail $test
-	 }
+    gdb_expect {
+	 -re ".* call2a \\(c=97 'a', f1=4, s=1, d1=5, i=2, f2=4, l=3, d2=5\\) .*$gdb_prompt $" { pass "run to call2a" }
+	 -re ".* call2a \\(c=97 'a', f1=.*, s=1, d1=5, i=2, f2=4, l=3, d2=5\\) .*$gdb_prompt $" { xfail "run to call2a" }
+	 -re "$gdb_prompt $" { fail "run to call2a" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to call2a" ; gdb_suppress_tests; }
     }
 
     # Print each arg as a double check to see if we can print
     gdb_test "print c" ".* = 97 'a'" "print c after run to call2a"
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     gdb_test "print f1" ".* = 4" "print f1 after run to call2a"
     gdb_test "print s" ".* = 1" "print s after run to call2a"
     gdb_test "print d1" ".* = 5" "print d1 after run to call2a"
     gdb_test "print i" ".* = 2" "print i after run to call2a"
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     gdb_test "print f2" ".* = 4" "print f2 after run to call2a"
     gdb_test "print l" ".* = 3" "print l after run to call2a"
     gdb_test "print d2" ".* = 5" "print d2 after run to call2a"
 
     setup_xfail "rs6000-*-*"
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    if {!$gcc_compiled} then { setup_xfail "mips-sgi-irix*" }
     # Continue; should stop at call2b and print actual arguments.
     if [gdb_test "cont" ".* call2b \\(f1=4, s=1, d1=5, i=2, f2=4, l=3, d2=5, c=97 'a'\\) .*" "continue to call2b"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     # Continue; should stop at call2c and print actual arguments.
     if [gdb_test "cont" ".* call2c \\(s=1, d1=5, i=2, f2=4, l=3, d2=5, c=97 'a', f1=4\\) .*" "continue to call2c"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     # Continue; should stop at call2d and print actual arguments.
     if [gdb_test "cont" ".* call2d \\(d1=5, i=2, f2=4, l=3, d2=5, c=97 'a', f1=4, s=1\\) .*" "continue to call2d"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     # Continue; should stop at call2e and print actual arguments.
     if [gdb_test "cont" ".* call2e \\(i=2, f2=4, l=3, d2=5, c=97 'a', f1=4, s=1, d1=5\\) .*" "continue to call2e"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     # Continue; should stop at call2f and print actual arguments.
     if [gdb_test "cont" ".* call2f \\(f2=4, l=3, d2=5, c=97 'a', f1=4, s=1, d1=5, i=2\\) .*" "continue to call2f"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     # Continue; should stop at call2g and print actual arguments.
     if [gdb_test "cont" ".* call2g \\(l=3, d2=5, c=97 'a', f1=4, s=1, d1=5, i=2, f2=4\\) .*" "continue to call2g"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     # Continue; should stop at call2h and print actual arguments.
     if [gdb_test "cont" ".* call2h \\(d2=5, c=97 'a', f1=4, s=1, d1=5, i=2, f2=4, l=3\\) .*" "continue to call2h"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # monitor only allows 8 breakpoints; w89k board allows 10, so
@@ -222,76 +250,12 @@ proc float_and_integral_args {} {
     delete_breakpoints
     gdb_breakpoint call2i
 
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
     # Continue; should stop at call2i and print actual arguments.
     if [gdb_test "cont" ".* call2i \\(c1=97 'a', f1=4, c2=97 'a', c3=97 'a', d1=5, c4=97 'a', c5=97 'a', c6=97 'a', f2=4, s=1, c7=97 'a', d2=5\\) .*" "continue to call2i"] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
-    gdb_stop_suppressing_tests
-}
-
-
-#
-# Locate actual args; _Complex types.
-#
-
-proc complex_args {} {
-    global gdb_prompt
-
-    delete_breakpoints
-
-    gdb_breakpoint callca
-    gdb_breakpoint callcb
-    gdb_breakpoint callcc
-    gdb_breakpoint callcd
-    gdb_breakpoint callce
-    gdb_breakpoint callcf
-
-    # Run; should stop at call1a and print actual arguments.
-    gdb_run_cmd
-    gdb_test "" " callca \\(f1=1 \\+ 2i, f2=1 \\+ 2i, f3=1 \\+ 2i\\) .*" "run to call2a"
-
-    gdb_test "cont" ".* callcb \\(d1=3 \\+ 4i, d2=3 \\+ 4i, d3=3 \\+ 4i\\) .*" "continue to callcb"
-    gdb_test "cont" ".* callcc \\(ld1=5 \\+ 6i, ld2=5 \\+ 6i, ld3=5 \\+ 6i\\) .*" "continue to callcc"
-    gdb_test "cont" ".* callcd \\(fc1=1 \\+ 2i, dc1=3 \\+ 4i, ldc1=5 \\+ 6i\\) .*" "continue to callcd"
-    gdb_test "cont" ".* callce \\(dc1=3 \\+ 4i, ldc1=5 \\+ 6i, fc1=1 \\+ 2i\\) .*" "continue to callce"
-    gdb_test "cont" ".* callcf \\(ldc1=5 \\+ 6i, fc1=1 \\+ 2i, dc1=3 \\+ 4i\\) .*" "continue to callcf"
-}
-
-
-#
-# Locate actual args; _Complex types and integral.
-#
-proc complex_integral_args {} {
-    global gdb_prompt
-
-    delete_breakpoints
-
-    gdb_breakpoint callc1a
-    gdb_breakpoint callc1b
-
-    # Run; should stop at call1a and print actual arguments.
-    gdb_run_cmd
-    gdb_test "" " callc1a \\(c=97 'a', s=1, i=2, ui=7, l=3, fc1=1 \\+ 2i, dc1=3 \\+ 4i, ldc1=5 \\+ 6i\\) .*" "run to callc1a"
-
-    gdb_test "cont" ".* callc1b \\(ldc1=5 \\+ 6i\\, c=97 'a', s=1, i=2, fc1=1 \\+ 2i, ui=7, l=3, dc1=3 \\+ 4i\\) .*" "continue to callc1b"
-}
-
-#
-# Locate actual args; _Complex types and integral/float.
-#
-proc complex_float_integral_args {} {
-    global gdb_prompt
-
-    delete_breakpoints
-
-    gdb_breakpoint callc2a
-    gdb_breakpoint callc2b
-
-    # Run; should stop at call1a and print actual arguments.
-    gdb_run_cmd
-    gdb_test "" " callc2a \\(c=97 'a', s=1, i=2, ui=7, l=3, f=4, d=5, fc1=1 \\+ 2i, dc1=3 \\+ 4i, ldc1=5 \\+ 6i\\) .*" "run to callc2a"
-
-    gdb_test "cont" ".* callc2b \\(fc1=1 \\+ 2i, c=97 'a', s=1, i=2, ui=7, ldc1=5 \\+ 6i\\, l=3, f=4, d=5, dc1=3 \\+ 4i\\) .*" "continue to callc2b"
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -313,7 +277,11 @@ proc pointer_args {} {
     # Try dereferencing the arguments.
 
     gdb_run_cmd
-    gdb_test "" " call3a \\(cp=$hex <c> \"a.*\", sp=$hex <s>, ip=$hex <i>, lp=$hex <l>\\) .*" "run to call3a"
+    gdb_expect {
+	 -re ".* call3a \\(cp=$hex \"a.*\", sp=$hex, ip=$hex, lp=$hex\\) .*$gdb_prompt $" { pass "run to call3a" }
+	 -re "$gdb_prompt $" { fail "run to call3a" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to call3a" ; gdb_suppress_tests; }
+    }
 
     gdb_test "print *cp" ".* = 97 'a'"
     gdb_test "print *sp" ".* = 1"
@@ -322,8 +290,8 @@ proc pointer_args {} {
 
     # Continue; should stop at call3b and print actual arguments.
     # Try dereferencing the arguments.
-    if [gdb_test "cont" ".* call3b \\(ucp=$hex <uc> \"b.*\", usp=$hex <us>, uip=$hex <ui>, ulp=$hex <ul>\\) .*" "continue to call3b"] {
-	gdb_suppress_tests
+    if [gdb_test "cont" ".* call3b \\(ucp=$hex \"b.*\", usp=$hex, uip=$hex, ulp=$hex\\) .*" "continue to call3b"] {
+	gdb_suppress_tests;
     }
 
     gdb_test "print *ucp" ".* = 98 'b'"
@@ -333,15 +301,15 @@ proc pointer_args {} {
 
     # Continue; should stop at call3c and print actual arguments.
     # Try dereferencing the arguments.
-    if [gdb_test "cont" ".* call3c \\(fp=$hex <f>, dp=$hex <d>\\) .*" "continue to call3c"] {
-	gdb_suppress_tests
+    if [gdb_test "cont" ".* call3c \\(fp=$hex, dp=$hex\\) .*" "continue to call3c"] {
+	gdb_suppress_tests;
     }
 
     gdb_test "print *fp" ".* = 4"
     gdb_test "print *dp" ".* = 5"
 
 #    pass "locate actual args, pointer types"
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -365,13 +333,19 @@ proc structs_by_reference {} {
     # Try dereferencing the arguments.
 
     gdb_run_cmd
-    gdb_test "" " call4a \\(stp=$hex <st>\\) .*" "run to call4a"
+    gdb_expect {
+	 -re ".* call4a \\(stp=$hex\\) .*$gdb_prompt $" {
+	    pass "run to call4a"
+	}
+	 -re "$gdb_prompt $" { fail "run to call4a" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to call4a" ; gdb_suppress_tests; }
+    }
 
     gdb_test "print *stp" ".* = \{s1 = 101, s2 = 102\}"
 
     # Continue; should stop at call4b and print actual arguments.
 
-    gdb_test "cont" ".* call4b \\(unp=$hex <un>\\) .*" "continue to call4b"
+    gdb_test "cont" ".* call4b \\(unp=$hex\\) .*" "continue to call4b"
 
     # Try dereferencing the arguments.
     if { $target_sizeof_long == $target_sizeof_int } {
@@ -391,7 +365,7 @@ proc structs_by_reference {} {
     }
 
     pass "locate actual args, structs/unions passed by reference"
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -415,7 +389,13 @@ proc structs_by_value {} {
     # Try dereferencing the arguments.
 
     gdb_run_cmd
-    gdb_test "" " call5a \\(st=\{s1 = 101, s2 = 102\}\\) .*" "run to call5a"
+    gdb_expect {
+	 -re ".* call5a \\(st=\{s1 = 101, s2 = 102\}\\) .*$gdb_prompt $" {
+	    pass "run to call5a"
+	}
+	 -re "$gdb_prompt $" { fail "run to call5a" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to call5a" ; gdb_suppress_tests; }
+    }
 
     gdb_test "print st" ".* = \{s1 = 101, s2 = 102\}"
 
@@ -453,7 +433,7 @@ proc structs_by_value {} {
 	fail "print un (unknown case)"
     }
 
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -466,6 +446,7 @@ proc discard_and_shuffle {} {
     global decimal
     global det_file
     global gcc_compiled
+    global hp_cc_compiler
 
     delete_breakpoints
 
@@ -482,16 +463,41 @@ proc discard_and_shuffle {} {
     # Print backtrace.
 
     gdb_run_cmd
-    gdb_test "" "Breakpoint $decimal, call6a .*" "run to call6a"
+    gdb_expect {
+	 -re ".*Breakpoint $decimal, call6a .*$gdb_prompt $" { pass "run to call6a" }
+	 -re "$gdb_prompt $" { fail "run to call6a" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to call6a" ; gdb_suppress_tests; }
+    }
 
     setup_xfail "rs6000-*-*"
 
-    gdb_test_multiple "backtrace 100" "backtrace from call6a" {
-	-re " call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) .* main \\(.*\\) .*$gdb_prompt $" {
+    if {!$gcc_compiled} {
+	setup_xfail "mips-sgi-irix5*"
+    }
+
+    # The debug info. for "f" is not correct. It's a known bug.
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    gdb_expect {
+	-re "backtrace 100\[\r\n\]+
+.* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) .*\r
+.* main \\(.*\\) .*\r
+$gdb_prompt $" {
 	    pass "backtrace from call6a"
 	}
-	-re " call6a \\(c=97 'a', s=1, i=2, l=3, f=.*, d=5, uc=98 'b', us=6, ui=7, ul=8\\) .* main \\(.*\\) .*$gdb_prompt $" {
+	-re "backtrace 100\[\r\n\]+
+.* call6a \\(c=97 'a', s=1, i=2, l=3, f=.*, d=5, uc=98 'b', us=6, ui=7, ul=8\\) .*\r
+.* main \\(.*\\) .*\r
+$gdb_prompt $" {
 	    xfail "backtrace from call6a"
+	}
+	-re "$gdb_prompt $" {
+	    fail "backtrace from call6a"
+	    gdb_suppress_tests
+	}
+	timeout {
+	    fail "(timeout) backtrace from call6a"
+	    gdb_suppress_tests
 	}
     }
 
@@ -500,12 +506,14 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6b
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6b" {
-	"\[\r\n\]#0 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6b" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* main \\(.*\\) " 
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call6c and print actual arguments.
@@ -513,27 +521,31 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6c
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6c" {
-	"\[\r\n\]#0 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6c" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
     # Continue; should stop at call6d and print actual arguments.
     # Print backtrace.
 
     gdb_continue call6d
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6d" {
-	"\[\r\n\]#0 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6d" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call6e and print actual arguments.
@@ -541,15 +553,17 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6e
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6e" {
-	"\[\r\n\]#0 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#5 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6e" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#5 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call6f and print actual arguments.
@@ -557,16 +571,18 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6f
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6f" {
-	"\[\r\n\]#0 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#5 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#6 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6f" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#5 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#6 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call6g and print actual arguments.
@@ -574,17 +590,19 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6g
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6g" {
-	"\[\r\n\]#0 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#5 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#6 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#7 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6g" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#5 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#6 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#7 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call6h and print actual arguments.
@@ -592,18 +610,20 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6h
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6h" {
-	"\[\r\n\]#0 .* call6h \\(us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#5 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#6 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#7 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#8 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6h" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6h \\(us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#5 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#6 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#7 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#8 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # monitor only allows 8 breakpoints; w89k board allows 10, so
@@ -618,19 +638,21 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6i
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6i" {
-	"\[\r\n\]#0 .* call6i \\(ui=7, ul=8\\) "
-	"\[\r\n\]#1 .* call6h \\(us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#5 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#6 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#7 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#8 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#9 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6i" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6i \\(ui=7, ul=8\\) "
+	".*\[\r\n\]#1 .* call6h \\(us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#5 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#6 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#7 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#8 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#9 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call6j and print actual arguments.
@@ -638,43 +660,50 @@ proc discard_and_shuffle {} {
 
     gdb_continue call6j
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6j" {
-	"\[\r\n\]#0 .* call6j \\(ul=8\\) "
-	"\[\r\n\]#1 .* call6i \\(ui=7, ul=8\\) "
-	"\[\r\n\]#2 .* call6h \\(us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#5 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#6 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#7 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#8 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#9 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#10 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6j" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6j \\(ul=8\\) "
+	".*\[\r\n\]#1 .* call6i \\(ui=7, ul=8\\) "
+	".*\[\r\n\]#2 .* call6h \\(us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#5 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#6 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#7 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#8 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#9 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#10 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
 
     # Continue; should stop at call6k and print actual arguments.
     # Print backtrace.
+    # This fails on i960-*-vxworks because gdb gets confused by
+    # breakpoints on adjacent instructions.
+    setup_xfail "i960-*-vxworks" 1786
     gdb_continue call6k
 
-    if [gdb_test_sequence "backtrace 100" "backtrace from call6k" {
-	"\[\r\n\]#0 .* call6k \\(\\) "
-	"\[\r\n\]#1 .* call6j \\(ul=8\\) "
-	"\[\r\n\]#2 .* call6i \\(ui=7, ul=8\\) "
-	"\[\r\n\]#3 .* call6h \\(us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#4 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#5 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#6 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#7 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#8 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#9 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#10 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
-	"\[\r\n\]#11 .* main \\(.*\\) at "
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    if [gdb_expect_list "backtrace from call6k" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call6k \\(\\) "
+	".*\[\r\n\]#1 .* call6j \\(ul=8\\) "
+	".*\[\r\n\]#2 .* call6i \\(ui=7, ul=8\\) "
+	".*\[\r\n\]#3 .* call6h \\(us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#4 .* call6g \\(uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#5 .* call6f \\(d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#6 .* call6e \\(f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#7 .* call6d \\(l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#8 .* call6c \\(i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#9 .* call6b \\(s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#10 .* call6a \\(c=97 'a', s=1, i=2, l=3, f=4, d=5, uc=98 'b', us=6, ui=7, ul=8\\) "
+	".*\[\r\n\]#11 .* main \\(.*\\) "
     } ] {
-	gdb_suppress_tests
+	gdb_suppress_tests;
     }
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 
@@ -688,6 +717,7 @@ proc shuffle_round_robin {} {
     global decimal
     global det_file
     global gcc_compiled
+    global hp_cc_compiler
 
     delete_breakpoints
 
@@ -704,16 +734,34 @@ proc shuffle_round_robin {} {
     # Print backtrace.
 
     gdb_run_cmd
-    gdb_test "" "Breakpoint $decimal, call7a .*" "run to call7a"
+    gdb_expect {
+	 -re ".*Breakpoint $decimal, call7a .*$gdb_prompt $" {
+	    pass "run to call7a"
+	}
+	 -re "$gdb_prompt $" { fail "run to call7a" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to call7a" ; gdb_suppress_tests; }
+    }
 
-    if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" }
-    gdb_test_multiple "backtrace 100" "backtrace from call7a" {
-	-re " call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) .* main \\(.*\\) .*$gdb_prompt $" {
+    setup_xfail "i960-*-*" 1813
+    if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" "mips-sgi-irix5*" }
+    # The debug info. for "f" is not correct. It's a known bug.
+    if {$hp_cc_compiler} {setup_xfail hppa2.0w-*-*}
+    send_gdb "backtrace 100\n"
+    gdb_expect {
+	-re "backtrace 100\[\r\n\]+
+.* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) .*\r
+.* main \\(.*\\) .*\r
+$gdb_prompt $" {
 	    pass "backtrace from call7a"
 	}
-	-re " call7a \\(c=97 'a', i=2, s=1, l=3, f=.*, uc=98 'b', d=5, us=6, ul=8, ui=7\\) .* main \\(.*\\) .*$gdb_prompt $" {
+	-re "backtrace 100\[\r\n\]+
+.* call7a \\(c=97 'a', i=2, s=1, l=3, f=.*, uc=98 'b', d=5, us=6, ul=8, ui=7\\) .*\r
+.* main \\(.*\\) .*\r
+$gdb_prompt $" {
 	    xfail "backtrace from call7a"
 	}
+	-re "$gdb_prompt $" { fail "backtrace from call7a" ; return }
+	timeout { fail "(timeout) backtrace from call7a" ; return }
     }
 
     # Continue; should stop at call7b and print actual arguments.
@@ -723,10 +771,11 @@ proc shuffle_round_robin {} {
 
     if {$gcc_compiled} then { setup_xfail "rs6000-*-*" }
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7b" {
-	"\[\r\n\]#0 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#1 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#2 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7b" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#1 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#2 .* main \\(.*\\) "
     }
 
     # Continue; should stop at call7c and print actual arguments.
@@ -734,11 +783,12 @@ proc shuffle_round_robin {} {
 
     gdb_continue call7c
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7c" {
-	"\[\r\n\]#0 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#1 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#2 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#3 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7c" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#1 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#2 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#3 .* main \\(.*\\) "
     }
 
     # Continue; should stop at call7d and print actual arguments.
@@ -746,23 +796,25 @@ proc shuffle_round_robin {} {
 
     gdb_continue call7d
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7d" {
-	"\[\r\n\]#0 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#1 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#2 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#3 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#4 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7d" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#1 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#2 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#3 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#4 .* main \\(.*\\) "
     }
 
     gdb_continue call7e
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7e" {
-	"\[\r\n\]#0 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
-	"\[\r\n\]#1 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#2 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#3 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#4 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#5 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7e" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
+	".*\[\r\n\]#1 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#2 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#3 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#4 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#5 .* main \\(.*\\) "
     }
 
     # Continue; should stop at call7f and print actual arguments.
@@ -770,14 +822,15 @@ proc shuffle_round_robin {} {
 
     gdb_continue call7f
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7f" {
-	"\[\r\n\]#0 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
-	"\[\r\n\]#1 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
-	"\[\r\n\]#2 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#3 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#4 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#5 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#6 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7f" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
+	".*\[\r\n\]#1 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
+	".*\[\r\n\]#2 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#3 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#4 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#5 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#6 .* main \\(.*\\) "
     }
 
     # Continue; should stop at call7g and print actual arguments.
@@ -785,29 +838,31 @@ proc shuffle_round_robin {} {
 
     gdb_continue call7g
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7g" {
-	"\[\r\n\]#0 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
-	"\[\r\n\]#1 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
-	"\[\r\n\]#2 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
-	"\[\r\n\]#3 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#4 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#5 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#6 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#7 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7g" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
+	".*\[\r\n\]#1 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
+	".*\[\r\n\]#2 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
+	".*\[\r\n\]#3 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#4 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#5 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#6 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#7 .* main \\(.*\\) "
     }
 
     gdb_continue call7h
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7h" {
-	"\[\r\n\]#0 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
-	"\[\r\n\]#1 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
-	"\[\r\n\]#2 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
-	"\[\r\n\]#3 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
-	"\[\r\n\]#4 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#5 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#6 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#7 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#8 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7h" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
+	".*\[\r\n\]#1 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
+	".*\[\r\n\]#2 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
+	".*\[\r\n\]#3 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
+	".*\[\r\n\]#4 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#5 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#6 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#7 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#8 .* main \\(.*\\) "
     }
 
     # monitor only allows 8 breakpoints; w89k board allows 10, so
@@ -822,17 +877,18 @@ proc shuffle_round_robin {} {
 
     gdb_continue call7i
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7i" {
-	"\[\r\n\]#0 .* call7i \\(ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6\\) "
-	"\[\r\n\]#1 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
-	"\[\r\n\]#2 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
-	"\[\r\n\]#3 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
-	"\[\r\n\]#4 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
-	"\[\r\n\]#5 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#6 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#7 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#8 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#9 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7i" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7i \\(ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6\\) "
+	".*\[\r\n\]#1 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
+	".*\[\r\n\]#2 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
+	".*\[\r\n\]#3 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
+	".*\[\r\n\]#4 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
+	".*\[\r\n\]#5 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#6 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#7 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#8 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#9 .* main \\(.*\\) "
     }
 
     # Continue; should stop at call7j and print actual arguments.
@@ -840,18 +896,19 @@ proc shuffle_round_robin {} {
 
     gdb_continue call7j
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7j" {
-	"\[\r\n\]#0 .* call7j \\(ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8\\) "
-	"\[\r\n\]#1 .* call7i \\(ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6\\) "
-	"\[\r\n\]#2 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
-	"\[\r\n\]#3 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
-	"\[\r\n\]#4 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
-	"\[\r\n\]#5 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
-	"\[\r\n\]#6 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#7 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#8 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#9 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#10 .* main \\(.*\\) at "
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7j" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7j \\(ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8\\) "
+	".*\[\r\n\]#1 .* call7i \\(ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6\\) "
+	".*\[\r\n\]#2 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
+	".*\[\r\n\]#3 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
+	".*\[\r\n\]#4 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
+	".*\[\r\n\]#5 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
+	".*\[\r\n\]#6 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#7 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#8 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#9 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#10 .* main \\(.*\\) "
     }
 
     # Continue; should stop at call7k and print actual arguments.
@@ -859,21 +916,23 @@ proc shuffle_round_robin {} {
 
     gdb_continue call7k
 
-    gdb_test_sequence "backtrace 100" "backtrace from call7k" {
-	"\[\r\n\]#0 .* call7k \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#1 .* call7j \\(ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8\\) "
-	"\[\r\n\]#2 .* call7i \\(ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6\\) "
-	"\[\r\n\]#3 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
-	"\[\r\n\]#4 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
-	"\[\r\n\]#5 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
-	"\[\r\n\]#6 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
-	"\[\r\n\]#7 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
-	"\[\r\n\]#8 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
-	"\[\r\n\]#9 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
-	"\[\r\n\]#10 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
-	"\[\r\n\]#11 .* main \\(.*\\) at "
+    if {!$gcc_compiled} then { setup_xfail "mips-sgi-irix*" }
+    send_gdb "backtrace 100\n"
+    gdb_expect_list "backtrace from call7k" ".*$gdb_prompt $" {
+	".*\[\r\n\]#0 .* call7k \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#1 .* call7j \\(ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8\\) "
+	".*\[\r\n\]#2 .* call7i \\(ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6\\) "
+	".*\[\r\n\]#3 .* call7h \\(us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5\\) "
+	".*\[\r\n\]#4 .* call7g \\(d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b'\\) "
+	".*\[\r\n\]#5 .* call7f \\(uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3, f=4\\) "
+	".*\[\r\n\]#6 .* call7e \\(f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1, l=3\\) "
+	".*\[\r\n\]#7 .* call7d \\(l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2, s=1\\) "
+	".*\[\r\n\]#8 .* call7c \\(s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a', i=2\\) "
+	".*\[\r\n\]#9 .* call7b \\(i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7, c=97 'a'\\) "
+	".*\[\r\n\]#10 .* call7a \\(c=97 'a', i=2, s=1, l=3, f=4, uc=98 'b', d=5, us=6, ul=8, ui=7\\) "
+	".*\[\r\n\]#11 .* main \\(.*\\) "
     }
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -893,19 +952,43 @@ proc recursive_structs_by_value {} {
     # Run; should stop at hitbottom and print actual arguments.
     # Print backtrace.
     gdb_run_cmd
-    gdb_test "" "Breakpoint $decimal, hitbottom .*" "run to hitbottom"
-
-    gdb_test_sequence "backtrace 100" "recursive passing of structs by value" {
-	"\[\r\n\]#0 .* hitbottom \\(\\) "
-	"\[\r\n\]#1 .* recurse \\(a=\{s = 0, i = 0, l = 0\}, depth=0\\) "
-	"\[\r\n\]#2 .* recurse \\(a=\{s = 1, i = 1, l = 1\}, depth=1\\) "
-	"\[\r\n\]#3 .* recurse \\(a=\{s = 2, i = 2, l = 2\}, depth=2\\) "
-	"\[\r\n\]#4 .* recurse \\(a=\{s = 3, i = 3, l = 3\}, depth=3\\) "
-	"\[\r\n\]#5 .* recurse \\(a=\{s = 4, i = 4, l = 4\}, depth=4\\) "
-	"\[\r\n\]#6 .* test_struct_args \\(\\) "
-	"\[\r\n\]#7 .* main \\(.*\\) at "
+    gdb_expect {
+	 -re ".*Breakpoint $decimal, hitbottom .*$gdb_prompt $" { pass "run to hitbottom" }
+	 -re "$gdb_prompt $" { fail "run to hitbottom" ; gdb_suppress_tests; }
+	 timeout { fail "(timeout) run to hitbottom" ; gdb_suppress_tests; }
     }
-    gdb_stop_suppressing_tests
+
+    if ![istarget sparclet-*-*] {
+	send_gdb "backtrace 100\n"
+	gdb_expect_list "recursive passing of structs by value" ".*$gdb_prompt $" {
+	    ".*\[\r\n\]#0 .* hitbottom \\(\\) "
+	    ".*\[\r\n\]#1 .* recurse \\(a=\{s = 0, i = 0, l = 0\}, depth=0\\) "
+	    ".*\[\r\n\]#2 .* recurse \\(a=\{s = 1, i = 1, l = 1\}, depth=1\\) "
+	    ".*\[\r\n\]#3 .* recurse \\(a=\{s = 2, i = 2, l = 2\}, depth=2\\) "
+	    ".*\[\r\n\]#4 .* recurse \\(a=\{s = 3, i = 3, l = 3\}, depth=3\\) "
+	    ".*\[\r\n\]#5 .* recurse \\(a=\{s = 4, i = 4, l = 4\}, depth=4\\) "
+	    ".*\[\r\n\]#6 .* test_struct_args \\(\\) "
+	    ".*\[\r\n\]#7 .* main \\(.*\\) "
+	}
+    } else {
+	fail "recursive passing of structs by value (sparclet)"
+    }
+    gdb_stop_suppressing_tests;
+}
+
+proc funcargs_reload { } {
+    global objdir
+    global subdir
+    global binfile
+    global srcdir
+
+    if [istarget "mips-idt-*"] {
+	# Restart because IDT/SIM runs out of file descriptors.
+	gdb_exit
+	gdb_start
+	gdb_reinitialize_dir $srcdir/$subdir
+	gdb_load ${binfile}
+    }
 }
 
 #
@@ -941,7 +1024,7 @@ proc localvars_after_alloca { } {
     gdb_test "print l" " = 3" "print l in localvars_after_alloca"
 
     gdb_test "backtrace 8" "#0.*localvars_after_alloca \\(c=97 'a', s=1, i=2, l=3\\).*#1.*main.*" "backtrace after alloca"
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 proc call_after_alloca { } {
@@ -964,7 +1047,7 @@ proc call_after_alloca { } {
 
     if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" }
     gdb_test "backtrace 8" "#0.*call_after_alloca_subr \\(c=97 'a', s=1, i=2, l=3, uc=98 'b', us=11, ui=12, ul=13\\).*#1.*call_after_alloca \\(c=97 'a', s=1, i=2, l=3\\).*#2.*main.*" "backtrace from call_after_alloca_subr"
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -1013,31 +1096,28 @@ proc localvars_in_indirect_call { } {
     # second indirect call.
     #
 
-    gdb_test_multiple "finish" "finish from indirectly called function" {
-	-re "\\(\\*pointer_to_call0a\\) \\(c, s, i, l\\);.*First.*$gdb_prompt $" {
-	    # If the branch instruction is not the last instruction in the
-	    # function call line, we'll stop at that line, and need an extra
-	    # "step" to continue the test.
+    send_gdb "finish\n"
+    gdb_expect {
+	 -re "\\(\\*pointer_to_call0a\\) \\(c, s, i, l\\);.*First.*$gdb_prompt $" {
+#On hppa2.0w-hp-hpux11.00, gdb finishes at one line earlier than 
+#hppa1.1-hp-hpux11.00. Therefore, an extra "step" is necessary to continue the test.
 	    send_gdb "step\n"
 	    exp_continue
 	}
-	-re ".*\\(\\*pointer_to_call0a\\) \\(c, s, i, l\\);.*Second.*$gdb_prompt $" {
+	 -re ".*\\(\\*pointer_to_call0a\\) \\(c, s, i, l\\);.*Second.*$gdb_prompt $" {
 	    pass "finish from indirectly called function"
 	}
-	-re ".*$gdb_prompt $" {
+	 -re ".*$gdb_prompt $" {
 	    fail "finish from indirectly called function"
-	    gdb_suppress_tests
+	    gdb_suppress_tests;
 	}
-	default { 
-	    fail "finish from indirectly called function"
-	    gdb_suppress_tests
-	}
+	 default { fail "finish from indirectly called function" ; gdb_suppress_tests; }
     }
 
     if {!$gcc_compiled} then { setup_xfail "rs6000-*-*" }
     gdb_test "step" "call0a \\(c=97 'a', s=1, i=2, l=3\\).*" \
 	"stepping into indirectly called function"
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
 #
@@ -1054,21 +1134,19 @@ proc test_stepping_over_trampolines { } {
     if { ! [ runto marker_call_with_trampolines ] } then { gdb_suppress_tests; }
 
     # Cater for gdb stopping in midline, see comment for finish above.
-    gdb_test_multiple "finish" "finish from marker_call_with_trampolines" {
-	-re "marker_call_with_trampolines ..;.*$gdb_prompt $" {
+    send_gdb "finish\n"
+    gdb_expect {
+	 -re "marker_call_with_trampolines ..;.*$gdb_prompt $" {
 	    send_gdb "step\n"
 	    exp_continue
 	}
-	-re "pointer_to_call_with_trampolines.*$gdb_prompt $" {
+	 -re "pointer_to_call_with_trampolines.*$gdb_prompt $" {
 	    pass "finish from marker_call_with_trampolines"
 	}
-	-re ".*$gdb_prompt $" {
+	 -re ".*$gdb_prompt $" {
 	    fail "finish from marker_call_with_trampolines"
 	}
-	default { 
-	    fail "finish from marker_call_with_trampolines"
-	    gdb_suppress_tests
-	}
+	 default { fail "finish from marker_call_with_trampolines" ; gdb_suppress_tests; }
     }
 
     # Try to step into the target function.
@@ -1083,29 +1161,35 @@ proc test_stepping_over_trampolines { } {
     # Stepping back to main might stop again after the gdb_suppress_tests; statement
     # or immediately transfer control back to main if optimizations
     # are performed.
-    gdb_test_multiple "step" "stepping back to main from function called with trampolines" {
-	-re "main .* at.*$gdb_prompt $" {
-	    pass "stepping back to main from function called with trampolines"
-	    gdb_suppress_tests
+    send_gdb "step\n"
+    gdb_expect {
+	 -re "main .* at.*$gdb_prompt $" {
+	     pass "stepping back to main from function called with trampolines" ;
+	     gdb_suppress_tests
 	}
-	-re "\}.*End of call_with_trampolines.*$gdb_prompt $" {
+	 -re "\}.*End of call_with_trampolines.*$gdb_prompt $" {
 	    send_gdb "step\n"
 	    exp_continue
 	}
-	-re ".*$gdb_prompt $" {
+	 -re ".*$gdb_prompt $" {
 	    fail "stepping back to main from function called with trampolines"
 	}
-	default {
-	    fail "stepping back to main from function called with trampolines"
-	    gdb_suppress_tests
-	}
+	 default { fail "stepping back to main from function called with trampolines" ; gdb_suppress_tests; }
     }
-    gdb_stop_suppressing_tests
+    gdb_stop_suppressing_tests;
 }
 
-set prev_timeout $timeout
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
 if [istarget "mips*tx39-*"] {
     set timeout 300
+} elseif [istarget "hppa*-hp-hpux*"] then {
+    set timeout 240
 } else {
     set timeout 60
 }
@@ -1113,67 +1197,66 @@ if [istarget "mips*tx39-*"] {
 # Determine expected output for unsigned long variables,
 # the output varies with sizeof (unsigned long).
 
-gdb_test_multiple "print sizeof (long)" "getting sizeof long" {
-    -re ".\[0-9\]* = 4.*$gdb_prompt $" {
-	set target_sizeof_long 4
-	# pass silently
+set target_sizeof_long 4
+send_gdb "print sizeof (long)\n"
+gdb_expect {
+    -re ".\[0-9\]* = 4.*$gdb_prompt $" { }
+    -re ".\[0-9\]* = 8.*$gdb_prompt $" { set target_sizeof_long 8 } 
+    -re ".*$gdb_prompt $" {
+	 fail "getting sizeof long"
     }
-    -re ".\[0-9\]* = 8.*$gdb_prompt $" {
-	set target_sizeof_long 8
-	# pass silently
-    }
+    default	{ fail "(timeout) getting sizeof long" }
 }
 
-gdb_test_multiple "print sizeof (int)" "getting sizeof int" {
-    -re ".\[0-9\]* = 2.*$gdb_prompt $" {
-	set target_sizeof_int 2
-	# pass silently
+set target_sizeof_int 4
+send_gdb "print sizeof (int)\n"
+gdb_expect {
+    -re ".\[0-9\]* = 2.*$gdb_prompt $" { set target_sizeof_int 2 }
+    -re ".\[0-9\]* = 4.*$gdb_prompt $" { }
+    -re ".\[0-9\]* = 8.*$gdb_prompt $" { set target_sizeof_int 8 } 
+    -re ".*$gdb_prompt $" {
+	 fail "getting sizeof unsigned long"
     }
-    -re ".\[0-9\]* = 4.*$gdb_prompt $" {
-	set target_sizeof_int 4
-	# pass silently
-    }
-    -re ".\[0-9\]* = 8.*$gdb_prompt $" {
-	set target_sizeof_int 8
-	# pass silently
-    }
+    default	{ fail "(timeout) getting sizeof int" }
 }
 
-switch [get_endianness] {
-    little { set target_bigendian_p 0 }
-    big { set target_bigendian_p 1 }
+set target_bigendian_p 1
+send_gdb "show endian\n"
+gdb_expect {
+    -re ".*little endian.*$gdb_prompt $" { set target_bigendian_p 0 }
+    -re ".*big endian.*$gdb_prompt $" { }
+    -re ".*$gdb_prompt $" {
+	 fail "getting target endian"
+    }
+    default	{ fail "(timeout) getting target endian" }
 }
 
 # Perform tests
 
-gdb_test_no_output "set print frame-arguments all"
-
 integral_args
+funcargs_reload
 unsigned_integral_args
-if {!$skip_float_test} {
+funcargs_reload
+if {![target_info exists gdb,skip_float_tests]} {
   float_and_integral_args
 }
-
-# Test _Complex type here if supported.
-if [support_complex_tests] {
-    complex_args
-
-    complex_integral_args
-
-    if {!$skip_float_test} {
-	complex_float_integral_args
-    }
-}
-
+funcargs_reload
 pointer_args
+funcargs_reload
 structs_by_reference
+funcargs_reload
 structs_by_value
+funcargs_reload
 discard_and_shuffle
+funcargs_reload
 shuffle_round_robin
+funcargs_reload
 recursive_structs_by_value
+funcargs_reload
 localvars_after_alloca
+funcargs_reload
 call_after_alloca
+funcargs_reload
 localvars_in_indirect_call
+funcargs_reload
 test_stepping_over_trampolines
-
-set timeout $prev_timeout

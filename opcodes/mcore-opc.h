@@ -1,22 +1,20 @@
 /* Assembler instructions for Motorola's Mcore processor
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000 Free Software Foundation, Inc.
 
-   This file is part of the GNU opcodes library.
+   
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "ansidecl.h"
 
@@ -33,7 +31,7 @@ mcore_opclass;
 
 typedef struct inst
 {
-  const char *   name;
+  char *         name;
   mcore_opclass  opclass;
   unsigned char  transfer;
   unsigned short inst;
@@ -41,7 +39,7 @@ typedef struct inst
 mcore_opcode_info;
 
 #ifdef DEFINE_TABLE
-const mcore_opcode_info mcore_table[] =
+mcore_opcode_info mcore_table[] =
 {
   { "bkpt",	O0,	0,	0x0000 },
   { "sync",	O0,	0,	0x0001 },
@@ -128,14 +126,14 @@ const mcore_opcode_info mcore_table[] =
   { "cmpnei",	OB,	0,	0x2A00 },
   { "bmaski",	OMa,	0,	0x2C00 },
   { "divu",	O1R1,	0,	0x2C10 },
-/* SPACE:                       0x2c20 - 0x2c7f */
+/* SPACE:                       0x2c20 - 0x2c7f */  
   { "bmaski",	OMb,	0,	0x2C80 },
   { "bmaski",	OMc,	0,	0x2D00 },
   { "andi",	OB,	0,	0x2E00 },
   { "bclri",	OB,	0,	0x3000 },
 /* SPACE:                       0x3200 - 0x320f */
   { "divs",	O1R1,	0,	0x3210 },
-/* SPACE:                       0x3220 - 0x326f */
+/* SPACE:                       0x3220 - 0x326f */  
   { "bgeni",	OBRa,	0,	0x3270 },
   { "bgeni",	OBRb,	0,	0x3280 },
   { "bgeni",	OBRc,	0,	0x3300 },
@@ -206,5 +204,6 @@ const mcore_opcode_info mcore_table[] =
   { "rori",	RSI,	0,	0x3800 },
   { "rotri",	RSI,    0,	0x3800 },
   { "nop",	O0,     0,	0x1200 },  /* mov r0, r0 */
+  { 0,		0,	0,      0 }
 };
 #endif

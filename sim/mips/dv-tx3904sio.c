@@ -1,20 +1,21 @@
 /*  This file is part of the program GDB, the GNU debugger.
     
-    Copyright (C) 1998-2020 Free Software Foundation, Inc.
+    Copyright (C) 1998, 1999 Free Software Foundation, Inc.
     Contributed by Cygnus Solutions.
     
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+    
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+    
     You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
     
     */
 
@@ -582,7 +583,7 @@ tx3904sio_fifo_push(struct hw* me, struct tx3904sio_fifo* fifo, char it)
       char* next_buf = zalloc(next_size);
       memcpy(next_buf, fifo->buffer, fifo->used);
 
-      if(fifo->buffer != NULL) free(fifo->buffer);
+      if(fifo->buffer != NULL) zfree(fifo->buffer);
       fifo->buffer = next_buf;
       fifo->size = next_size;
     }
@@ -598,7 +599,7 @@ tx3904sio_fifo_reset(struct hw* me, struct tx3904sio_fifo* fifo)
   /* HW_TRACE ((me, "reset fifo")); */
   fifo->used = 0;
   fifo->size = 0;
-  free(fifo->buffer);
+  zfree(fifo->buffer);
   fifo->buffer = 0;
 }
 

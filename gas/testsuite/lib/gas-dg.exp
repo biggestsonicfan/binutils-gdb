@@ -1,19 +1,4 @@
 # Define gas callbacks for dg.exp.
-# Copyright (C) 2012-2020 Free Software Foundation, Inc.
-
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  
 
 load_lib dg.exp
 
@@ -36,7 +21,7 @@ proc gas-dg-test { prog do_what tool_flags } {
 	"run" {
 	    # This is the only place where we care if an executable was
 	    # created or not.  If it was, dg.exp will try to run it.
-	    remote_file host delete "$output_file"
+	    catch "exec rm -f $output_file"
 	}
 	default {
 	    perror "$do_what: not a valid dg-do keyword"
@@ -51,8 +36,7 @@ proc gas-dg-test { prog do_what tool_flags } {
     regsub -all "//" $dir "/" dir
     regsub -all "//" $prog "/" prog
     if [string match "$dir/*" $prog] {
-	# We use (?q) to treat $dir as a literal.
-	regsub "(?q)$dir" $prog "" prog
+	regsub "$dir" $prog "" prog
     }
 
     # FIXME: This should be gas_start but it doesn't set comp_output.

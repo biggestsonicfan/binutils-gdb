@@ -13,7 +13,6 @@ does the return value.  The third argument is unused in @libib{}.
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include "ansidecl.h"
 
 /* On some systems (such as WindISS), you must include <sys/types.h>
    to get the definition of "pid_t" before you include <sys/wait.h>.  */
@@ -23,13 +22,10 @@ does the return value.  The third argument is unused in @libib{}.
 #include <sys/wait.h>
 #endif
 
-#ifdef __MINGW32__
-#include <process.h>
-#define wait(s)  _cwait(s,pid,_WAIT_CHILD)
-#endif
-
 pid_t
-waitpid (pid_t pid, int *stat_loc, int options ATTRIBUTE_UNUSED)
+waitpid (pid, stat_loc, options)
+     pid_t pid;
+     int *stat_loc, options;
 {
   for (;;)
     {

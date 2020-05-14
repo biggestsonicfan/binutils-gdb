@@ -10,13 +10,25 @@
 .*:     file format elf64-mmix
 
 SYMBOL TABLE:
-0+ l    d  \.init	0+ (|\.init)
-0+ l    df \*ABS\*	0+ .*
+0+ l    d  \.init	0+ 
+0+4 l    d  \.text	0+ 
+2000000000000000 l    d  \.sbss	0+ 
+2000000000000000 l    d  \.bss	0+ 
+0+7f8 l    d  \.MMIX\.reg_contents	0+ 
+0+ l    d  \*ABS\*	0+ 
+0+ l    d  \*ABS\*	0+ 
+0+ l    d  \*ABS\*	0+ 
 0+ l       \.init	0+ _start
-2000000000000000 g       \.init	0+ __bss_start
-2000000000000000 g       \.init	0+ _edata
-2000000000000000 g       \.init	0+ _end
-0+4 g       \.init	0+ _start\.
+0+ g       \*ABS\*	0+ 
+0+ g       \*ABS\*	0+ 
+2000000000000000 g       \*ABS\*	0+ __bss_start
+2000000000000000 g       \*ABS\*	0+ _edata
+2000000000000000 g       \*ABS\*	0+ _end
+0+4 g       \.text	0+ _start\.
 
 Contents of section \.init:
  0000 e37704a6                             .*
+Contents of section \.text:
+Contents of section \.sbss:
+Contents of section \.bss:
+Contents of section \.MMIX\.reg_contents:

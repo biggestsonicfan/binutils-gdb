@@ -59,7 +59,6 @@ double		v_double_array[2];
 
 /* PR 3742 */
 typedef char t_char_array[];
-t_char_array *pv_char_array;
 
 /**** pointers *******/
 
@@ -198,16 +197,6 @@ struct outer_struct {
 	long outer_long;
 } nested_su;
 
-struct highest
-{
-  int a;
-  struct
-  {
-    int b;
-    struct { int c; } anonymous_level_2;
-  } anonymous_level_1;
-} the_highest;
-
 /**** Enumerations *******/
 
 enum 
@@ -248,8 +237,6 @@ int (*xptr) (int (*) (), int (*) (void), int);
 int (*(*ffptr) (char)) (short);
 int (*(*(*fffptr) (char)) (short)) (long);
 
-func_type v_func_type;
-
 /* Here are the sort of stabs we expect to see for the above:
 
    .stabs "func_type:t(0,100)=*(0,101)=g(0,1)(0,102)=*(0,103)=g(0,1)(0,1)(0,14)#(0,14)#",128,0,234,0
@@ -269,18 +256,6 @@ func_type v_func_type;
 
 /***********/
 
-extern char charfoo ();
-
-typedef int foo;
-
-foo intfoo (afoo)
-{
-  charfoo (afoo);
-  return (afoo * 2);
-}
-
-/***********/
-
 int main ()
 {
   /* Ensure that malloc is a pointer type; avoid use of "void" and any include files. */
@@ -290,6 +265,10 @@ int main ()
      sure it is linked in to this program.  */
   v_char_pointer = (char *) malloc (1);
 
+#ifdef usestubs
+  set_debug_traps();
+  breakpoint();
+#endif
   /* Some linkers (e.g. on AIX) remove unreferenced variables,
      so make sure to reference them. */
   primary = blue;
@@ -360,8 +339,6 @@ int main ()
 
   nested_su.outer_int = 0;
   v_t_struct_p = 0;
-
-  the_highest.a = 0;
 
   v_boolean = FALSE;
   v_boolean2 = my_false;

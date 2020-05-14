@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -44,7 +45,6 @@
 
 #include <ctype.h>
 
-#include "libiberty.h"
 
 /* manipulate/lookup device names */
 
@@ -539,14 +539,14 @@ parse_reg_property(device *current,
     if (device_nr_size_cells(bus) > 0)
       chp = parse_size(current, bus, chp, &regs[reg_nr].size);
     else
-      memset(&regs[reg_nr].size, 0, sizeof (&regs[reg_nr].size));
+      memset(&regs[reg_nr].size, sizeof (&regs[reg_nr].size), 0);
   }
 
   /* create it */
   device_add_reg_array_property(current, property_name,
 				regs, nr_regs);
 
-  free(regs);
+  zfree(regs);
 }
 
 
@@ -583,7 +583,7 @@ parse_ranges_property(device *current,
   /* create it */
   device_add_range_array_property(current, property_name, ranges, nr_ranges);
 
-  free(ranges);
+  zfree(ranges);
 }
 
 
@@ -619,56 +619,12 @@ parse_integer_property(device *current,
     for (i = 0; i < nr_entries; i++) {
       H2BE(words[i]);
     }
-    /* perhaps integer array property is better */
+    /* perhaphs integer array property is better */
     device_add_array_property(current, property_name, words,
                               sizeof(words[0]) * nr_entries);
   }
 }
 
-/* PROPERTY_VALUE is a raw property value.  Quote it as required by
-   parse_string_property.  It is the caller's responsibility to free
-   the memory returned.  */
-
-EXTERN_TREE\
-(char *)
-tree_quote_property(const char *property_value)
-{
-  char *p;
-  char *ret;
-  const char *chp;
-  int quotees;
-
-  /* Count characters needing quotes in PROPERTY_VALUE.  */
-  quotees = 0;
-  for (chp = property_value; *chp; ++chp)
-    if (*chp == '\\' || *chp == '"')
-      ++quotees;
-  
-  ret = (char *) xmalloc (strlen (property_value) 
-			  + 2 /* quotes */
-			  + quotees
-			  + 1 /* terminator */);
-
-  p = ret;
-  /* Add the opening quote.  */
-  *p++ = '"';
-  /* Copy the value.  */
-  for (chp = property_value; *chp; ++chp)
-    if (*chp == '\\' || *chp == '"')
-      {
-	/* Quote this character.  */ 
-	*p++ = '\\';
-	*p++ = *chp;
-      }
-    else
-      *p++ = *chp;
-  /* Add the closing quote.  */
-  *p++ = '"';
-  /* Terminate the string.  */
-  *p++ = '\0';
-
-  return ret;
-}
 
 /* <string> ... */
 
@@ -769,9 +725,9 @@ parse_string_property(device *current,
   /* flush the created string */
   while (nr_strings > 0) {
     nr_strings--;
-    free(strings[nr_strings]);
+    zfree(strings[nr_strings]);
   }
-  free(strings);
+  zfree(strings);
 }
 
 

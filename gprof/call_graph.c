@@ -1,12 +1,12 @@
 /* call_graph.c  -  Create call graphs.
 
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #include "gprof.h"
 #include "search_list.h"
@@ -31,7 +31,10 @@
 #include "sym_ids.h"
 
 void
-cg_tally (bfd_vma from_pc, bfd_vma self_pc, unsigned long count)
+cg_tally (from_pc, self_pc, count)
+     bfd_vma from_pc;
+     bfd_vma self_pc;
+     unsigned long count;
 {
   Sym *parent;
   Sym *child;
@@ -77,7 +80,9 @@ cg_tally (bfd_vma from_pc, bfd_vma self_pc, unsigned long count)
    for formatting error-messages only.  */
 
 void
-cg_read_rec (FILE *ifp, const char *filename)
+cg_read_rec (ifp, filename)
+     FILE *ifp;
+     const char *filename;
 {
   bfd_vma from_pc, self_pc;
   unsigned int count;
@@ -104,7 +109,9 @@ cg_read_rec (FILE *ifp, const char *filename)
    only.  */
 
 void
-cg_write_arcs (FILE *ofp, const char *filename)
+cg_write_arcs (ofp, filename)
+     FILE *ofp;
+     const char *filename;
 {
   Arc *arc;
   Sym *sym;

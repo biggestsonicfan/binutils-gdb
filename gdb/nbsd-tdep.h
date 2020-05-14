@@ -1,12 +1,12 @@
 /* Common target-dependent definitions for NetBSD systems.
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
    Contributed by Wasabi Systems, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,36 +15,14 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef NBSD_TDEP_H
 #define NBSD_TDEP_H
 
 struct link_map_offsets *nbsd_ilp32_solib_svr4_fetch_link_map_offsets (void);
 struct link_map_offsets *nbsd_lp64_solib_svr4_fetch_link_map_offsets (void);
-
-int nbsd_pc_in_sigtramp (CORE_ADDR, const char *);
-
-/* NetBSD specific set of ABI-related routines.  */
-
-void nbsd_init_abi (struct gdbarch_info, struct gdbarch *);
-
-/* Output the header for "info proc mappings".  ADDR_BIT is the size
-   of a virtual address in bits.  */
-
-extern void nbsd_info_proc_mappings_header (int addr_bit);
-
-/* Output description of a single memory range for "info proc
-   mappings".  ADDR_BIT is the size of a virtual address in bits.  The
-   KVE_START, KVE_END, KVE_OFFSET, KVE_FLAGS, and KVE_PROTECTION
-   parameters should contain the value of the corresponding fields in
-   a 'struct kinfo_vmentry'.  The KVE_PATH parameter should contain a
-   pointer to the 'kve_path' field in a 'struct kinfo_vmentry'. */
-
-extern void nbsd_info_proc_mappings_entry (int addr_bit, ULONGEST kve_start,
-					   ULONGEST kve_end,
-					   ULONGEST kve_offset,
-					   int kve_flags, int kve_protection,
-					   const char *kve_path);
 
 #endif /* NBSD_TDEP_H */

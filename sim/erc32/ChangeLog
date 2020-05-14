@@ -1,500 +1,3 @@
-2018-10-30  Joel Sherrill <joel@rtems.org>
-
-	* configure.ac: Remove the Cygwin-specific libtermcap.a hack
-	and use the standard logic to determine which library to use.
-	* configure: Regenerate.
-
-2017-09-06  John Baldwin  <jhb@FreeBSD.org>
-
-	* configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* config.in, configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-09  Mike Frysinger  <vapier@gentoo.org>
-
-	* config.in, configure: Regenerate.
-
-2016-01-06  Mike Frysinger  <vapier@gentoo.org>
-
-	* interf.c (sim_open): Mark argv const.
-	(sim_create_inferior): Mark argv and env const.
-
-2016-01-04  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2016-01-03  Mike Frysinger  <vapier@gentoo.org>
-
-	* interf.c (sim_open): Replace while loop with a call to countargv.
-
-2016-01-03  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure.ac (SIM_AC_OPTION_HOSTENDIAN): Delete.
-	* configure: Regenerate.
-	* exec.c (fpexec): Rename CURRENT_HOST_BYTE_ORDER to
-	HOST_BYTE_ORDER.
-	* sis.h (WITH_HOST_BYTE_ORDER): Rename to ...
-	(HOST_BYTE_ORDER): ... this.
-
-2016-01-02  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2015-12-26  Mike Frysinger  <vapier@gentoo.org>
-
-	* config.in, configure: Regenerate.
-
-2015-06-23  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2015-06-12  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2015-06-12  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2015-05-17  Mike Frysinger  <vapier@gentoo.org>
-
-	* erc32.c: Re-add file overview & author info.
-	* exec.c, float.c, func.c, help.c, interf.c, sis.c: Likewise.
-
-2015-05-08  Joel Brobecker  <brobecker@adacore.com>
-
-	* configure.ac: Add copyright header.
-	* erc32.c: Change copyright holder to FSF.  Reformat.
-	* exec.c, float.c, func.c, interf.c, sis.c, sis.h: Likewise.
-	* help.c, startsim: Add copyright header.
-
-2015-04-29  Nick Clifton  <nickc@redhat.com>
-
-	PR 18273
-	* sis.c (main): Remove unreachable code.
-
-2015-04-24  David Binderman  <dcb314@hotmail.com>
-	    Nick Clifton  <nickc@redhat.com>
-
-	PR 18273
-	* exec.c (add32): Fix typo in check for overflow.
-
-2015-04-19  Jiri Gaisler  <jiri@gaisler.se>
-
-	* erc32.c (current_target_byte_order): Delete.
-	(fetch_bytes): Remove.
-	(store_bytes): Remove byte twisting.
-	(memory_read, memory_write): Access memory directly.
-	(extract_short, extract_short_signed, extract_byte,
-	extract_byte_signed): New function for for sub-word LD instructions.
-	* exec.c (extract_short, extract_short_signed, extract_byte,
-	extract_byte_signed): New functions.
-	(dispatch_instruction): Update memory reads.
-	* func.c (current_target_byte_order): Delete.
-	(get_regi): Delete little endian handling.
-	(disp_ctrl, dis_mem): Adjust print-out to new data endian.
-	(bfd_load): Delete little endian handling.
-	* interf.c (current_target_byte_order): Delete.
-	(sim_open): Set dinfo to host endian to get correct disassembly.
-	(sim_write, sim_read): Convert endian when gdb reads or writes
-	memory.
-	* sis.c (main): Set endian.
-	* sis.h (EBT): Define.
-
-2015-04-13  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure: Regenerate.
-
-2015-03-31  Mike Frysinger  <vapier@gentoo.org>
-
-	* config.in, configure: Regenerate.
-
-2015-03-28  Jiri Gaisler  <jiri@gaisler.se>
-
-	* func.c (exec_cmd): Fix old style prototype.  Mark cmd const.  Save
-	the command in a new cmdsave2 to avoid modifying.
-	(bfd_load): Fix old style prototype.  Mark fname const.
-	* sis.h (exec_cmd): Mark cmd const.
-	(bfd_load): Mark fname const.
-
-2015-03-28  Jiri Gaisler  <jiri@gaisler.se>
-
-	* erc32.c (memory_iread): New function to fetch instructions.
-	(memory_read): Print message in verbose mode.
-	* interf.c (run_sim): Use memory_iread.
-	* sis.c (run_sim): As above.
-	* sis.h (memory_iread): New prototype.
-	(sregs): Declare.
-
-2015-03-28  Mike Frysinger  <vapier@gentoo.org>
-
-	* erc32.c (mec_read): Delete parenthesis around return statement.
-	(mec_write, read_uart, rtc_counter_read, gpt_counter_read, memory_read,
-	memory_write, get_mem_ptr, sis_memory_write, sis_memory_read): Likewise.
-	* exec.c (sub_cc, add_cc, add32, dispatch_instruction, fpexec, chk_asi,
-	execute_trap, check_interrupts): Likewise.
-	* float.c (get_accex): Likewise.
-	* func.c (batch, limcalc, exec_cmd, disp_fpu, now, wait_for_irq,
-	check_bpt, bfd_load, get_time): Likewise.
-	* interf.c (run_sim, sim_write, sim_read): Likewise.
-	* sis.c (run_sim): Likewise.
-
-2015-03-24  Mike Frysinger  <vapier@gentoo.org>
-
-	* interf.c (sim_set_callbacks, sim_size, sim_trace): Delete.
-
-2015-03-17  Jiri Gaisler  <jiri@gaisler.se>
-
-	* func.c (exec_cmd): Silence compiler warnings when calling system().
-	(batch): Replace fgets() with getline().
-
-2015-03-17  Jiri Gaisler  <jiri@gaisler.se>
-
-	* func.c (show_stat): Print simulation time in portable long long
-	format.
-	* help.c (usage): Update usage help print-out.
-	* sis.c (run_sim): Increase debug level with -v. Also print
-	simulation time in portable long long format.
-	* sis.h: Use stdint.h for portable 32- and 64-bit ints.
-
-2015-03-16  Mike Frysinger  <vapier@gentoo.org>
-
-	* config.in, configure: Regenerate.
-
-2015-03-16  Jiri Gaisler  <jiri@gaisler.se>
-
-	* Makefile.in (end, end.h): Remove target rules.
-	(clean): Remove end and end.h.
-	(erc32.o, exec.o, float.o, func.o, help.o, interf.o, sis.o): Delete
-	rules.
-	* configure, config.in: Regenerate.
-	* configure.ac: Use SIM_AC_OPTION_HOSTENDIAN
-	* end.c: Delete.
-	* erc32.c: Remove end.h include.
-	* exec.c: Remove end.h include. Use HOST_LITTLE_ENDIAN.
-	* func.c, sis.c: Likewise.
-
-2015-03-14  Mike Frysinger  <vapier@gentoo.org>
-
-	* Makefile.in (SIM_RUN_OBJS): Set to sis.o.
-
-2015-03-14  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure.ac (AC_CHECK_HEADERS): Delete.
-	* aclocal.m4, configure: Regenerate.
-
-2015-02-22  Jiri Gaisler  <jiri@gaisler.se>
-
-	* Makefile.in: Add include path to readline.h.
-	sis.c: Remove locally define readline types.
-
-2015-02-21  Jiri Gaisler  <jiri@gaisler.se>
-
-	* func.c (reset_stat, show_stat): Switch to double in time keeping.
-	(get_time): New function to get system time.
-	* interf.c (run_sim): Use get_time() for system time.
-	* sis.c (run_sim): Likewise.
-	* sis.h: Likewise.
-
-2015-02-21  Jiri Gaisler  <jiri@gaisler.se>
-
-	* Makefile.in: Remove unused defines
-
-2015-02-21  Jiri Gaisler  <jiri@gaisler.se>
-
-	* float.c (get_accex, clear_accex, set_fsr): Use functions from fenv.h
-	instead of custom assembly.
-
-2015-02-21  Jiri Gaisler  <jiri@gaisler.se>
-
-	* erc32.c (mec_read): Allow simulator memory size to be read
-	by application.
-	(boot_init): initialize memory and timers if start address is
-	not 0.
-	* func.c (exe_cmd): Call boot_init if start address not 0.
-	* interf.c (run_sim): Likewise.
-
-2015-02-21  Jiri Gaisler  <jiri@gaisler.se>
-
-	* exec.c (init_regs): erc32 has vendor ID 1 and version ID 1 in %psr.
-
-2015-02-21  Jiri Gaisler  <jiri@gaisler.se>
-
-	* func.c (print_insn_sparc_sis): Add helper function for disassembly.
-	(disp_ctrl): Use helper function.
-
-2014-08-19  Alan Modra  <amodra@gmail.com>
-
-	* configure: Regenerate.
-
-2014-08-15  Roland McGrath  <mcgrathr@google.com>
-
-	* configure: Regenerate.
-	* config.in: Regenerate.
-
-2014-03-10  Mike Frysinger  <vapier@gentoo.org>
-
-	* interf.c (sim_do_command): Add const to cmd.
-
-2014-03-05  Mike Frysinger  <vapier@gentoo.org>
-
-	* interf.c (sim_load): Add const to prog.
-
-2013-10-09  Sergio Durigan Junior  <sergiodj@redhat.com>
-
-	PR sim/16018:
-	* float.c (set_fsr): Add missing "break" statements.  Reindent
-	code.
-
-2013-09-23  Alan Modra  <amodra@gmail.com>
-
-	* configure: Regenerate.
-
-2013-06-03  Mike Frysinger  <vapier@gentoo.org>
-
-	* aclocal.m4, configure: Regenerate.
-
-2013-03-14  Joel Sherrill <joel.sherrill@oarcorp.com>
-
-	* Makefile.in: Include build directory in search path to find
-	config.h
-
-2012-08-16  Nick Clifton  <nickc@redhat.com>
-
-	* end.c: Include config.h before system header files.
-	* erc32.c: Likewise.
-	* exec.c: Likewise.
-	* float.c: Likewise.
-	* func.c: Likewise.
-	* help.c: Likewise.
-	* interf.c: Likewise.
-
-2012-06-15  Joel Brobecker  <brobecker@adacore.com>
-
-	* sys.h: Include "config.h".
-
-2012-06-15  Joel Brobecker  <brobecker@adacore.com>
-
-	* config.in, configure: Regenerate.
-
-2012-05-24  Pedro Alves  <palves@redhat.com>
-
-	PR gdb/7205
-
-	Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
-
-2012-03-24  Mike Frysinger  <vapier@gentoo.org>
-
-	* aclocal.m4, config.in, configure: Regenerate.
-
-2011-12-31  Mike Frysinger  <vapier@gentoo.org>
-
-	PR sim/9971:
-	* configure.ac: Change AC_CHECK_LIB to AC_SEARCH_LIBS to match
-	the code in gdb's configure.ac with $TERMCAP.
-	* configure: Regenerated.
-
-2011-12-03  Mike Frysinger  <vapier@gentoo.org>
-
-	* aclocal.m4: New file.
-	* configure: Regenerate.
-
-2011-10-17  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure.ac: Change include to common/acinclude.m4.
-
-2011-10-17  Mike Frysinger  <vapier@gentoo.org>
-
-	* configure.ac: Change AC_PREREQ to 2.64.  Delete AC_CONFIG_HEADER
-	call.  Replace common.m4 include with SIM_AC_COMMON.
-	* configure: Regenerate.
-
-2011-06-09  Mike Frysinger  <vapier@gentoo.org>
-
-	* interf.c (sim_open): Accept and ignore `--sysroot=...'.
-
-2011-06-01  Joel Brobecker  <brobecker@adacore.com>
-
-	* interf.c (sim_complete_command): New stub function.
-
-2011-01-11  Andrew Burgess  <aburgess@broadcom.com>
-
-	* interf.c (sim_store_register): Update return value to
-	match new API.
-
-2010-05-20  Joel Brobecker  <brobecker@adacore.com>
-
-	* sis.h: Remove #include <stdint.h>.
-	(uint64, int64): Redefine without using stdint.h.
-	(UINT64_MAX): Define.
-
-2010-04-20  Tiemen Schut    <T.Schut@sron.nl>
-
-	* erc32.c (sis_memory_write): Change prototype to const unsigned char *.
-	* func.c (exec_cmd, event, advance_time, wait_for_irq): Use uint64
-	for counts.
-	* interf.c (run_sim): Change icount to uint64_t. Use strtol directly.
-	(sim_resume): Specify maximum run time as uint64.
-	* sis.c (run_sim): Change icount to uint64_t.
-	* sis.h: Define uint64 as uint64_t. Change various fields and
-	prototypes to uint64 to support longer simulations.
-
-2010-04-14  Mike Frysinger  <vapier@gentoo.org>
-
-	* interp.c (sim_write): Add const to buf arg.
-
-2010-01-09  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
-
-	* configure: Regenerate.
-
-2009-08-22  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
-
-	* config.in: Regenerate.
-	* configure: Likewise.
-
-	* configure: Regenerate.
-
-2008-11-10  Joel Sherrill <joel.sherrill@oarcorp.com>
-
-	* erc32.c, exec.c: Fix warnings.
-
-2008-07-11  Hans-Peter Nilsson  <hp@axis.com>
-
-	* configure: Regenerate to track ../common/common.m4 changes.
-	* config.in: Ditto.
-
-2008-06-09  Joel Sherrill <joel.sherrill@oarcorp.com>
-
-	* sis.c: Correct spelling error.
-
-2008-06-06  Vladimir Prus  <vladimir@codesourcery.com>
-	    Daniel Jacobowitz  <dan@codesourcery.com>
-	    Joseph Myers  <joseph@codesourcery.com>
-
-	* configure: Regenerate.
-
-2006-12-21  Hans-Peter Nilsson  <hp@axis.com>
-
-	* acconfig.h: Remove.
-	* config.in: Regenerate.
-
-2006-12-20  Hans-Peter Nilsson  <hp@axis.com>
-
-	* configure.ac: Add test for readline, substitute READLINE.
-	* Makefile.in (READLINE_LIB): New substituted-contents variable.
-	(SIM_EXTRA_LIBDEPS): Don't set.
-	(SIM_EXTRA_LIBS): Use $(READLINE_LIB) instead of
-	../../readline/libreadline.a.
-	* configure: Regenerate.
-
-2006-08-08  Daniel Jacobowitz  <dan@codesourcery.com>
-
-	* Makefile.in (func.o, help.o): Correct dependencies.
-
-2006-08-08  Joel Sherrill <joel.sherrill@oarcorp.com>
-
-	* Makefile.in (install-sis): Honor DESTDIR.
-
-2006-06-13  Richard Earnshaw  <rearnsha@arm.com>
-
-	* configure: Regenerated.
-
-2006-06-05  Daniel Jacobowitz  <dan@codesourcery.com>
-
-	* configure: Regenerated.
-
-2006-05-31  Daniel Jacobowitz  <dan@codesourcery.com>
-
-	* configure: Regenerated.
-
-2005-11-28  Mark Mitchell  <mark@codesourcery.com>
-
-	* interf.c: (gdb/signals.h): Include it.
-	(sim_stop_reason): Use TARGET_SIGNAL_*.
-
-2005-07-08  Ben Elliston  <bje@au.ibm.com>
-
-	* func.c: Remove ANSI_PROTOTYPES conditional code.
-
-2005-03-23  Mark Kettenis  <kettenis@gnu.org>
-
-	* configure: Regenerate.
-
-2005-03-07  Jerome Guitton  <guitton@gnat.com>
-
-	* sim/erc32/float.c (set_fsr): Do not use deprecated multi-line
-	strings.
-	(clear_accex): Ditto.
-	* sim/erc32/interf.c: Remove the redeclaration of fprintf.
-	* sim/erc32/sis.c: Ditto.
-	* sim/erc32/exec.c: Add missing semicolon.
-	* sim/erc32/func.c: Remove definitions of generic_print_address,
-	generic_symbol_at_address, buffer_read_memory and perror_memory, as
-	they are already defined in opcodes/dis-buf.c.
-
-2005-01-14  Andrew Cagney  <cagney@gnu.org>
-
-	* configure.ac: Sinclude aclocal.m4 before common.m4.  Add
-	explicit call to AC_CONFIG_HEADER.
-	* configure: Regenerate.
-
-2005-01-12  Andrew Cagney  <cagney@gnu.org>
-
-	* configure.ac: Update to use ../common/common.m4.
-	* configure: Re-generate.
-
-2005-01-11  Andrew Cagney  <cagney@localhost.localdomain>
-
-	* configure: Regenerated to track ../common/aclocal.m4 changes.
-
-2005-01-07  Andrew Cagney  <cagney@gnu.org>
-
-	* configure.ac: Rename configure.in, require autoconf 2.59.
-	* configure: Re-generate.
-
-2004-12-08  Hans-Peter Nilsson  <hp@axis.com>
-
-	* configure: Regenerate for ../common/aclocal.m4 update.
-
-2004-11-11  Andreas Schwab  <schwab@suse.de>
-
-	* interf.c: Include "libiberty.h" instead of declaring buildargv
-	ourselves.
-
-2003-02-27  Andrew Cagney  <cagney@redhat.com>
-
-	* interf.c (sim_open, sim_create_inferior): Rename _bfd to bfd.
-
 2002-06-16  Andrew Cagney  <ac131313@redhat.com>
 
 	* configure: Regenerated to track ../common/aclocal.m4 changes.
@@ -525,19 +28,19 @@ Thu Sep  2 18:15:53 1999  Andrew Cagney  <cagney@b1.cygnus.com>
 1999-05-08  Felix Lee  <flee@cygnus.com>
 
 	* configure: Regenerated to track ../common/aclocal.m4 changes.
-
+	
 1999-03-03  DJ Delorie  <dj@cygnus.com>
 
 	* configure.in: add termcap and -luser32 for host=cygwin
 	* configure: regenerate
-
+	
 1999-02-11  Hugo Tyson  <hmt@cygnus.co.uk>
 
-	* exec.c (dispatch_instruction):
+	* exec.c (dispatch_instruction): 
 	Correct the sense of the
 	          if (!sparclite) {
 		     sregs->trap = TRAP_UNIMP;
-	             break;
+                     break;
 		  }
 	clause that has been pasted around: it's correct in the SCAN and
 	DIVScc (divide step) cases (where it was probably originally
@@ -636,7 +139,7 @@ Tue Jun  2 15:20:35 1998  Mark Alexander  <marka@cygnus.com>
 	(get_regi): Handle little-endian data.
 	(bfd_load): Recognize little-endian SPARClite as having
 	little-endian data.
-
+	
 Fri May 22 14:23:16 1998  Mark Alexander  <marka@cygnus.com>
 
 	* erc32.c (port_init): Print messages only if sis_verbose is true.
@@ -651,7 +154,7 @@ Thu May 14 23:10:48 1998  Mark Alexander  <marka@cygnus.com>
 	* (div64): New helper function for 64-bit division.
 	* (dispatch_instruction): Add emulation of SDIV, SDIVCC, UDIV,
 	and UDIVCC.
-
+	
 Wed May 13 14:59:54 1998  Mark Alexander  <marka@cygnus.com>
 
 	* erc32.c (close_port): Don't close stdin; it kills GDB.
@@ -662,7 +165,7 @@ Wed May 13 14:59:54 1998  Mark Alexander  <marka@cygnus.com>
 
 Tue Apr 28 18:33:31 1998  Geoffrey Noer  <noer@cygnus.com>
 
-	* configure: Regenerated to track ../common/aclocal.m4 changes.
+        * configure: Regenerated to track ../common/aclocal.m4 changes.
 
 Sun Apr 26 15:31:55 1998  Tom Tromey  <tromey@creche>
 
@@ -970,12 +473,12 @@ Wed Jul  3 16:05:23 1996  Stu Grossman  (grossman@critters.cygnus.com)
 
 Wed Jun 26 12:19:11 1996  Jason Molenda  (crash@godzilla.cygnus.co.jp)
 
-	* Makefile.in (bindir, libdir, datadir, mandir, infodir, includedir,
-	INSTALL_PROGRAM, INSTALL_DATA): Use autoconf-set values.
-	(docdir, oldincludedir): Removed.
-	* configure.in (AC_PREREQ): autoconf 2.5 or higher.
-	(AC_PROG_INSTALL): Added.
-	* configure: Rebuilt.
+        * Makefile.in (bindir, libdir, datadir, mandir, infodir, includedir,
+        INSTALL_PROGRAM, INSTALL_DATA): Use autoconf-set values.
+        (docdir, oldincludedir): Removed.
+        * configure.in (AC_PREREQ): autoconf 2.5 or higher.
+        (AC_PROG_INSTALL): Added.
+        * configure: Rebuilt.
 
 Mon Jun 24 14:19:07 1996  Ian Lance Taylor  <ian@cygnus.com>
 
@@ -1000,9 +503,9 @@ Sun May 19 21:05:31 1996  Rob Savoye  <rob@chinadoll.cygnus.com>
 
 Version 2.1 26-02-96
 --------------------
-
+ 
 * Fixed bug in "go" command.
-
+ 
 version 2.0 05-02-96
 --------------------
 
@@ -1040,22 +543,22 @@ version 1.6.2 25-10-95
 --------------------
 
 * Added -DFAST_UART to Makefile
-
+ 
 
 version 1.6.1 24-10-95
 --------------------
-
+ 
 * Fixed bug in STDFQ which caused bus error
 
 
 version 1.6 02-10-95
 --------------------
-
+ 
 * Modified srt0.s to include code that initiates registers in IU and FPU
   and initializes the data segment. The simulator 'load' command does not
   longer initialize the data segment!
 
-* Corrected MEC timer operation; scalers now divide the frequency by
+* Corrected MEC timer operation; scalers now divide the frequency by 
   (scaler_value + 1).
 
 * MEC breakpoints are not checked during store operation
@@ -1079,7 +582,7 @@ version 1.4 22-08-95
 * Added a '-g' switch to enable/disable the GNU readline(), which cause
 some problems on solaris 2.x machines.
 
-* Enabled MEC watchpoint and breakpoint function to mem.c. Performance
+* Enabled MEC watchpoint and breakpoint function to mem.c. Performance 
 may suffer a bit ...
 
 NOTE: The UARTs are now connected to /dev/ttypc and /dev/ttypd.

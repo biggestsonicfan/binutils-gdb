@@ -1,12 +1,12 @@
 # Reply server mig-output massager
 #
-#   Copyright (C) 1995-2020 Free Software Foundation, Inc.
+#   Copyright 1995, 1996, 1999 Free Software Foundation, Inc.
 #
 #   Written by Miles Bader <miles@gnu.ai.mit.edu>
 #
 #   This program is free software; you can redistribute it and/or
 #   modify it under the terms of the GNU General Public License as
-#   published by the Free Software Foundation; either version 3, or (at
+#   published by the Free Software Foundation; either version 2, or (at
 #   your option) any later version.
 #
 #   This program is distributed in the hope that it will be useful, but
@@ -15,7 +15,8 @@
 #   General Public License for more details.
 #
 #   You should have received a copy of the GNU General Public License
-#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 # This awk script hacks the output of mig-generated reply server code
 # so that it allows replies with just the error-code in them (as this is
@@ -49,7 +50,7 @@ parse_phase == 2 {
   print; next;
 }
 
-parse_phase == 3 && /} Request/ {
+parse_phase == 3 && /}/ {
   # The args structure is over.
   if (num_args > 1)
     parse_phase = 5;
@@ -60,44 +61,27 @@ parse_phase == 3 && /} Request/ {
   print; next;
 }
 
-parse_phase == 3 && num_args == 0 {
+parse_phase == 3 {
   # The type field for an argument.
-  # This won't be accurate in case of unions being used in the Request struct,
-  # but that doesn't matter, as we'll only be looking at arg_type_code_name[0],
-  # which will not be a union type.
   arg_type_code_name[num_args] = $2;
   sub (/;$/, "", arg_type_code_name[num_args]) # Get rid of the semi-colon
   parse_phase = 4;
   print; next;
 }
 
-parse_phase == 3 && num_args == 1 {
-  # We've got more than one argument (but we don't care what it is).
-  num_args++;
-  print; next;
-}
-
-parse_phase == 3 {
-  # We've know everything we need; now just wait for the end of the Request
-  # struct.
-  print; next;
-}
-
 parse_phase == 4 {
   # The value field for an argument.
-  # This won't be accurate in case of unions being used in the Request struct,
-  # but that doesn't matter, as we'll only be looking at arg_name[0], which
-  # will not be a union type.
   arg_name[num_args] = $2;
   sub (/;$/, "", arg_name[num_args]) # Get rid of the semi-colon
+  arg_type[num_args] = $1;
   num_args++;
   parse_phase = 3;
   print; next;
 }
 
-parse_phase == 5 && /^[ \t]*(auto |static )?const mach_msg_type_t/ {
+parse_phase == 5 && /^[ \t]*static const mach_msg_type_t/ {
   # The type check structure for an argument.
-  arg_check_name[num_checks] = $(NF - 2);
+  arg_check_name[num_checks] = $4;
   num_checks++;
   print; next;
 }
@@ -109,12 +93,6 @@ parse_phase == 5 && /^[ \t]*mig_external kern_return_t/ {
 }
 
 parse_phase == 5 && /^#if[ \t]TypeCheck/ {
-  # Keep going if we have not yet collected the type check structures.
-  if (num_checks == 0)
-    {
-      print; next;
-    }
-
   # The first args type checking statement; we need to insert our chunk of
   # code that bypasses all the type checks if this is an error return, after
   # which we're done until we get to the next function.  Handily, the size
@@ -122,15 +100,19 @@ parse_phase == 5 && /^#if[ \t]TypeCheck/ {
   # structure that we want to check for.
   print "\tif (In0P->Head.msgh_size == sizeof (Reply)";
   print "\t    && ! (In0P->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX)";
-  print "\t    && ! BAD_TYPECHECK(&In0P->" arg_type_code_name[0] ", &" arg_check_name[0] ")";
+  print "\t    && *(int *)&In0P->" arg_type_code_name[0] " == *(int *)&" arg_check_name[0];
   print "\t    && In0P->" arg_name[0] " != 0)";
   print "\t  /* Error return, only the error code argument is passed.  */";
   print "\t  {";
-  # Force the function user_function_name into a type that only takes the first
-  # two arguments.
+  # Force the function into a type that only takes the first two args, via
+  # the temp variable SFUN (is there another way to correctly do this cast?).
   # This is possibly bogus, but easier than supplying bogus values for all
   # the other args (we can't just pass 0 for them, as they might not be scalar).
-  print "\t    OutP->RetCode = (*(kern_return_t (*)(mach_port_t, kern_return_t)) " user_function_name ") (In0P->Head.msgh_request_port, In0P->" arg_name[0] ");";
+  printf ("\t    kern_return_t (*sfun)(mach_port_t");
+  for (i = 0; i < num_args; i++)
+    printf (", %s", arg_type[i]);
+  printf (") = %s;\n", user_function_name);
+  print "\t    OutP->RetCode = (*(kern_return_t (*)(mach_port_t, kern_return_t))sfun) (In0P->Head.msgh_request_port, In0P->" arg_name[0] ");";
   print "\t    return;";
   print "\t  }";
   print "";

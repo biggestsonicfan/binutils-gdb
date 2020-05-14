@@ -1,11 +1,11 @@
 /* m68hc11 & m68hc12 ELF support for BFD.
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,7 +15,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef _ELF_M68HC11_H
 #define _ELF_M68HC11_H
@@ -42,12 +42,6 @@ START_RELOC_NUMBERS (elf_m68hc11_reloc_type)
   RELOC_NUMBER (R_M68HC11_LO16, 12)
   RELOC_NUMBER (R_M68HC11_PAGE, 13)
 
-  RELOC_NUMBER (R_M68HC12_16B, 15)
-  RELOC_NUMBER (R_M68HC12_PCREL_9, 16)
-  RELOC_NUMBER (R_M68HC12_PCREL_10, 17)
-  RELOC_NUMBER (R_M68HC12_HI8XG, 18)
-  RELOC_NUMBER (R_M68HC12_LO8XG, 19)
-
      /* GNU extension for linker relaxation.
         Mark beginning of a jump instruction (any form).  */
   RELOC_NUMBER (R_M68HC11_RL_JUMP, 20)
@@ -70,38 +64,14 @@ END_RELOC_NUMBERS (R_M68HC11_max)
 /* Uses 68HC12 memory banks.  */
 #define E_M68HC12_BANKS 0x000000004
 
-/* XGATE ram offsetting.  */
-#define E_M68HC11_XGATE_RAMOFFSET     0x000000100
-
-/* Suppress warnings */
-#define E_M68HC11_NO_BANK_WARNING     0x000000200
-
-#define EF_M68HC11_MACH_MASK 0xF0
-#define EF_M68HC11_GENERIC   0x00 /* Generic 68HC12/backward compatibility.  */
-#define EF_M68HC12_MACH      0x10 /* 68HC12 microcontroller.  */
-#define EF_M68HCS12_MACH     0x20 /* 68HCS12 microcontroller.  */
-#define EF_M68HC11_MACH(mach) ((mach) & EF_M68HC11_MACH_MASK)
-
-/* True if we can merge machines.  A generic HC12 can work on any proc
-   but once we have specific code, merge is not possible.  */
-#define EF_M68HC11_CAN_MERGE_MACH(mach1, mach2) \
-  ((EF_M68HC11_MACH (mach1) == EF_M68HC11_MACH (mach2)) \
-   || (EF_M68HC11_MACH (mach1) == EF_M68HC11_GENERIC) \
-   || (EF_M68HC11_MACH (mach2) == EF_M68HC11_GENERIC))
-
-#define EF_M68HC11_MERGE_MACH(mach1, mach2) \
-  (((EF_M68HC11_MACH (mach1) == EF_M68HC11_MACH (mach2)) \
-    || (EF_M68HC11_MACH (mach1) == EF_M68HC11_GENERIC)) ? \
-      EF_M68HC11_MACH (mach2) : EF_M68HC11_MACH (mach1))
-
 
 /* Special values for the st_other field in the symbol table.  These
    are used for 68HC12 to identify far functions (must be called with
    'call' and returns with 'rtc').  */
-#define STO_M68HC12_FAR          0x80
+#define STO_M68HC12_FAR 0x80
 
 /* Identify interrupt handlers.  This is used by the debugger to
    correctly compute the stack frame.  */
-#define STO_M68HC12_INTERRUPT    0x40
+#define STO_M68HC12_INTERRUPT 0x40
      
 #endif

@@ -1,34 +1,47 @@
 /* MIPS Simulator definition.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
-This file is part of the MIPS sim.
+This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef SIM_MAIN_H
 #define SIM_MAIN_H
 
-/* MIPS uses an unusual format for floating point quiet NaNs.  */
-#define SIM_QUIET_NAN_NEGATED
+/* This simulator doesn't cache the Current Instruction Address */
+/* #define SIM_ENGINE_HALT_HOOK(SD, LAST_CPU, CIA) */
+/* #define SIM_ENGINE_RESUME_HOOK(SD, LAST_CPU, CIA) */
+
+#define SIM_HAVE_BIENDIAN
+
+
+/* hobble some common features for moment */
+#define WITH_WATCHPOINTS 1
+#define WITH_MODULO_MEMORY 1
+
 
 #define SIM_CORE_SIGNAL(SD,CPU,CIA,MAP,NR_BYTES,ADDR,TRANSFER,ERROR) \
 mips_core_signal ((SD), (CPU), (CIA), (MAP), (NR_BYTES), (ADDR), (TRANSFER), (ERROR))
 
 #include "sim-basics.h"
+
+typedef address_word sim_cia;
+
 #include "sim-base.h"
-#include "bfd.h"
+
 
 /* Deprecated macros and types for manipulating 64bit values.  Use
    ../common/sim-bits.h and ../common/sim-endian.h macros instead. */
@@ -47,20 +60,6 @@ typedef unsigned64 uword64;
 #define NOTHALFWORDVALUE(v) ((((((uword64)(v)>>16) == 0) && !((v) & ((unsigned)1 << 15))) || (((((uword64)(v)>>32) == 0xFFFFFFFF) && ((((uword64)(v)>>16) & 0xFFFF) == 0xFFFF)) && ((v) & ((unsigned)1 << 15)))) ? (1 == 0) : (1 == 1))
 
 
-typedef enum {
-  cp0_dmfc0,
-  cp0_dmtc0,
-  cp0_mfc0,
-  cp0_mtc0,
-  cp0_tlbr,
-  cp0_tlbwi,
-  cp0_tlbwr,
-  cp0_tlbp,
-  cp0_cache,
-  cp0_eret,
-  cp0_deret,
-  cp0_rfe
-} CP0_operation;
 
 /* Floating-point operations: */
 
@@ -260,6 +259,8 @@ struct _sim_cpu {
 
 
   /* The following are internal simulator state variables: */
+#define CIA_GET(CPU) ((CPU)->registers[PCIDX] + 0)
+#define CIA_SET(CPU,CIA) ((CPU)->registers[PCIDX] = (CIA))
   address_word dspc;  /* delay-slot PC */
 #define DSPC ((CPU)->dspc)
 
@@ -311,7 +312,7 @@ struct _sim_cpu {
    state. */
 
 #ifndef TM_MIPS_H
-#define LAST_EMBED_REGNUM (96)
+#define LAST_EMBED_REGNUM (89)
 #define NUM_REGS (LAST_EMBED_REGNUM + 1)
 
 #define FP0_REGNUM 38           /* Floating point register 0 (single float) */
@@ -347,52 +348,6 @@ struct _sim_cpu {
 #define Debug	(REGISTERS[86])
 #define DEPC	(REGISTERS[87])
 #define EPC	(REGISTERS[88])
-#define ACX	(REGISTERS[89])
-
-#define AC0LOIDX	(33)	/* Must be the same register as LO */
-#define AC0HIIDX	(34)	/* Must be the same register as HI */
-#define AC1LOIDX	(90)
-#define AC1HIIDX	(91)
-#define AC2LOIDX	(92)
-#define AC2HIIDX	(93)
-#define AC3LOIDX	(94)
-#define AC3HIIDX	(95)
-
-#define DSPLO(N)	(REGISTERS[DSPLO_REGNUM[N]])
-#define DSPHI(N)	(REGISTERS[DSPHI_REGNUM[N]])
-
-#define DSPCRIDX	(96)	/* DSP control register */
-#define DSPCR		(REGISTERS[DSPCRIDX])
-
-#define DSPCR_POS_SHIFT		(0)
-#define DSPCR_POS_MASK		(0x3f)
-#define DSPCR_POS_SMASK		(DSPCR_POS_MASK << DSPCR_POS_SHIFT)
-
-#define DSPCR_SCOUNT_SHIFT	(7)
-#define DSPCR_SCOUNT_MASK	(0x3f)
-#define DSPCR_SCOUNT_SMASK	(DSPCR_SCOUNT_MASK << DSPCR_SCOUNT_SHIFT)
-
-#define DSPCR_CARRY_SHIFT	(13)
-#define DSPCR_CARRY_MASK	(1)
-#define DSPCR_CARRY_SMASK	(DSPCR_CARRY_MASK << DSPCR_CARRY_SHIFT)
-#define DSPCR_CARRY		(1 << DSPCR_CARRY_SHIFT)
-
-#define DSPCR_EFI_SHIFT		(14)
-#define DSPCR_EFI_MASK		(1)
-#define DSPCR_EFI_SMASK		(DSPCR_EFI_MASK << DSPCR_EFI_SHIFT)
-#define DSPCR_EFI		(1 << DSPCR_EFI_MASK)
-
-#define DSPCR_OUFLAG_SHIFT	(16)
-#define DSPCR_OUFLAG_MASK	(0xff)
-#define DSPCR_OUFLAG_SMASK	(DSPCR_OUFLAG_MASK << DSPCR_OUFLAG_SHIFT)
-#define DSPCR_OUFLAG4		(1 << (DSPCR_OUFLAG_SHIFT + 4))
-#define DSPCR_OUFLAG5		(1 << (DSPCR_OUFLAG_SHIFT + 5))
-#define DSPCR_OUFLAG6		(1 << (DSPCR_OUFLAG_SHIFT + 6))
-#define DSPCR_OUFLAG7		(1 << (DSPCR_OUFLAG_SHIFT + 7))
-
-#define DSPCR_CCOND_SHIFT	(24)
-#define DSPCR_CCOND_MASK	(0xf)
-#define DSPCR_CCOND_SMASK	(DSPCR_CCOND_MASK << DSPCR_CCOND_SHIFT)
 
   /* All internal state modified by signal_exception() that may need to be
      rolled back for passing moment-of-exception image back to gdb. */
@@ -428,7 +383,7 @@ struct _sim_cpu {
 #define NR_COP0_GPR	32
   unsigned_word cop0_gpr[NR_COP0_GPR];
 #define COP0_GPR	((CPU)->cop0_gpr)
-#define COP0_BADVADDR	(COP0_GPR[8])
+#define COP0_BADVADDR ((unsigned32)(COP0_GPR[8]))
 
   /* While space is allocated for the floating point registers in the
      main registers array, they are stored separatly.  This is because
@@ -468,16 +423,18 @@ struct _sim_cpu {
   hilo_history lo_history;
 #define LOHISTORY (&(CPU)->lo_history)
 
+#define check_branch_bug() 
+#define mark_branch_bug(TARGET) 
+
+
 
   sim_cpu_base base;
 };
 
-extern void mips_sim_close (SIM_DESC sd, int quitting);
-#define SIM_CLOSE_HOOK(...) mips_sim_close (__VA_ARGS__)
 
 /* MIPS specific simulator watch config */
 
-void watch_options_install (SIM_DESC sd);
+void watch_options_install PARAMS ((SIM_DESC sd));
 
 struct swatch {
   sim_event *pc;
@@ -491,10 +448,13 @@ struct sim_state {
 
   struct swatch watch;
 
-  sim_cpu *cpu[MAX_NR_PROCESSORS];
+  sim_cpu cpu[MAX_NR_PROCESSORS];
+#if (WITH_SMP)
+#define STATE_CPU(sd,n) (&(sd)->cpu[n])
+#else
+#define STATE_CPU(sd,n) (&(sd)->cpu[0])
+#endif
 
-  /* microMIPS ISA mode.  */
-  int isa_mode;
 
   sim_state_base base;
 };
@@ -592,7 +552,7 @@ struct sim_state {
 /* Hardware configuration. Affects endianness of LoadMemory and
    StoreMemory and the endianness of Kernel and Supervisor mode
    execution. The value is 0 for little-endian; 1 for big-endian. */
-#define BigEndianMem    (CURRENT_TARGET_BYTE_ORDER == BFD_ENDIAN_BIG)
+#define BigEndianMem    (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
 /*(state & simBE) ? 1 : 0)*/
 
 /* ReverseEndian */
@@ -692,10 +652,10 @@ void signal_exception (SIM_DESC sd, sim_cpu *cpu, address_word cia, int exceptio
 /* XXX FIXME: For now, assume that FPU (cp1) is always usable.  */
 #define COP_Usable(coproc_num)		(coproc_num == 1)
 
-void cop_lw  (SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg, unsigned int memword);
-void cop_ld  (SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg, uword64 memword);
-unsigned int cop_sw (SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg);
-uword64 cop_sd (SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg);
+void cop_lw  PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg, unsigned int memword));
+void cop_ld  PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg, uword64 memword));
+unsigned int cop_sw PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg));
+uword64 cop_sd PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int coproc_num, int coproc_reg));
 
 #define COP_LW(coproc_num,coproc_reg,memword) \
 cop_lw (SD, CPU, cia, coproc_num, coproc_reg, memword)
@@ -707,12 +667,9 @@ cop_sw (SD, CPU, cia, coproc_num, coproc_reg)
 cop_sd (SD, CPU, cia, coproc_num, coproc_reg)
 
 
-void decode_coproc (SIM_DESC sd, sim_cpu *cpu, address_word cia,
-		    unsigned int instruction, int coprocnum, CP0_operation op,
-		    int rt, int rd, int sel);
-#define DecodeCoproc(instruction,coprocnum,op,rt,rd,sel) \
-  decode_coproc (SD, CPU, cia, (instruction), (coprocnum), (op), \
-		 (rt), (rd), (sel))
+void decode_coproc PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, unsigned int instruction));
+#define DecodeCoproc(instruction) \
+decode_coproc (SD, CPU, cia, (instruction))
 
 int sim_monitor (SIM_DESC sd, sim_cpu *cpu, address_word cia, unsigned int arg);
   
@@ -908,6 +865,12 @@ unsigned64 mdmx_shuffle (SIM_STATE, int, unsigned64, unsigned64);
 /* The following are generic to all versions of the MIPS architecture
    to date: */
 
+/* Memory Access Types (for CCA): */
+#define Uncached                (0)
+#define CachedNoncoherent       (1)
+#define CachedCoherent          (2)
+#define Cached                  (3)
+
 #define isINSTRUCTION   (1 == 0) /* FALSE */
 #define isDATA          (1 == 1) /* TRUE */
 #define isLOAD          (1 == 0) /* FALSE */
@@ -936,67 +899,49 @@ unsigned64 mdmx_shuffle (SIM_STATE, int, unsigned64, unsigned64);
 #define PSIZE (WITH_TARGET_ADDRESS_BITSIZE)
 
 
-INLINE_SIM_MAIN (void) load_memory (SIM_DESC sd, sim_cpu *cpu, address_word cia, uword64* memvalp, uword64* memval1p, int CCA, unsigned int AccessLength, address_word pAddr, address_word vAddr, int IorD);
-#define LoadMemory(memvalp,memval1p,AccessLength,pAddr,vAddr,IorD,raw) \
-load_memory (SD, CPU, cia, memvalp, memval1p, 0, AccessLength, pAddr, vAddr, IorD)
+INLINE_SIM_MAIN (int) address_translation PARAMS ((SIM_DESC sd, sim_cpu *, address_word cia, address_word vAddr, int IorD, int LorS, address_word *pAddr, int *CCA, int raw));
+#define AddressTranslation(vAddr,IorD,LorS,pAddr,CCA,host,raw) \
+address_translation (SD, CPU, cia, vAddr, IorD, LorS, pAddr, CCA, raw)
 
-INLINE_SIM_MAIN (void) store_memory (SIM_DESC sd, sim_cpu *cpu, address_word cia, int CCA, unsigned int AccessLength, uword64 MemElem, uword64 MemElem1, address_word pAddr, address_word vAddr);
-#define StoreMemory(AccessLength,MemElem,MemElem1,pAddr,vAddr,raw) \
-store_memory (SD, CPU, cia, 0, AccessLength, MemElem, MemElem1, pAddr, vAddr)
+INLINE_SIM_MAIN (void) load_memory PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, uword64* memvalp, uword64* memval1p, int CCA, unsigned int AccessLength, address_word pAddr, address_word vAddr, int IorD));
+#define LoadMemory(memvalp,memval1p,CCA,AccessLength,pAddr,vAddr,IorD,raw) \
+load_memory (SD, CPU, cia, memvalp, memval1p, CCA, AccessLength, pAddr, vAddr, IorD)
 
-INLINE_SIM_MAIN (void) cache_op (SIM_DESC sd, sim_cpu *cpu, address_word cia, int op, address_word pAddr, address_word vAddr, unsigned int instruction);
+INLINE_SIM_MAIN (void) store_memory PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int CCA, unsigned int AccessLength, uword64 MemElem, uword64 MemElem1, address_word pAddr, address_word vAddr));
+#define StoreMemory(CCA,AccessLength,MemElem,MemElem1,pAddr,vAddr,raw) \
+store_memory (SD, CPU, cia, CCA, AccessLength, MemElem, MemElem1, pAddr, vAddr)
+
+INLINE_SIM_MAIN (void) cache_op PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int op, address_word pAddr, address_word vAddr, unsigned int instruction));
 #define CacheOp(op,pAddr,vAddr,instruction) \
 cache_op (SD, CPU, cia, op, pAddr, vAddr, instruction)
 
-INLINE_SIM_MAIN (void) sync_operation (SIM_DESC sd, sim_cpu *cpu, address_word cia, int stype);
+INLINE_SIM_MAIN (void) sync_operation PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int stype));
 #define SyncOperation(stype) \
 sync_operation (SD, CPU, cia, (stype))
+
+INLINE_SIM_MAIN (void) prefetch PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, int CCA, address_word pAddr, address_word vAddr, int DATA, int hint));
+#define Prefetch(CCA,pAddr,vAddr,DATA,hint) \
+prefetch (SD, CPU, cia, CCA, pAddr, vAddr, DATA, hint)
 
 void unpredictable_action (sim_cpu *cpu, address_word cia);
 #define NotWordValue(val)	not_word_value (SD_, (val))
 #define Unpredictable()		unpredictable (SD_)
 #define UnpredictableResult()	/* For now, do nothing.  */
 
-INLINE_SIM_MAIN (unsigned32) ifetch32 (SIM_DESC sd, sim_cpu *cpu, address_word cia, address_word vaddr);
+INLINE_SIM_MAIN (unsigned32) ifetch32 PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, address_word vaddr));
 #define IMEM32(CIA) ifetch32 (SD, CPU, (CIA), (CIA))
-INLINE_SIM_MAIN (unsigned16) ifetch16 (SIM_DESC sd, sim_cpu *cpu, address_word cia, address_word vaddr);
+INLINE_SIM_MAIN (unsigned16) ifetch16 PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia, address_word vaddr));
 #define IMEM16(CIA) ifetch16 (SD, CPU, (CIA), ((CIA) & ~1))
 #define IMEM16_IMMED(CIA,NR) ifetch16 (SD, CPU, (CIA), ((CIA) & ~1) + 2 * (NR))
-#define IMEM32_MICROMIPS(CIA) \
-  (ifetch16 (SD, CPU, (CIA), (CIA)) << 16 | ifetch16 (SD, CPU, (CIA + 2), \
-						      (CIA + 2)))
-#define IMEM16_MICROMIPS(CIA) ifetch16 (SD, CPU, (CIA), ((CIA)))
 
-#define MICROMIPS_MINOR_OPCODE(INSN) ((INSN & 0x1C00) >> 10)
-
-#define MICROMIPS_DELAYSLOT_SIZE_ANY 0
-#define MICROMIPS_DELAYSLOT_SIZE_16 2
-#define MICROMIPS_DELAYSLOT_SIZE_32 4
-
-extern int isa_mode;
-
-#define ISA_MODE_MIPS32 0
-#define ISA_MODE_MICROMIPS 1
-
-address_word micromips_instruction_decode (SIM_DESC sd, sim_cpu * cpu,
-					   address_word cia,
-					   int instruction_size);
-
-#if WITH_TRACE_ANY_P
-void dotrace (SIM_DESC sd, sim_cpu *cpu, FILE *tracefh, int type, SIM_ADDR address, int width, char *comment, ...);
+void dotrace PARAMS ((SIM_DESC sd, sim_cpu *cpu, FILE *tracefh, int type, SIM_ADDR address, int width, char *comment, ...));
 extern FILE *tracefh;
-#else
-#define dotrace(sd, cpu, tracefh, type, address, width, comment, ...)
-#endif
 
-extern int DSPLO_REGNUM[4];
-extern int DSPHI_REGNUM[4];
-
-INLINE_SIM_MAIN (void) pending_tick (SIM_DESC sd, sim_cpu *cpu, address_word cia);
+INLINE_SIM_MAIN (void) pending_tick PARAMS ((SIM_DESC sd, sim_cpu *cpu, address_word cia));
 extern SIM_CORE_SIGNAL_FN mips_core_signal;
 
-char* pr_addr (SIM_ADDR addr);
-char* pr_uword64 (uword64 addr);
+char* pr_addr PARAMS ((SIM_ADDR addr));
+char* pr_uword64 PARAMS ((uword64 addr));
 
 
 #define GPR_CLEAR(N) do { GPR_SET((N),0); } while (0)
@@ -1005,24 +950,6 @@ void mips_cpu_exception_trigger(SIM_DESC sd, sim_cpu* cpu, address_word pc);
 void mips_cpu_exception_suspend(SIM_DESC sd, sim_cpu* cpu, int exception);
 void mips_cpu_exception_resume(SIM_DESC sd, sim_cpu* cpu, int exception);
 
-#ifdef MIPS_MACH_MULTI
-extern int mips_mach_multi(SIM_DESC sd);
-#define MIPS_MACH(SD)	mips_mach_multi(SD)
-#else
-#define	MIPS_MACH(SD)	MIPS_MACH_DEFAULT
-#endif
-
-/* Macros for determining whether a MIPS IV or MIPS V part is subject
-   to the hi/lo restrictions described in mips.igen.  */
-
-#define MIPS_MACH_HAS_MT_HILO_HAZARD(SD) \
-  (MIPS_MACH (SD) != bfd_mach_mips5500)
-
-#define MIPS_MACH_HAS_MULT_HILO_HAZARD(SD) \
-  (MIPS_MACH (SD) != bfd_mach_mips5500)
-
-#define MIPS_MACH_HAS_DIV_HILO_HAZARD(SD) \
-  (MIPS_MACH (SD) != bfd_mach_mips5500)
 
 #if H_REVEALS_MODULE_P (SIM_MAIN_INLINE)
 #include "sim-main.c"

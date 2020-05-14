@@ -4,12 +4,12 @@
 .*:     file format elf64-mmix
 
 SYMBOL TABLE:
-0+ l    d  \.text	0+ (|\.text)
-0+ l    d  \.data	0+ (|\.data)
-0+ l    d  \.bss	0+ (|\.bss)
+0+ l    d  \.text	0+ 
+0+ l    d  \.data	0+ 
+0+ l    d  \.bss	0+ 
 0+4 l       \.text	0+ w4
 0+10 l       \.text	0+ w2
-0+ l    d  \.MMIX\.reg_contents	0+ (|\.MMIX\.reg_contents)
+0+ l    d  \.MMIX\.reg_contents	0+ 
 0+c  w      \.text	0+ w1
 0+8  w      \.text	0+ w3
 
@@ -29,5 +29,6 @@ OFFSET           TYPE              VALUE
 Contents of section \.text:
  0000 fd000000 232a0000 232b0000 232c000c  .*
  0010 232d0000                             .*
+Contents of section \.data:
 Contents of section \.MMIX\.reg_contents:
  0000 00000000 00000000 00000000 00000000  .*

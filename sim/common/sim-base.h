@@ -1,23 +1,22 @@
 /* Simulator pseudo baseclass.
-
-   Copyright 1997-2020 Free Software Foundation, Inc.
-
+   Copyright (C) 1997-1998 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 
 /* Simulator state pseudo baseclass.
@@ -28,12 +27,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
    information), include ``sim-base.h'':
 
      #include "sim-basics.h"
+     typedef address_word sim_cia;
      /-* If `sim_cia' is not an integral value (e.g. a struct), define
          CIA_ADDR to return the integral value.  *-/
-     /-* typedef struct {...} sim_cia; *-/
      /-* #define CIA_ADDR(cia) (...) *-/
      #include "sim-base.h"
-
+   
    finally, two data types `struct _sim_cpu' and `struct sim_state'
    are defined:
 
@@ -43,7 +42,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
      };
 
      struct sim_state {
-       sim_cpu *cpu[MAX_NR_PROCESSORS];
+       sim_cpu cpu[MAX_NR_PROCESSORS];
+     #if (WITH_SMP)
+     #define STATE_CPU(sd,n) (&(sd)->cpu[n])
+     #else
+     #define STATE_CPU(sd,n) (&(sd)->cpu[0])
+     #endif
        ... simulator specific members ...
        sim_state_base base;
      };
@@ -54,10 +58,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #ifndef SIM_BASE_H
 #define SIM_BASE_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* Pre-declare certain types. */
 
@@ -70,38 +70,51 @@ extern "C" {
    (e.g. for delay slot handling).  */
 #ifndef CIA_ADDR
 #define CIA_ADDR(cia) (cia)
-typedef address_word sim_cia;
 #endif
 #ifndef INVALID_INSTRUCTION_ADDRESS
 #define INVALID_INSTRUCTION_ADDRESS ((address_word)0 - 1)
 #endif
 
-/* TODO: Probably should just delete SIM_CPU.  */
-typedef struct _sim_cpu SIM_CPU;
 typedef struct _sim_cpu sim_cpu;
 
 #include "sim-module.h"
 
-#include "sim-arange.h"
 #include "sim-trace.h"
 #include "sim-core.h"
 #include "sim-events.h"
 #include "sim-profile.h"
+#ifdef SIM_HAVE_MODEL
 #include "sim-model.h"
+#endif
 #include "sim-io.h"
 #include "sim-engine.h"
 #include "sim-watch.h"
 #include "sim-memopt.h"
+#ifdef SIM_HAVE_BREAKPOINTS
+#include "sim-break.h"
+#endif
 #include "sim-cpu.h"
-#include "sim-assert.h"
+
+/* Global pointer to current state while sim_resume is running.
+   On a machine with lots of registers, it might be possible to reserve
+   one of them for current_state.  However on a machine with few registers
+   current_state can't permanently live in one and indirecting through it
+   will be slower [in which case one can have sim_resume set globals from
+   current_state for faster access].
+   If CURRENT_STATE_REG is defined, it means current_state is living in
+   a global register.  */
 
 
-/* We require all sims to dynamically allocate cpus.  See comment up top about
-   struct sim_state.  */
-#if (WITH_SMP)
-# define STATE_CPU(sd, n) ((sd)->cpu[n])
+#ifdef CURRENT_STATE_REG
+/* FIXME: wip */
 #else
-# define STATE_CPU(sd, n) ((sd)->cpu[0])
+extern struct sim_state *current_state;
+#endif
+
+
+/* The simulator may provide different (and faster) definition.  */
+#ifndef CURRENT_STATE
+#define CURRENT_STATE current_state
 #endif
 
 
@@ -159,27 +172,23 @@ typedef struct {
 #define STATE_PROG_ARGV(sd) ((sd)->base.prog_argv)
 
   /* The program's bfd.  */
-  struct bfd *prog_bfd;
+  struct _bfd *prog_bfd;
 #define STATE_PROG_BFD(sd) ((sd)->base.prog_bfd)
 
   /* Symbol table for prog_bfd */
-  struct bfd_symbol **prog_syms;
+  struct symbol_cache_entry **prog_syms;
 #define STATE_PROG_SYMS(sd) ((sd)->base.prog_syms)
 
-  /* Number of prog_syms symbols.  */
-  long prog_syms_count;
-#define STATE_PROG_SYMS_COUNT(sd) ((sd)->base.prog_syms_count)
-
   /* The program's text section.  */
-  struct bfd_section *text_section;
+  struct sec *text_section;
   /* Starting and ending text section addresses from the bfd.  */
-  bfd_vma text_start, text_end;
+  SIM_ADDR text_start, text_end;
 #define STATE_TEXT_SECTION(sd) ((sd)->base.text_section)
 #define STATE_TEXT_START(sd) ((sd)->base.text_start)
 #define STATE_TEXT_END(sd) ((sd)->base.text_end)
 
   /* Start address, set when the program is loaded from the bfd.  */
-  bfd_vma start_addr;
+  SIM_ADDR start_addr;
 #define STATE_START_ADDR(sd) ((sd)->base.start_addr)
 
   /* Size of the simulator's cache, if any.
@@ -187,6 +196,16 @@ typedef struct {
      to process instructions.  */
   unsigned int scache_size;
 #define STATE_SCACHE_SIZE(sd) ((sd)->base.scache_size)
+
+  /* FIXME: Move to top level sim_state struct (as some struct)?  */
+#ifdef SIM_HAVE_FLATMEM
+  unsigned int mem_size;
+#define STATE_MEM_SIZE(sd) ((sd)->base.mem_size)
+  unsigned int mem_base;
+#define STATE_MEM_BASE(sd) ((sd)->base.mem_base)
+  unsigned char *memory;
+#define STATE_MEMORY(sd) ((sd)->base.memory)
+#endif
 
   /* core memory bus */
 #define STATE_CORE(sd) (&(sd)->base.core)
@@ -208,6 +227,10 @@ typedef struct {
   sim_watchpoints watchpoints;
 #define STATE_WATCHPOINTS(sd) (&(sd)->base.watchpoints)
 
+  /* Pointer to list of breakpoints */
+  struct sim_breakpoint *breakpoints;
+#define STATE_BREAKPOINTS(sd) ((sd)->base.breakpoints)
+
 #if WITH_HW
   struct sim_hw *hw;
 #define STATE_HW(sd) ((sd)->base.hw)
@@ -227,11 +250,7 @@ typedef struct {
 } sim_state_base;
 
 /* Functions for allocating/freeing a sim_state.  */
-SIM_DESC sim_state_alloc (SIM_OPEN_KIND kind, host_callback *callback);
-void sim_state_free (SIM_DESC);
-
-#ifdef __cplusplus
-}
-#endif
+SIM_DESC sim_state_alloc PARAMS ((SIM_OPEN_KIND kind, host_callback *callback));
+void sim_state_free PARAMS ((SIM_DESC));
 
 #endif /* SIM_BASE_H */

@@ -1,12 +1,12 @@
 /* sym_ids.c
 
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright 2000, 2001, 2002 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -16,53 +16,46 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "gprof.h"
 #include "libiberty.h"
 #include "safe-ctype.h"
+#include "gprof.h"
 #include "search_list.h"
 #include "source.h"
 #include "symtab.h"
 #include "cg_arcs.h"
 #include "sym_ids.h"
-#include "corefile.h"
-
-struct match
-  {
-    int prev_index;	/* Index of prev match.  */
-    Sym *prev_match;	/* Previous match.  */
-    Sym *first_match;	/* Chain of all matches.  */
-    Sym sym;
-  };
 
 struct sym_id
   {
     struct sym_id *next;
     char *spec;			/* Parsing modifies this.  */
     Table_Id which_table;
-    bfd_boolean has_right;
+    boolean has_right;
 
-    struct match left, right;
-  };
+    struct match
+      {
+	int prev_index;		/* Index of prev match.  */
+	Sym *prev_match;	/* Previous match.  */
+	Sym *first_match;	/* Chain of all matches.  */
+	Sym sym;
+      }
+    left, right;
+  }
+ *id_list;
 
-static struct sym_id  *id_list;
-
-static void parse_spec
-  (char *, Sym *);
-static void parse_id
-  (struct sym_id *);
-static bfd_boolean match
-  (Sym *, Sym *);
-static void extend_match
-  (struct match *, Sym *, Sym_Table *, bfd_boolean);
+static void parse_spec PARAMS ((char *, Sym *));
+static void parse_id PARAMS ((struct sym_id *));
+static boolean match PARAMS ((Sym *, Sym *));
+static void extend_match PARAMS ((struct match *, Sym *, Sym_Table *, boolean));
 
 
 Sym_Table syms[NUM_TABLES];
 
 #ifdef DEBUG
-static const char *table_name[] =
+const char *table_name[] =
 {
   "INCL_GRAPH", "EXCL_GRAPH",
   "INCL_ARCS", "EXCL_ARCS",
@@ -87,7 +80,9 @@ static Source_File non_existent_file =
 
 
 void
-sym_id_add (const char *spec, Table_Id which_table)
+sym_id_add (spec, which_table)
+     const char *spec;
+     Table_Id which_table;
 {
   struct sym_id *id;
   int len = strlen (spec);
@@ -115,7 +110,9 @@ sym_id_add (const char *spec, Table_Id which_table)
    FILENAME not containing a dot can be specified by FILENAME.  */
 
 static void
-parse_spec (char *spec, Sym *sym)
+parse_spec (spec, sym)
+     char *spec;
+     Sym *sym;
 {
   char *colon;
 
@@ -170,7 +167,8 @@ parse_spec (char *spec, Sym *sym)
    by parse_spec().  */
 
 static void
-parse_id (struct sym_id *id)
+parse_id (id)
+     struct sym_id *id;
 {
   char *slash;
 
@@ -181,7 +179,7 @@ parse_id (struct sym_id *id)
     {
       parse_spec (slash + 1, &id->right.sym);
       *slash = '\0';
-      id->has_right = TRUE;
+      id->has_right = true;
     }
   parse_spec (id->spec, &id->left.sym);
 
@@ -218,27 +216,26 @@ parse_id (struct sym_id *id)
 
 /* Return TRUE iff PATTERN matches SYM.  */
 
-static bfd_boolean
-match (Sym *pattern, Sym *sym)
+static boolean
+match (pattern, sym)
+     Sym *pattern;
+     Sym *sym;
 {
-  if (pattern->file && pattern->file != sym->file)
-    return FALSE;
-  if (pattern->line_num && pattern->line_num != sym->line_num)
-    return FALSE;
-  if (pattern->name)
-    {
-      const char *sym_name = sym->name;
-      if (*sym_name && bfd_get_symbol_leading_char (core_bfd) == *sym_name)
-	sym_name++;
-      if (strcmp (pattern->name, sym_name) != 0)
-	return FALSE;
-    }
-  return TRUE;
+  return (pattern->file ? pattern->file == sym->file : true)
+    && (pattern->line_num ? pattern->line_num == sym->line_num : true)
+    && (pattern->name
+	? strcmp (pattern->name,
+		  sym->name+(discard_underscores && sym->name[0] == '_')) == 0
+	: true);
 }
 
 
 static void
-extend_match (struct match *m, Sym *sym, Sym_Table *tab, bfd_boolean second_pass)
+extend_match (m, sym, tab, second_pass)
+     struct match *m;
+     Sym *sym;
+     Sym_Table *tab;
+     boolean second_pass;
 {
   if (m->prev_match != sym - 1)
     {
@@ -273,7 +270,7 @@ extend_match (struct match *m, Sym *sym, Sym_Table *tab, bfd_boolean second_pass
    requests---you get what you ask for!  */
 
 void
-sym_id_parse (void)
+sym_id_parse ()
 {
   Sym *sym, *left, *right;
   struct sym_id *id;
@@ -289,10 +286,10 @@ sym_id_parse (void)
       for (id = id_list; id; id = id->next)
 	{
 	  if (match (&id->left.sym, sym))
-	    extend_match (&id->left, sym, &syms[id->which_table], FALSE);
+	    extend_match (&id->left, sym, &syms[id->which_table], false);
 
 	  if (id->has_right && match (&id->right.sym, sym))
-	    extend_match (&id->right, sym, &right_ids, FALSE);
+	    extend_match (&id->right, sym, &right_ids, false);
 	}
     }
 
@@ -320,10 +317,10 @@ sym_id_parse (void)
       for (id = id_list; id; id = id->next)
 	{
 	  if (match (&id->left.sym, sym))
-	    extend_match (&id->left, sym, &syms[id->which_table], TRUE);
+	    extend_match (&id->left, sym, &syms[id->which_table], true);
 
 	  if (id->has_right && match (&id->right.sym, sym))
-	    extend_match (&id->right, sym, &right_ids, TRUE);
+	    extend_match (&id->right, sym, &right_ids, true);
 	}
     }
 
@@ -371,8 +368,11 @@ sym_id_parse (void)
    time requesting -k a/b.  Fortunately, those symbol tables don't get
    very big (the user has to type them!), so a linear search is probably
    tolerable.  */
-bfd_boolean
-sym_id_arc_is_present (Sym_Table *sym_tab, Sym *from, Sym *to)
+boolean
+sym_id_arc_is_present (sym_tab, from, to)
+     Sym_Table *sym_tab;
+     Sym *from;
+     Sym *to;
 {
   Sym *sym;
 
@@ -380,8 +380,8 @@ sym_id_arc_is_present (Sym_Table *sym_tab, Sym *from, Sym *to)
     {
       if (from->addr >= sym->addr && from->addr <= sym->end_addr
 	  && arc_lookup (sym, to))
-	return TRUE;
+	return true;
     }
 
-  return FALSE;
+  return false;
 }

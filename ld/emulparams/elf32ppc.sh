@@ -1,30 +1,38 @@
 # If you change this file, please also look at files which source this one:
-# elf32lppcnto.sh elf32lppc.sh elf32ppclinux.sh elf32ppcnto.sh
-# elf32ppcsim.sh
+# elf32lppc.sh elf32ppclinux.sh elf32ppcsim.sh
 
-source_sh ${srcdir}/emulparams/elf32ppccommon.sh
-source_sh ${srcdir}/emulparams/plt_unwind.sh
-# Yes, we want duplicate .got and .plt sections.  The linker chooses the
-# appropriate one magically in ppc_after_open
-DATA_GOT=
-SDATA_GOT=
-SEPARATE_GOTPLT=0
+TEMPLATE_NAME=elf32
+GENERATE_SHLIB_SCRIPT=yes
+SCRIPT_NAME=elf
+OUTPUT_FORMAT="elf32-powerpc"
+TEXT_START_ADDR=0x01800000
+MAXPAGESIZE=0x10000
+ARCH=powerpc
+MACHINE=
 BSS_PLT=
-GOT=".got          ${RELOCATING-0} : SPECIAL { *(.got) }"
-GOTPLT=".plt          ${RELOCATING-0} : SPECIAL { *(.plt) }"
-PLT=".plt          ${RELOCATING-0} : SPECIAL { *(.plt) }
-  .iplt         ${RELOCATING-0} : { *(.iplt) }"
-OTHER_TEXT_SECTIONS="*(.glink)"
-OTHER_GOT_RELOC_SECTIONS="
-  .rela.branch_lt	${RELOCATING-0} : { *(.rela.branch_lt) }"
-OTHER_RELRO_SECTIONS_2="
-  .branch_lt	${RELOCATING-0} :${RELOCATING+ ALIGN(4)} { *(.branch_lt) }"
-EXTRA_EM_FILE=ppc32elf
-if grep -q 'ld_elf32_spu_emulation' ldemul-list.h; then
-# crt1.o defines data_start and __data_start.  Keep them first.
-# Next put all the .data.spehandle sections, with a trailing zero word.
-  DATA_START_SYMBOLS="${RELOCATING+*crt1.o(.data .data.* .gnu.linkonce.d.*)
-    PROVIDE (__spe_handle = .);
-    *(.data.spehandle)
-    . += 4 * (DEFINED (__spe_handle) || . != 0);}"
+EXECUTABLE_SYMBOLS='PROVIDE (__stack = 0); PROVIDE (___stack = 0);'
+OTHER_BSS_END_SYMBOLS='__end = .;'
+OTHER_READWRITE_SECTIONS="
+  .fixup        ${RELOCATING-0} : { *(.fixup) }
+  .got1         ${RELOCATING-0} : { *(.got1) }
+  .got2         ${RELOCATING-0} : { *(.got2) }
+"
+
+# Treat a host that matches the target with the possible exception of "64"
+# in the name as if it were native.
+if test `echo "$host" | sed -e s/64//` = `echo "$target" | sed -e s/64//`; then
+    case " $EMULATION_LIBPATH " in
+      *" ${EMULATION_NAME} "*)
+	LIB_PATH=${libdir}
+	for lib in ${NATIVE_LIB_DIRS}; do
+	  case :${LIB_PATH}: in
+	    *:${lib}:*) ;;
+	    *) LIB_PATH=${LIB_PATH}:${lib} ;;
+	  esac
+	done
+	# Look for 64 bit target libraries in /lib64, /usr/lib64 etc., first.
+    	case "$EMULATION_NAME" in
+    	  *64*) LIB_PATH=`echo ${LIB_PATH}: | sed -e s,:,64:,g`$LIB_PATH
+    	esac
+    esac
 fi

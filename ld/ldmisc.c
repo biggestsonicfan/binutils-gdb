@@ -1,231 +1,94 @@
 /* ldmisc.c
-   Copyright (C) 1991-2020 Free Software Foundation, Inc.
+   Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+   2000, 2002
+   Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support.
 
-   This file is part of the GNU Binutils.
+This file is part of GLD, the Gnu Linker.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+GLD is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+GLD is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with GLD; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
-#include "bfdlink.h"
+#include "sysdep.h"
 #include "libiberty.h"
-#include "ctf-api.h"
-#include "safe-ctype.h"
-#include "filenames.h"
 #include "demangle.h"
+
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
+
 #include "ld.h"
 #include "ldmisc.h"
 #include "ldexp.h"
 #include "ldlang.h"
-#include <ldgram.h>
+#include "ldgram.h"
 #include "ldlex.h"
 #include "ldmain.h"
 #include "ldfile.h"
 
+static void vfinfo PARAMS ((FILE *, const char *, va_list));
+
 /*
  %% literal %
+ %F error is fatal
+ %P print program name
+ %S print script file and linenumber
+ %E current bfd error or errno
+ %I filename from a lang_input_statement_type
+ %B filename from a bfd
+ %T symbol name
+ %X no object output, fail return
+ %V hex bfd_vma
+ %v hex bfd_vma, no leading zeros
+ %W hex bfd_vma with 0x with no leading zeros taking up 8 spaces
  %C clever filename:linenumber with function
  %D like %C, but no function name
- %E current bfd error or errno
- %F error is fatal
  %G like %D, but only function name
- %H like %C but in addition emit section+offset
- %P print program name
- %V hex bfd_vma
- %W hex bfd_vma with 0x with no leading zeros taking up 8 spaces
- %X no object output, fail return
- %d integer, like printf
- %ld long, like printf
- %lu unsigned long, like printf
- %p native (host) void* pointer, like printf
- %pA section name from a section
- %pB filename from a bfd
- %pI filename from a lang_input_statement_type
- %pR info about a relent
- %pS print script file and linenumber from etree_type.
- %pT symbol name
+ %R info about a relent
  %s arbitrary string, like printf
+ %d integer, like printf
  %u integer, like printf
- %v hex bfd_vma, no leading zeros
 */
 
-void
-vfinfo (FILE *fp, const char *fmt, va_list ap, bfd_boolean is_warning)
+static void
+vfinfo (fp, fmt, arg)
+     FILE *fp;
+     const char *fmt;
+     va_list arg;
 {
-  bfd_boolean fatal = FALSE;
-  const char *scan;
-  int arg_type;
-  unsigned int arg_count = 0;
-  unsigned int arg_no;
-  union vfinfo_args
-  {
-    int i;
-    long l;
-    void *p;
-    bfd_vma v;
-    struct {
-      bfd *abfd;
-      asection *sec;
-      bfd_vma off;
-    } reladdr;
-    enum
-      {
-	Bad,
-	Int,
-	Long,
-	Ptr,
-	Vma,
-	RelAddr
-      } type;
-  } args[9];
+  boolean fatal = false;
 
-  for (arg_no = 0; arg_no < sizeof (args) / sizeof (args[0]); arg_no++)
-    args[arg_no].type = Bad;
-
-  arg_count = 0;
-  scan = fmt;
-  while (*scan != '\0')
-    {
-      while (*scan != '%' && *scan != '\0')
-	scan++;
-
-      if (*scan == '%')
-	{
-	  scan++;
-
-	  arg_no = arg_count;
-	  if (*scan != '0' && ISDIGIT (*scan) && scan[1] == '$')
-	    {
-	      arg_no = *scan - '1';
-	      scan += 2;
-	    }
-
-	  arg_type = Bad;
-	  switch (*scan++)
-	    {
-	    case '\0':
-	      --scan;
-	      break;
-
-	    case 'V':
-	    case 'v':
-	    case 'W':
-	      arg_type = Vma;
-	      break;
-
-	    case 's':
-	      arg_type = Ptr;
-	      break;
-
-	    case 'p':
-	      if (*scan == 'A' || *scan == 'B' || *scan == 'I'
-		  || *scan == 'R' || *scan == 'S' || *scan ==  'T')
-		scan++;
-	      arg_type = Ptr;
-	      break;
-
-	    case 'C':
-	    case 'D':
-	    case 'G':
-	    case 'H':
-	      arg_type = RelAddr;
-	      break;
-
-	    case 'd':
-	    case 'u':
-	      arg_type = Int;
-	      break;
-
-	    case 'l':
-	      if (*scan == 'd' || *scan == 'u')
-		{
-		  ++scan;
-		  arg_type = Long;
-		}
-	      break;
-
-	    default:
-	      break;
-	    }
-	  if (arg_type != Bad)
-	    {
-	      if (arg_no >= sizeof (args) / sizeof (args[0]))
-		abort ();
-	      args[arg_no].type = arg_type;
-	      ++arg_count;
-	    }
-	}
-    }
-
-  for (arg_no = 0; arg_no < arg_count; arg_no++)
-    {
-      switch (args[arg_no].type)
-	{
-	case Int:
-	  args[arg_no].i = va_arg (ap, int);
-	  break;
-	case Long:
-	  args[arg_no].l = va_arg (ap, long);
-	  break;
-	case Ptr:
-	  args[arg_no].p = va_arg (ap, void *);
-	  break;
-	case Vma:
-	  args[arg_no].v = va_arg (ap, bfd_vma);
-	  break;
-	case RelAddr:
-	  args[arg_no].reladdr.abfd = va_arg (ap, bfd *);
-	  args[arg_no].reladdr.sec = va_arg (ap, asection *);
-	  args[arg_no].reladdr.off = va_arg (ap, bfd_vma);
-	  break;
-	default:
-	  abort ();
-	}
-    }
-
-  arg_count = 0;
   while (*fmt != '\0')
     {
-      const char *str = fmt;
       while (*fmt != '%' && *fmt != '\0')
-	fmt++;
-      if (fmt != str)
-	if (fwrite (str, 1, fmt - str, fp))
-	  {
-	    /* Ignore.  */
-	  }
+	{
+	  putc (*fmt, fp);
+	  fmt++;
+	}
 
       if (*fmt == '%')
 	{
 	  fmt++;
-
-	  arg_no = arg_count;
-	  if (*fmt != '0' && ISDIGIT (*fmt) && fmt[1] == '$')
-	    {
-	      arg_no = *fmt - '1';
-	      fmt += 2;
-	    }
-
 	  switch (*fmt++)
 	    {
-	    case '\0':
-	      --fmt;
-	      /* Fall through.  */
+	    default:
+	      fprintf (fp, "%%%c", fmt[-1]);
+	      break;
 
 	    case '%':
 	      /* literal % */
@@ -234,14 +97,13 @@ vfinfo (FILE *fp, const char *fmt, va_list ap, bfd_boolean is_warning)
 
 	    case 'X':
 	      /* no object output, fail return */
-	      config.make_executable = FALSE;
+	      config.make_executable = false;
 	      break;
 
 	    case 'V':
 	      /* hex bfd_vma */
 	      {
-		bfd_vma value = args[arg_no].v;
-		++arg_count;
+		bfd_vma value = va_arg (arg, bfd_vma);
 		fprintf_vma (fp, value);
 	      }
 	      break;
@@ -251,8 +113,7 @@ vfinfo (FILE *fp, const char *fmt, va_list ap, bfd_boolean is_warning)
 	      {
 		char buf[100];
 		char *p = buf;
-		bfd_vma value = args[arg_no].v;
-		++arg_count;
+		bfd_vma value = va_arg (arg, bfd_vma);
 		sprintf_vma (p, value);
 		while (*p == '0')
 		  p++;
@@ -264,15 +125,14 @@ vfinfo (FILE *fp, const char *fmt, va_list ap, bfd_boolean is_warning)
 
 	    case 'W':
 	      /* hex bfd_vma with 0x with no leading zeroes taking up
-		 8 spaces.  */
+                 8 spaces.  */
 	      {
 		char buf[100];
 		bfd_vma value;
 		char *p;
 		int len;
 
-		value = args[arg_no].v;
-		++arg_count;
+		value = va_arg (arg, bfd_vma);
 		sprintf_vma (buf, value);
 		for (p = buf; *p == '0'; ++p)
 		  ;
@@ -288,9 +148,41 @@ vfinfo (FILE *fp, const char *fmt, va_list ap, bfd_boolean is_warning)
 	      }
 	      break;
 
+	    case 'T':
+	      /* Symbol name.  */
+	      {
+		const char *name = va_arg (arg, const char *);
+
+		if (name == (const char *) NULL || *name == 0)
+		  fprintf (fp, _("no symbol"));
+		else if (! demangling)
+		  fprintf (fp, "%s", name);
+		else
+		  {
+		    char *demangled;
+
+		    demangled = demangle (name);
+		    fprintf (fp, "%s", demangled);
+		    free (demangled);
+		  }
+	      }
+	      break;
+
+	    case 'B':
+	      /* filename from a bfd */
+	      {
+		bfd *abfd = va_arg (arg, bfd *);
+		if (abfd->my_archive)
+		  fprintf (fp, "%s(%s)", abfd->my_archive->filename,
+			   abfd->filename);
+		else
+		  fprintf (fp, "%s", abfd->filename);
+	      }
+	      break;
+
 	    case 'F':
 	      /* Error is fatal.  */
-	      fatal = TRUE;
+	      fatal = true;
 	      break;
 
 	    case 'P':
@@ -303,111 +195,153 @@ vfinfo (FILE *fp, const char *fmt, va_list ap, bfd_boolean is_warning)
 	      fprintf (fp, "%s", bfd_errmsg (bfd_get_error ()));
 	      break;
 
+	    case 'I':
+	      /* filename from a lang_input_statement_type */
+	      {
+		lang_input_statement_type *i;
+
+		i = va_arg (arg, lang_input_statement_type *);
+		if (bfd_my_archive (i->the_bfd) != NULL)
+		  fprintf (fp, "(%s)",
+			   bfd_get_filename (bfd_my_archive (i->the_bfd)));
+		fprintf (fp, "%s", i->local_sym_name);
+		if (bfd_my_archive (i->the_bfd) == NULL
+		    && strcmp (i->local_sym_name, i->filename) != 0)
+		  fprintf (fp, " (%s)", i->filename);
+	      }
+	      break;
+
+	    case 'S':
+	      /* Print script file and linenumber.  */
+	      if (parsing_defsym)
+		fprintf (fp, "--defsym %s", lex_string);
+	      else if (ldfile_input_filename != NULL)
+		fprintf (fp, "%s:%u", ldfile_input_filename, lineno);
+	      else
+		fprintf (fp, _("built in linker script:%u"), lineno);
+	      break;
+
+	    case 'R':
+	      /* Print all that's interesting about a relent.  */
+	      {
+		arelent *relent = va_arg (arg, arelent *);
+
+		lfinfo (fp, "%s+0x%v (type %s)",
+			(*(relent->sym_ptr_ptr))->name,
+			relent->addend,
+			relent->howto->name);
+	      }
+	      break;
+
 	    case 'C':
 	    case 'D':
 	    case 'G':
-	    case 'H':
-	      /* Clever filename:linenumber with function name if possible.
-		 The arguments are a BFD, a section, and an offset.  */
+	      /* Clever filename:linenumber with function name if possible,
+		 or section name as a last resort.  The arguments are a BFD,
+		 a section, and an offset.  */
 	      {
 		static bfd *last_bfd;
-		static char *last_file;
-		static char *last_function;
+		static char *last_file = NULL;
+		static char *last_function = NULL;
 		bfd *abfd;
 		asection *section;
 		bfd_vma offset;
-		asymbol **asymbols = NULL;
+		lang_input_statement_type *entry;
+		asymbol **asymbols;
 		const char *filename;
 		const char *functionname;
 		unsigned int linenumber;
-		bfd_boolean discard_last;
-		bfd_boolean done;
-		bfd_error_type last_bfd_error = bfd_get_error ();
+		boolean discard_last;
 
-		abfd = args[arg_no].reladdr.abfd;
-		section = args[arg_no].reladdr.sec;
-		offset = args[arg_no].reladdr.off;
-		++arg_count;
+		abfd = va_arg (arg, bfd *);
+		section = va_arg (arg, asection *);
+		offset = va_arg (arg, bfd_vma);
 
-		if (abfd != NULL)
+		entry = (lang_input_statement_type *) abfd->usrdata;
+		if (entry != (lang_input_statement_type *) NULL
+		    && entry->asymbols != (asymbol **) NULL)
+		  asymbols = entry->asymbols;
+		else
 		  {
-		    if (!bfd_generic_link_read_symbols (abfd))
-		      einfo (_("%F%P: %pB: could not read symbols: %E\n"), abfd);
+		    long symsize;
+		    long symbol_count;
 
-		    asymbols = bfd_get_outsymbols (abfd);
+		    symsize = bfd_get_symtab_upper_bound (abfd);
+		    if (symsize < 0)
+		      einfo (_("%B%F: could not read symbols\n"), abfd);
+		    asymbols = (asymbol **) xmalloc (symsize);
+		    symbol_count = bfd_canonicalize_symtab (abfd, asymbols);
+		    if (symbol_count < 0)
+		      einfo (_("%B%F: could not read symbols\n"), abfd);
+		    if (entry != (lang_input_statement_type *) NULL)
+		      {
+			entry->asymbols = asymbols;
+			entry->symbol_count = symbol_count;
+		      }
 		  }
 
-		/* The GNU Coding Standard requires that error messages
-		   be of the form:
-
-		     source-file-name:lineno: message
-
-		   We do not always have a line number available so if
-		   we cannot find them we print out the section name and
-		   offset instead.  */
-		discard_last = TRUE;
-		if (abfd != NULL
-		    && bfd_find_nearest_line (abfd, section, asymbols, offset,
-					      &filename, &functionname,
-					      &linenumber))
+		discard_last = true;
+		if (bfd_find_nearest_line (abfd, section, asymbols, offset,
+					   &filename, &functionname,
+					   &linenumber))
 		  {
-		    if (functionname != NULL
-			&& (fmt[-1] == 'C' || fmt[-1] == 'H'))
+		    if (functionname != NULL && fmt[-1] == 'G')
 		      {
-			/* Detect the case where we are printing out a
-			   message for the same function as the last
-			   call to vinfo ("%C").  In this situation do
-			   not print out the ABFD filename or the
-			   function name again.  Note - we do still
-			   print out the source filename, as this will
-			   allow programs that parse the linker's output
-			   (eg emacs) to correctly locate multiple
-			   errors in the same source file.  */
+			lfinfo (fp, "%B:", abfd);
+			if (filename != NULL
+			    && strcmp (filename, bfd_get_filename (abfd)) != 0)
+			  fprintf (fp, "%s:", filename);
+			lfinfo (fp, "%T", functionname);
+		      }
+		    else if (functionname != NULL && fmt[-1] == 'C')
+		      {
+			if (filename == (char *) NULL)
+			  filename = abfd->filename;
+
 			if (last_bfd == NULL
+			    || last_file == NULL
 			    || last_function == NULL
 			    || last_bfd != abfd
-			    || (last_file == NULL) != (filename == NULL)
-			    || (filename != NULL
-				&& filename_cmp (last_file, filename) != 0)
+			    || strcmp (last_file, filename) != 0
 			    || strcmp (last_function, functionname) != 0)
 			  {
-			    lfinfo (fp, _("%pB: in function `%pT':\n"),
+			    /* We use abfd->filename in this initial line,
+			       in case filename is a .h file or something
+			       similarly unhelpful.  */
+			    lfinfo (fp, _("%B: In function `%T':\n"),
 				    abfd, functionname);
 
 			    last_bfd = abfd;
 			    if (last_file != NULL)
 			      free (last_file);
-			    last_file = NULL;
-			    if (filename)
-			      last_file = xstrdup (filename);
+			    last_file = xstrdup (filename);
 			    if (last_function != NULL)
 			      free (last_function);
 			    last_function = xstrdup (functionname);
 			  }
-			discard_last = FALSE;
+			discard_last = false;
+			if (linenumber != 0)
+			  fprintf (fp, "%s:%u", filename, linenumber);
+			else
+			  lfinfo (fp, "%s(%s+0x%v)", filename, section->name,
+				  offset);
 		      }
+		    else if (filename == NULL
+			     || strcmp (filename, abfd->filename) == 0)
+		      {
+			lfinfo (fp, "%B(%s+0x%v)", abfd, section->name,
+				offset);
+			if (linenumber != 0)
+			  lfinfo (fp, ":%u", linenumber);
+		      }
+		    else if (linenumber != 0)
+		      lfinfo (fp, "%B:%s:%u", abfd, filename, linenumber);
 		    else
-		      lfinfo (fp, "%pB:", abfd);
-
-		    if (filename != NULL)
-		      fprintf (fp, "%s:", filename);
-
-		    done = fmt[-1] != 'H';
-		    if (functionname != NULL && fmt[-1] == 'G')
-		      lfinfo (fp, "%pT", functionname);
-		    else if (filename != NULL && linenumber != 0)
-		      fprintf (fp, "%u%s", linenumber, done ? "" : ":");
-		    else
-		      done = FALSE;
+		      lfinfo (fp, "%B(%s+0x%v):%s", abfd, section->name,
+			      offset, filename);
 		  }
 		else
-		  {
-		    lfinfo (fp, "%pB:", abfd);
-		    done = FALSE;
-		  }
-		if (!done)
-		  lfinfo (fp, "(%pA+0x%v)", section, offset);
-		bfd_set_error (last_bfd_error);
+		  lfinfo (fp, "%B(%s+0x%v)", abfd, section->name, offset);
 
 		if (discard_last)
 		  {
@@ -426,201 +360,105 @@ vfinfo (FILE *fp, const char *fmt, va_list ap, bfd_boolean is_warning)
 	      }
 	      break;
 
-	    case 'p':
-	      if (*fmt == 'A')
-		{
-		  /* section name from a section */
-		  asection *sec;
-		  bfd *abfd;
-
-		  fmt++;
-		  sec = (asection *) args[arg_no].p;
-		  ++arg_count;
-		  fprintf (fp, "%s", sec->name);
-		  abfd = sec->owner;
-		  if (abfd != NULL)
-		    {
-		      const char *group = bfd_group_name (abfd, sec);
-		      if (group != NULL)
-			fprintf (fp, "[%s]", group);
-		    }
-		}
-	      else if (*fmt == 'B')
-		{
-		  /* filename from a bfd */
-		  bfd *abfd = (bfd *) args[arg_no].p;
-
-		  fmt++;
-		  ++arg_count;
-		  if (abfd == NULL)
-		    fprintf (fp, "%s generated", program_name);
-		  else if (abfd->my_archive != NULL
-			   && !bfd_is_thin_archive (abfd->my_archive))
-		    fprintf (fp, "%s(%s)", abfd->my_archive->filename,
-			     abfd->filename);
-		  else
-		    fprintf (fp, "%s", abfd->filename);
-		}
-	      else if (*fmt == 'I')
-		{
-		  /* filename from a lang_input_statement_type */
-		  lang_input_statement_type *i;
-
-		  fmt++;
-		  i = (lang_input_statement_type *) args[arg_no].p;
-		  ++arg_count;
-		  if (i->the_bfd != NULL
-		      && i->the_bfd->my_archive != NULL
-		      && !bfd_is_thin_archive (i->the_bfd->my_archive))
-		    fprintf (fp, "(%s)%s", i->the_bfd->my_archive->filename,
-			     i->local_sym_name);
-		  else
-		    fprintf (fp, "%s", i->filename);
-		}
-	      else if (*fmt == 'R')
-		{
-		  /* Print all that's interesting about a relent.  */
-		  arelent *relent = (arelent *) args[arg_no].p;
-
-		  fmt++;
-		  ++arg_count;
-		  lfinfo (fp, "%s+0x%v (type %s)",
-			  (*(relent->sym_ptr_ptr))->name,
-			  relent->addend,
-			  relent->howto->name);
-		}
-	      else if (*fmt == 'S')
-		{
-		  /* Print script file and linenumber.  */
-		  etree_type node;
-		  etree_type *tp = (etree_type *) args[arg_no].p;
-
-		  fmt++;
-		  ++arg_count;
-		  if (tp == NULL)
-		    {
-		      tp = &node;
-		      tp->type.filename = ldlex_filename ();
-		      tp->type.lineno = lineno;
-		    }
-		  if (tp->type.filename != NULL)
-		    fprintf (fp, "%s:%u", tp->type.filename, tp->type.lineno);
-		}
-	      else if (*fmt == 'T')
-		{
-		  /* Symbol name.  */
-		  const char *name = (const char *) args[arg_no].p;
-
-		  fmt++;
-		  ++arg_count;
-		  if (name == NULL || *name == 0)
-		    {
-		      fprintf (fp, _("no symbol"));
-		      break;
-		    }
-		  else if (demangling)
-		    {
-		      char *demangled;
-
-		      demangled = bfd_demangle (link_info.output_bfd, name,
-						DMGL_ANSI | DMGL_PARAMS);
-		      if (demangled != NULL)
-			{
-			  fprintf (fp, "%s", demangled);
-			  free (demangled);
-			  break;
-			}
-		    }
-		  fprintf (fp, "%s", name);
-		}
-	      else
-		{
-		  /* native (host) void* pointer, like printf */
-		  fprintf (fp, "%p", args[arg_no].p);
-		  ++arg_count;
-		}
-	      break;
-
 	    case 's':
 	      /* arbitrary string, like printf */
-	      fprintf (fp, "%s", (char *) args[arg_no].p);
-	      ++arg_count;
+	      fprintf (fp, "%s", va_arg (arg, char *));
 	      break;
 
 	    case 'd':
 	      /* integer, like printf */
-	      fprintf (fp, "%d", args[arg_no].i);
-	      ++arg_count;
+	      fprintf (fp, "%d", va_arg (arg, int));
 	      break;
 
 	    case 'u':
 	      /* unsigned integer, like printf */
-	      fprintf (fp, "%u", args[arg_no].i);
-	      ++arg_count;
-	      break;
-
-	    case 'l':
-	      if (*fmt == 'd')
-		{
-		  fprintf (fp, "%ld", args[arg_no].l);
-		  ++arg_count;
-		  ++fmt;
-		  break;
-		}
-	      else if (*fmt == 'u')
-		{
-		  fprintf (fp, "%lu", args[arg_no].l);
-		  ++arg_count;
-		  ++fmt;
-		  break;
-		}
-	      /* Fallthru */
-
-	    default:
-	      fprintf (fp, "%%%c", fmt[-1]);
+	      fprintf (fp, "%u", va_arg (arg, unsigned int));
 	      break;
 	    }
 	}
     }
 
-  if (is_warning && config.fatal_warnings)
-    config.make_executable = FALSE;
+  if (config.fatal_warnings)
+    config.make_executable = false;
 
-  if (fatal)
+  if (fatal == true)
     xexit (1);
+}
+
+/* Wrapper around cplus_demangle.  Strips leading underscores and
+   other such chars that would otherwise confuse the demangler.  */
+
+char *
+demangle (name)
+     const char *name;
+{
+  char *res;
+  const char *p;
+
+  if (output_bfd != NULL
+      && bfd_get_symbol_leading_char (output_bfd) == name[0])
+    ++name;
+
+  /* This is a hack for better error reporting on XCOFF, PowerPC64-ELF
+     or the MS PE format.  These formats have a number of leading '.'s
+     on at least some symbols, so we remove all dots to avoid
+     confusing the demangler.  */
+  p = name;
+  while (*p == '.')
+    ++p;
+
+  res = cplus_demangle (p, DMGL_ANSI | DMGL_PARAMS);
+  if (res)
+    {
+      size_t dots = p - name;
+
+      /* Now put back any stripped dots.  */
+      if (dots != 0)
+	{
+	  size_t len = strlen (res) + 1;
+	  char *add_dots = xmalloc (len + dots);
+
+	  memcpy (add_dots, name, dots);
+	  memcpy (add_dots + dots, res, len);
+	  free (res);
+	  res = add_dots;
+	}
+      return res;
+    }
+  return xstrdup (name);
 }
 
 /* Format info message and print on stdout.  */
 
 /* (You would think this should be called just "info", but then you
-   would be hosed by LynxOS, which defines that name in its libc.)  */
+   would hosed by LynxOS, which defines that name in its libc.)  */
 
 void
-info_msg (const char *fmt, ...)
+info_msg VPARAMS ((const char *fmt, ...))
 {
-  va_list arg;
+  VA_OPEN (arg, fmt);
+  VA_FIXEDARG (arg, const char *, fmt);
 
-  va_start (arg, fmt);
-  vfinfo (stdout, fmt, arg, FALSE);
-  va_end (arg);
+  vfinfo (stdout, fmt, arg);
+  VA_CLOSE (arg);
 }
 
 /* ('e' for error.) Format info message and print on stderr.  */
 
 void
-einfo (const char *fmt, ...)
+einfo VPARAMS ((const char *fmt, ...))
 {
-  va_list arg;
+  VA_OPEN (arg, fmt);
+  VA_FIXEDARG (arg, const char *, fmt);
 
-  fflush (stdout);
-  va_start (arg, fmt);
-  vfinfo (stderr, fmt, arg, TRUE);
-  va_end (arg);
-  fflush (stderr);
+  vfinfo (stderr, fmt, arg);
+  VA_CLOSE (arg);
 }
 
 void
-info_assert (const char *file, unsigned int line)
+info_assert (file, line)
+     const char *file;
+     unsigned int line;
 {
   einfo (_("%F%P: internal error %s %d\n"), file, line);
 }
@@ -628,53 +466,36 @@ info_assert (const char *file, unsigned int line)
 /* ('m' for map) Format info message and print on map.  */
 
 void
-minfo (const char *fmt, ...)
+minfo VPARAMS ((const char *fmt, ...))
 {
-  if (config.map_file != NULL)
-    {
-      va_list arg;
+  VA_OPEN (arg, fmt);
+  VA_FIXEDARG (arg, const char *, fmt);
 
-      va_start (arg, fmt);
-      if (fmt[0] == '%' && fmt[1] == '!' && fmt[2] == 0)
-	{
-	  /* Stash info about --as-needed shared libraries.  Print
-	     later so they don't appear intermingled with archive
-	     library info.  */
-	  struct asneeded_minfo *m = xmalloc (sizeof *m);
-
-	  m->next = NULL;
-	  m->soname = va_arg (arg, const char *);
-	  m->ref = va_arg (arg, bfd *);
-	  m->name = va_arg (arg, const char *);
-	  *asneeded_list_tail = m;
-	  asneeded_list_tail = &m->next;
-	}
-      else
-	vfinfo (config.map_file, fmt, arg, FALSE);
-      va_end (arg);
-    }
+  vfinfo (config.map_file, fmt, arg);
+  VA_CLOSE (arg);
 }
 
 void
-lfinfo (FILE *file, const char *fmt, ...)
+lfinfo VPARAMS ((FILE *file, const char *fmt, ...))
 {
-  va_list arg;
+  VA_OPEN (arg, fmt);
+  VA_FIXEDARG (arg, FILE *, file);
+  VA_FIXEDARG (arg, const char *, fmt);
 
-  va_start (arg, fmt);
-  vfinfo (file, fmt, arg, FALSE);
-  va_end (arg);
+  vfinfo (file, fmt, arg);
+  VA_CLOSE (arg);
 }
 
 /* Functions to print the link map.  */
 
 void
-print_space (void)
+print_space ()
 {
   fprintf (config.map_file, " ");
 }
 
 void
-print_nl (void)
+print_nl ()
 {
   fprintf (config.map_file, "\n");
 }
@@ -683,14 +504,17 @@ print_nl (void)
    call this function.  */
 
 void
-ld_abort (const char *file, int line, const char *fn)
+ld_abort (file, line, fn)
+     const char *file;
+     int line;
+     const char *fn;
 {
   if (fn != NULL)
-    einfo (_("%P: internal error: aborting at %s:%d in %s\n"),
+    einfo (_("%P: internal error: aborting at %s line %d in %s\n"),
 	   file, line, fn);
   else
-    einfo (_("%P: internal error: aborting at %s:%d\n"),
+    einfo (_("%P: internal error: aborting at %s line %d\n"),
 	   file, line);
-  einfo (_("%F%P: please report this bug\n"));
+  einfo (_("%P%F: please report this bug\n"));
   xexit (1);
 }

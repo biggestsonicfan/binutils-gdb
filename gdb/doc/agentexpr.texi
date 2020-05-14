@@ -1,20 +1,16 @@
-@c \input texinfo
+\input texinfo
 @c %**start of header
-@c @setfilename agentexpr.info
-@c @settitle GDB Agent Expressions
-@c @setchapternewpage off
+@setfilename agentexpr.info
+@settitle GDB Agent Expressions
+@setchapternewpage off
 @c %**end of header
 
-@c This file is part of the GDB manual.
-@c
-@c Copyright (C) 2003--2020 Free Software Foundation, Inc.
-@c
-@c See the file gdb.texinfo for copying conditions.
+Revision: $Id$
 
-@node Agent Expressions
-@appendix The GDB Agent Expression Mechanism
+@node The GDB Agent Expression Mechanism
+@chapter The GDB Agent Expression Mechanism
 
-In some applications, it is not feasible for the debugger to interrupt
+In some applications, it is not feasable for the debugger to interrupt
 the program's execution long enough for the developer to learn anything
 helpful about its behavior.  If the program's correctness depends on its
 real-time behavior, delays introduced by a debugger might cause the
@@ -57,6 +53,8 @@ debugging agent in real-time applications.
 * Bytecode Descriptions::       What each one does.
 * Using Agent Expressions::     How agent expressions fit into the big picture.
 * Varying Target Capabilities:: How to discover what the target can do.
+* Tracing on Symmetrix::        Special info for implementation on EMC's
+                                boxes.
 * Rationale::                   Why we did it this way.
 @end menu
 
@@ -216,7 +214,7 @@ their sum, as an integer.
 
 In this example, @code{add} is the name of the bytecode, and
 @code{(0x02)} is the one-byte value used to encode the bytecode, in
-hexadecimal.  The phrase ``@var{a} @var{b} @result{} @var{a+b}'' shows
+hexidecimal.  The phrase ``@var{a} @var{b} @result{} @var{a+b}'' shows
 the stack before and after the bytecode executes.  Beforehand, the stack
 must contain at least two values, @var{a} and @var{b}; since the top of
 the stack is to the right, @var{b} is on the top of the stack, and
@@ -301,7 +299,7 @@ Pop two integers from the stack; let @var{a} be the next-to-top value,
 and @var{b} be the top value.  Shift @var{a} left by @var{b} bits, and
 push the result.
 
-@item @code{rsh_signed} (0x0a): @var{a} @var{b} @result{} @code{(signed)}@var{a>>b}
+@item @code{rsh_signed} (0x0a): @var{a} @var{b} @result{} @var{@code{(signed)}a>>b}
 Pop two integers from the stack; let @var{a} be the next-to-top value,
 and @var{b} be the top value.  Shift @var{a} right by @var{b} bits,
 inserting copies of the top bit at the high end, and push the result.
@@ -353,7 +351,8 @@ byte unsigned integer following the @code{ext} bytecode.
 
 @item @code{zero_ext} (0x2a) @var{n}: @var{a} @result{} @var{a}, zero-extended from @var{n} bits
 Pop an unsigned value from the stack; zero all but the bottom @var{n}
-bits.
+bits.  This means that all bits to the left of bit @var{n-1} (where the
+least significant bit is bit 0) are set to the value of bit @var{n-1}.
 
 The number of source bits to preserve, @var{n}, is encoded as a single
 byte unsigned integer following the @code{zero_ext} bytecode.
@@ -389,18 +388,6 @@ Exchange the top two items on the stack.
 @item @code{pop} (0x29): @var{a} =>
 Discard the top value on the stack.
 
-@item @code{pick} (0x32) @var{n}: @var{a} @dots{} @var{b} => @var{a} @dots{} @var{b} @var{a}
-Duplicate an item from the stack and push it on the top of the stack.
-@var{n}, a single byte, indicates the stack item to copy.  If @var{n}
-is zero, this is the same as @code{dup}; if @var{n} is one, it copies
-the item under the top item, etc.  If @var{n} exceeds the number of
-items on the stack, terminate with an error.
-
-@item @code{rot} (0x33): @var{a} @var{b} @var{c} => @var{c} @var{a} @var{b}
-Rotate the top three items on the stack.  The top item (c) becomes the third
-item, the next-to-top item (b) becomes the top item and the third item (a) from
-the top becomes the next-to-top item.
-
 @item @code{if_goto} (0x20) @var{offset}: @var{a} @result{}
 Pop an integer off the stack; if it is non-zero, branch to the given
 offset in the bytecode string.  Otherwise, continue to the next
@@ -410,7 +397,7 @@ Thus, an offset of zero denotes the beginning of the expression.
 
 The @var{offset} is stored as a sixteen-bit unsigned value, stored
 immediately following the @code{if_goto} bytecode.  It is always stored
-most significant byte first, regardless of the target's normal
+most signficant byte first, regardless of the target's normal
 endianness.  The offset is not guaranteed to fall at any particular
 alignment within the bytecode stream; thus, on machines where fetching a
 16-bit on an unaligned address raises an exception, you should fetch the
@@ -444,29 +431,11 @@ registers are numbered following GDB's conventions.
 
 The register number @var{n} is encoded as a 16-bit unsigned integer
 immediately following the @code{reg} bytecode.  It is always stored most
-significant byte first, regardless of the target's normal endianness.
+signficant byte first, regardless of the target's normal endianness.
 The register number is not guaranteed to fall at any particular
 alignment within the bytecode stream; thus, on machines where fetching a
 16-bit on an unaligned address raises an exception, you should fetch the
 register number one byte at a time.
-
-@item @code{getv} (0x2c) @var{n}: @result{} @var{v}
-Push the value of trace state variable number @var{n}, without sign
-extension.
-
-The variable number @var{n} is encoded as a 16-bit unsigned integer
-immediately following the @code{getv} bytecode.  It is always stored most
-significant byte first, regardless of the target's normal endianness.
-The variable number is not guaranteed to fall at any particular
-alignment within the bytecode stream; thus, on machines where fetching a
-16-bit on an unaligned address raises an exception, you should fetch the
-register number one byte at a time.
-
-@item @code{setv} (0x2d) @var{n}: @var{v} @result{} @var{v}
-Set trace state variable number @var{n} to the value found on the top
-of the stack.  The stack is unchanged, so that the value is readily
-available if the assignment is part of a larger expression.  The
-handling of @var{n} is as described for @code{getv}.
 
 @item @code{trace} (0x0c): @var{addr} @var{size} @result{}
 Record the contents of the @var{size} bytes at @var{addr} in a trace
@@ -485,32 +454,6 @@ Identical to trace_quick, except that @var{size} is a 16-bit big-endian
 unsigned integer, not a single byte.  This should probably have been
 named @code{trace_quick16}, for consistency.
 
-@item @code{tracev} (0x2e) @var{n}: @result{} @var{a}
-Record the value of trace state variable number @var{n} in the trace
-buffer.  The handling of @var{n} is as described for @code{getv}.
-
-@item @code{tracenz} (0x2f)  @var{addr} @var{size} @result{}
-Record the bytes at @var{addr} in a trace buffer, for later retrieval
-by GDB.  Stop at either the first zero byte, or when @var{size} bytes
-have been recorded, whichever occurs first.
-
-@item @code{printf} (0x34)  @var{numargs} @var{string} @result{}
-Do a formatted print, in the style of the C function @code{printf}).
-The value of @var{numargs} is the number of arguments to expect on the
-stack, while @var{string} is the format string, prefixed with a
-two-byte length.  The last byte of the string must be zero, and is
-included in the length.  The format string includes escaped sequences
-just as it appears in C source, so for instance the format string
-@code{"\t%d\n"} is six characters long, and the output will consist of
-a tab character, a decimal number, and a newline.  At the top of the
-stack, above the values to be printed, this bytecode will pop a
-``function'' and ``channel''.  If the function is nonzero, then the
-target may treat it as a function and call it, passing the channel as
-a first argument, as with the C function @code{fprintf}.  If the
-function is zero, then the target may simply call a standard formatted
-print function of its choice.  In all, this bytecode pops 2 +
-@var{numargs} stack elements, and pushes nothing.
-
 @item @code{end} (0x27): @result{}
 Stop executing bytecode; the result should be the top element of the
 stack.  If the purpose of the expression was to compute an lvalue or a
@@ -523,20 +466,8 @@ address, and the top of the stack is the lvalue's size, in bytes.
 @node Using Agent Expressions
 @section Using Agent Expressions
 
-Agent expressions can be used in several different ways by @value{GDBN},
-and the debugger can generate different bytecode sequences as appropriate.
-
-One possibility is to do expression evaluation on the target rather
-than the host, such as for the conditional of a conditional
-tracepoint.  In such a case, @value{GDBN} compiles the source
-expression into a bytecode sequence that simply gets values from
-registers or memory, does arithmetic, and returns a result.
-
-Another way to use agent expressions is for tracepoint data
-collection.  @value{GDBN} generates a different bytecode sequence for
-collection; in addition to bytecodes that do the calculation,
-@value{GDBN} adds @code{trace} bytecodes to save the pieces of
-memory that were used.
+Here is a sketch of a full non-stop debugging cycle, showing how agent
+expressions fit into the process.
 
 @itemize @bullet
 
@@ -555,7 +486,9 @@ GDB transmits the tracepoints and their associated expressions to the
 GDB agent, running on the debugging target.
 
 @item
-The agent arranges to be notified when a trace point is hit.
+The agent arranges to be notified when a trace point is hit.  Note that,
+on some systems, the target operating system is completely responsible
+for collecting the data; see @ref{Tracing on Symmetrix}.
 
 @item
 When execution on the target reaches a trace point, the agent evaluates
@@ -608,6 +541,142 @@ which registers are actually available for collection
 whether the target supports disabled tracepoints
 
 @end itemize
+
+
+
+@node Tracing on Symmetrix
+@section Tracing on Symmetrix
+
+This section documents the API used by the GDB agent to collect data on
+Symmetrix systems.
+
+Cygnus originally implemented these tracing features to help EMC
+Corporation debug their Symmetrix high-availability disk drives.  The
+Symmetrix application code already includes substantial tracing
+facilities; the GDB agent for the Symmetrix system uses those facilities
+for its own data collection, via the API described here.
+
+@deftypefn Function DTC_RESPONSE adbg_find_memory_in_frame (FRAME_DEF *@var{frame}, char *@var{address}, char **@var{buffer}, unsigned int *@var{size})
+Search the trace frame @var{frame} for memory saved from @var{address}.
+If the memory is available, provide the address of the buffer holding
+it; otherwise, provide the address of the next saved area.
+
+@itemize @bullet
+
+@item
+If the memory at @var{address} was saved in @var{frame}, set
+@code{*@var{buffer}} to point to the buffer in which that memory was
+saved, set @code{*@var{size}} to the number of bytes from @var{address}
+that are saved at @code{*@var{buffer}}, and return
+@code{OK_TARGET_RESPONSE}.  (Clearly, in this case, the function will
+always set @code{*@var{size}} to a value greater than zero.)
+
+@item
+If @var{frame} does not record any memory at @var{address}, set
+@code{*@var{size}} to the distance from @var{address} to the start of
+the saved region with the lowest address higher than @var{address}.  If
+there is no memory saved from any higher address, set @code{*@var{size}}
+to zero.  Return @code{NOT_FOUND_TARGET_RESPONSE}.
+@end itemize
+
+These two possibilities allow the caller to either retrieve the data, or
+walk the address space to the next saved area.
+@end deftypefn
+
+This function allows the GDB agent to map the regions of memory saved in
+a particular frame, and retrieve their contents efficiently.
+
+This function also provides a clean interface between the GDB agent and
+the Symmetrix tracing structures, making it easier to adapt the GDB
+agent to future versions of the Symmetrix system, and vice versa.  This
+function searches all data saved in @var{frame}, whether the data is
+there at the request of a bytecode expression, or because it falls in
+one of the format's memory ranges, or because it was saved from the top
+of the stack.  EMC can arbitrarily change and enhance the tracing
+mechanism, but as long as this function works properly, all collected
+memory is visible to GDB.
+
+The function itself is straightforward to implement.  A single pass over
+the trace frame's stack area, memory ranges, and expression blocks can
+yield the address of the buffer (if the requested address was saved),
+and also note the address of the next higher range of memory, to be
+returned when the search fails.
+
+As an example, suppose the trace frame @code{f} has saved sixteen bytes
+from address @code{0x8000} in a buffer at @code{0x1000}, and thirty-two
+bytes from address @code{0xc000} in a buffer at @code{0x1010}.  Here are
+some sample calls, and the effect each would have:
+
+@table @code
+
+@item adbg_find_memory_in_frame (f, (char*) 0x8000, &buffer, &size)
+This would set @code{buffer} to @code{0x1000}, set @code{size} to
+sixteen, and return @code{OK_TARGET_RESPONSE}, since @code{f} saves
+sixteen bytes from @code{0x8000} at @code{0x1000}.
+
+@item adbg_find_memory_in_frame (f, (char *) 0x8004, &buffer, &size)
+This would set @code{buffer} to @code{0x1004}, set @code{size} to
+twelve, and return @code{OK_TARGET_RESPONSE}, since @file{f} saves the
+twelve bytes from @code{0x8004} starting four bytes into the buffer at
+@code{0x1000}.  This shows that request addresses may fall in the middle
+of saved areas; the function should return the address and size of the
+remainder of the buffer.
+
+@item adbg_find_memory_in_frame (f, (char *) 0x8100, &buffer, &size)
+This would set @code{size} to @code{0x3f00} and return
+@code{NOT_FOUND_TARGET_RESPONSE}, since there is no memory saved in
+@code{f} from the address @code{0x8100}, and the next memory available
+is at @code{0x8100 + 0x3f00}, or @code{0xc000}.  This shows that request
+addresses may fall outside of all saved memory ranges; the function
+should indicate the next saved area, if any.
+
+@item adbg_find_memory_in_frame (f, (char *) 0x7000, &buffer, &size)
+This would set @code{size} to @code{0x1000} and return
+@code{NOT_FOUND_TARGET_RESPONSE}, since the next saved memory is at
+@code{0x7000 + 0x1000}, or @code{0x8000}.
+
+@item adbg_find_memory_in_frame (f, (char *) 0xf000, &buffer, &size)
+This would set @code{size} to zero, and return
+@code{NOT_FOUND_TARGET_RESPONSE}.  This shows how the function tells the
+caller that no further memory ranges have been saved.
+
+@end table
+
+As another example, here is a function which will print out the
+addresses of all memory saved in the trace frame @code{frame} on the
+Symmetrix INLINES console:
+@example
+void
+print_frame_addresses (FRAME_DEF *frame)
+@{
+  char *addr;
+  char *buffer;
+  unsigned long size;
+
+  addr = 0;
+  for (;;)
+    @{
+      /* Either find out how much memory we have here, or discover
+         where the next saved region is.  */
+      if (adbg_find_memory_in_frame (frame, addr, &buffer, &size)
+          == OK_TARGET_RESPONSE)
+        printp ("saved %x to %x\n", addr, addr + size);
+      if (size == 0)
+        break;
+      addr += size;
+    @}
+@}
+@end example
+
+Note that there is not necessarily any connection between the order in
+which the data is saved in the trace frame, and the order in which
+@code{adbg_find_memory_in_frame} will return those memory ranges.  The
+code above will always print the saved memory regions in order of
+increasing address, while the underlying frame structure might store the
+data in a random order.
+
+[[This section should cover the rest of the Symmetrix functions the stub
+relies upon, too.]]
 
 @node Rationale
 @section Rationale
@@ -766,3 +835,5 @@ opcode 0x30 reserved, to remain compatible with the customer who added
 it.
 
 @end table
+
+@bye

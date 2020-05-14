@@ -1,23 +1,22 @@
 /*  armdefs.h -- ARMulator common definitions:  ARM6 Instruction Emulator.
     Copyright (C) 1994 Advanced RISC Machines Ltd.
-
+ 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
-
+ 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+ 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>. */
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA. */
 
-#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 
 #define FALSE 0
 #define TRUE 1
@@ -26,10 +25,12 @@
 #define LOWHIGH 1
 #define HIGHLOW 2
 
-typedef uint32_t ARMword;
-typedef int32_t ARMsword;
-typedef uint64_t ARMdword;
-typedef int64_t ARMsdword;
+#ifndef __STDC__
+typedef char *VoidStar;
+#endif
+
+typedef unsigned long ARMword;	/* must be 32 bits wide */
+typedef unsigned long long ARMdword;	/* Must be at least 64 bits wide.  */
 typedef struct ARMul_State ARMul_State;
 
 typedef unsigned ARMul_CPInits (ARMul_State * state);
@@ -49,29 +50,11 @@ typedef unsigned ARMul_CPReads (ARMul_State * state, unsigned reg,
 typedef unsigned ARMul_CPWrites (ARMul_State * state, unsigned reg,
 				 ARMword value);
 
-typedef double ARMdval;	/* FIXME: Must be a 64-bit floating point type.  */
-typedef float  ARMfval;	/* FIXME: Must be a 32-bit floating point type.  */
-
-typedef union
-{
-  ARMword  uword[2];
-  ARMsword sword[2];
-  ARMfval  fval[2];
-  ARMdword dword;
-  ARMdval  dval;
-} ARM_VFP_reg;
-
-#define VFP_fval(N)  (state->VFP_Reg[(N)>> 1].fval[(N) & 1])
-#define VFP_uword(N) (state->VFP_Reg[(N)>> 1].uword[(N) & 1])
-#define VFP_sword(N) (state->VFP_Reg[(N)>> 1].sword[(N) & 1])
-
-#define VFP_dval(N)  (state->VFP_Reg[(N)].dval)
-#define VFP_dword(N) (state->VFP_Reg[(N)].dword)
-
 struct ARMul_State
 {
   ARMword Emulate;		/* to start and stop emulation */
   unsigned EndCondition;	/* reason for stopping */
+  unsigned ErrorCode;		/* type of illegal instruction */
   ARMword Reg[16];		/* the current register file */
   ARMword RegBank[7][16];	/* all the registers */
   /* 40 bit accumulator.  We always keep this 64 bits wide,
@@ -151,15 +134,19 @@ struct ARMul_State
   unsigned is_v4;		/* Are we emulating a v4 architecture (or higher) ?  */
   unsigned is_v5;		/* Are we emulating a v5 architecture ?  */
   unsigned is_v5e;		/* Are we emulating a v5e architecture ?  */
-  unsigned is_v6;		/* Are we emulating a v6 architecture ?  */
   unsigned is_XScale;		/* Are we emulating an XScale architecture ?  */
-  unsigned is_iWMMXt;		/* Are we emulating an iWMMXt co-processor ?  */
-  unsigned is_ep9312;		/* Are we emulating a Cirrus Maverick co-processor ?  */
   unsigned verbose;		/* Print various messages like the banner */
-
-  ARM_VFP_reg  VFP_Reg[32];     /* Advanced SIMD registers.  */
-  ARMword      FPSCR;		/* Floating Point Status Register.  */
 };
+
+#define ResetPin NresetSig
+#define FIQPin NfiqSig
+#define IRQPin NirqSig
+#define AbortPin abortSig
+#define TransPin NtransSig
+#define BigEndPin bigendSig
+#define Prog32Pin prog32Sig
+#define Data32Pin data32Sig
+#define LateAbortPin lateabtSig
 
 /***************************************************************************\
 *                        Properties of ARM we know about                    *
@@ -175,9 +162,6 @@ struct ARMul_State
 #define ARM_v5_Prop      0x80
 #define ARM_v5e_Prop     0x100
 #define ARM_XScale_Prop  0x200
-#define ARM_ep9312_Prop  0x400
-#define ARM_iWMMXt_Prop  0x800
-#define ARM_v6_Prop      0x1000
 
 /***************************************************************************\
 *                   Macros to extract instruction fields                    *
@@ -406,11 +390,24 @@ extern int XScale_debug_moe (ARMul_State * state, int moe);
 \***************************************************************************/
 
 extern unsigned ARMul_OSInit (ARMul_State * state);
+extern void ARMul_OSExit (ARMul_State * state);
 extern unsigned ARMul_OSHandleSWI (ARMul_State * state, ARMword number);
+extern ARMword ARMul_OSLastErrorP (ARMul_State * state);
+
+extern ARMword ARMul_Debug (ARMul_State * state, ARMword pc, ARMword instr);
+extern unsigned ARMul_OSException (ARMul_State * state, ARMword vector,
+				   ARMword pc);
+extern int rdi_log;
 
 /***************************************************************************\
 *                            Host-dependent stuff                           *
 \***************************************************************************/
+
+#ifdef macintosh
+pascal void SpinCursor (short increment);	/* copied from CursorCtl.h */
+# define HOURGLASS           SpinCursor( 1 )
+# define HOURGLASS_RATE      1023	/* 2^n - 1 */
+#endif
 
 extern void ARMul_UndefInstr      (ARMul_State *, ARMword);
 extern void ARMul_FixCPSR         (ARMul_State *, ARMword, ARMword);

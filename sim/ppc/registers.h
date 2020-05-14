@@ -1,10 +1,10 @@
 /*  This file is part of the program psim.
 
-    Copyright 1994, 1997, 2003 Andrew Cagney
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 3 of the License, or
+    the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -13,7 +13,8 @@
     GNU General Public License for more details.
  
     You should have received a copy of the GNU General Public License
-    along with this program; if not, see <http://www.gnu.org/licenses/>.
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  
     */
 
@@ -27,19 +28,6 @@
  *
  */
 
-/* FIXME:
-
-   For the moment use macro's to determine if the E500 or Altivec
-   registers should be included.  IGEN should instead of a :register:
-   field to facilitate the specification and generation of per ISA
-   registers.  */
-
-#ifdef WITH_E500
-#include "e500_registers.h"
-#endif
-#if WITH_ALTIVEC
-#include "altivec_registers.h"
-#endif
 
 /**
  ** General Purpose Registers
@@ -240,6 +228,7 @@ enum {
   srr1_subsequent_instruction = BIT(47)
 };
 
+
 /**
  ** storage interrupt registers
  **/
@@ -275,14 +264,8 @@ typedef struct _registers {
   /* Segment Registers */
   sreg sr[nr_of_srs];
 
-#if WITH_ALTIVEC
-  struct altivec_regs altivec;
-#endif
-#if WITH_E500
-  struct e500_regs e500;
-#endif
-
 } registers;
+
 
 /* dump out all the registers */
 
@@ -298,12 +281,6 @@ typedef enum {
   reg_gpr, reg_fpr, reg_spr, reg_msr,
   reg_cr, reg_fpscr, reg_pc, reg_sr,
   reg_insns, reg_stalls, reg_cycles,
-#ifdef WITH_ALTIVEC
-  reg_vr, reg_vscr,
-#endif
-#ifdef WITH_E500
-  reg_acc, reg_gprh, reg_evr,
-#endif
   nr_register_types
 } register_types;
 

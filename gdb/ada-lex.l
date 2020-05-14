@@ -1,20 +1,22 @@
 /* FLEX lexer for Ada expressions, for GDB.
-   Copyright (C) 1994-2020 Free Software Foundation, Inc.
+   Copyright (C) 1994, 1997, 2000
+   Free Software Foundation, Inc.
 
-   This file is part of GDB.
+This file is part of GDB.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.  */
 
 /*----------------------------------------------------------------------*/
 
@@ -23,6 +25,9 @@
 /* the global pointer lexptr.  It returns a syntactic category for */
 /* each successive token and places a semantic value into yylval */
 /* (ada-lval), defined by the parser.   */
+
+/* Run flex with (at least) the -i option (case-insensitive), and the -I */
+/* option (interactive---no unnecessary lookahead).  */
 
 DIG	[0-9]
 NUM10	({DIG}({DIG}|_)*)
@@ -40,58 +45,48 @@ EXP	(e[+-]{NUM10})
 POSEXP  (e"+"?{NUM10})
 
 %{
-
-#include "diagnostics.h"
-
-/* Some old versions of flex generate code that uses the "register" keyword,
-   which clang warns about.  This was observed for example with flex 2.5.35,
-   as shipped with macOS 10.12.  */
-DIAGNOSTIC_PUSH
-DIAGNOSTIC_IGNORE_DEPRECATED_REGISTER
-
 #define NUMERAL_WIDTH 256
 #define LONGEST_SIGN ((ULONGEST) 1 << (sizeof(LONGEST) * HOST_CHAR_BIT - 1))
 
-/* Temporary staging for numeric literals.  */
-static char numbuf[NUMERAL_WIDTH];
- static void canonicalizeNumeral (char *s1, const char *);
-static struct stoken processString (const char*, int);
-static int processInt (struct parser_state *, const char *, const char *,
-		       const char *);
-static int processReal (struct parser_state *, const char *);
-static struct stoken processId (const char *, int);
-static int processAttribute (const char *);
-static int find_dot_all (const char *);
-static void rewind_to_char (int);
+/* Temporary staging for numeric literals. */
+static char numbuf[NUMERAL_WIDTH]; 
+ static void canonicalizeNumeral (char* s1, const char*);
+static int processInt (const char*, const char*, const char*);
+static int processReal (const char*);
+static int processId (const char*, int);
+static int processAttribute (const char*);
+static int find_dot_all (const char*);
 
 #undef YY_DECL
-#define YY_DECL static int yylex ( void )
-
-/* Flex generates a static function "input" which is not used.
-   Defining YY_NO_INPUT comments it out.  */
-#define YY_NO_INPUT
+#define YY_DECL static int yylex ( void ) 
 
 #undef YY_INPUT
 #define YY_INPUT(BUF, RESULT, MAX_SIZE) \
-    if ( *pstate->lexptr == '\000' ) \
+    if ( *lexptr == '\000' ) \
       (RESULT) = YY_NULL; \
     else \
       { \
-        *(BUF) = *pstate->lexptr; \
+        *(BUF) = *lexptr; \
         (RESULT) = 1; \
-	pstate->lexptr += 1; \
+	lexptr += 1; \
       }
 
-static int find_dot_all (const char *);
+static char *tempbuf = NULL;
+static int tempbufsize = 0;
+static int tempbuf_len;
+static struct block* left_block_context;
 
-/* Depth of parentheses.  */
-static int paren_depth;
+static void resize_tempbuf (unsigned int);
+
+static void block_lookup (char*, char*);
+
+static int name_lookup (char*, char*, int*);
+
+static int find_dot_all (const char*);
 
 %}
 
-%option case-insensitive interactive nodefault noyywrap
-
-%s BEFORE_QUAL_QUOTE
+%s IN_STRING BEFORE_QUAL_QUOTE
 
 %%
 
@@ -99,92 +94,104 @@ static int paren_depth;
 
 "--".*		 { yyterminate(); }
 
-{NUM10}{POSEXP}  {
-		   canonicalizeNumeral (numbuf, yytext);
-		   return processInt (pstate, NULL, numbuf,
-				      strrchr (numbuf, 'e') + 1);
+{NUM10}{POSEXP}  { 
+		   canonicalizeNumeral (numbuf, yytext); 
+		   return processInt (NULL, numbuf, strrchr(numbuf, 'e')+1);
 		 }
 
-{NUM10}          {
-		   canonicalizeNumeral (numbuf, yytext);
-		   return processInt (pstate, NULL, numbuf, NULL);
+{NUM10}          { 
+		   canonicalizeNumeral (numbuf, yytext); 
+		   return processInt (NULL, numbuf, NULL);
 		 }
 
 {NUM10}"#"{HEXDIG}({HEXDIG}|_)*"#"{POSEXP} {
 		   canonicalizeNumeral (numbuf, yytext);
-		   return processInt (pstate, numbuf,
-				      strchr (numbuf, '#') + 1,
+    		   return processInt (numbuf,
+				      strchr (numbuf, '#') + 1, 
 				      strrchr(numbuf, '#') + 1);
 		 }
 
 {NUM10}"#"{HEXDIG}({HEXDIG}|_)*"#" {
 		   canonicalizeNumeral (numbuf, yytext);
-		   return processInt (pstate, numbuf, strchr (numbuf, '#') + 1,
-				      NULL);
+    		   return processInt (numbuf, strchr (numbuf, '#') + 1, NULL);
 		 }
 
 "0x"{HEXDIG}+	{
 		  canonicalizeNumeral (numbuf, yytext+2);
-		  return processInt (pstate, "16#", numbuf, NULL);
+		  return processInt ("16#", numbuf, NULL);
 		}
 
 
 {NUM10}"."{NUM10}{EXP} {
-		   canonicalizeNumeral (numbuf, yytext);
-		   return processReal (pstate, numbuf);
+		   canonicalizeNumeral (numbuf, yytext); 
+		   return processReal (numbuf);
 		}
 
 {NUM10}"."{NUM10} {
-		   canonicalizeNumeral (numbuf, yytext);
-		   return processReal (pstate, numbuf);
+		   canonicalizeNumeral (numbuf, yytext); 
+		   return processReal (numbuf);
 		}
 
 {NUM10}"#"{NUM16}"."{NUM16}"#"{EXP} {
-                   error (_("Based real literals not implemented yet."));
+                   error ("Based real literals not implemented yet.");
 		}
 
 {NUM10}"#"{NUM16}"."{NUM16}"#" {
-                   error (_("Based real literals not implemented yet."));
+                   error ("Based real literals not implemented yet.");
 		}
 
 <INITIAL>"'"({GRAPHIC}|\")"'" {
-		   yylval.typed_val.type = type_char (pstate);
+		   yylval.typed_val.type = builtin_type_ada_char;
 		   yylval.typed_val.val = yytext[1];
 		   return CHARLIT;
 		}
 
 <INITIAL>"'[\""{HEXDIG}{2}"\"]'"   {
                    int v;
-                   yylval.typed_val.type = type_char (pstate);
+                   yylval.typed_val.type = builtin_type_ada_char;
 		   sscanf (yytext+3, "%2x", &v);
 		   yylval.typed_val.val = v;
 		   return CHARLIT;
 		}
 
-\"({GRAPHIC}|"[\""({HEXDIG}{2}|\")"\"]")*\"   {
-	           yylval.sval = processString (yytext+1, yyleng-2);
+\"{OPER}\"/{WHITE}*"(" { return processId (yytext, yyleng); }
+
+<INITIAL>\"	{ 
+		   tempbuf_len = 0;
+		   BEGIN IN_STRING;
+		}
+
+<IN_STRING>{GRAPHIC}*\"  {
+		   resize_tempbuf (yyleng+tempbuf_len);
+		   strncpy (tempbuf+tempbuf_len, yytext, yyleng-1);
+		   tempbuf_len += yyleng-1;
+		   yylval.sval.ptr = tempbuf;
+		   yylval.sval.length = tempbuf_len;
+		   BEGIN INITIAL;
 		   return STRING;
 		}
 
-\"              {
-                   error (_("ill-formed or non-terminated string literal"));
+<IN_STRING>{GRAPHIC}*"[\""{HEXDIG}{2}"\"]" {
+		   int n;
+		   resize_tempbuf (yyleng-5+tempbuf_len+1);
+		   strncpy (tempbuf+tempbuf_len, yytext, yyleng-6);
+		   sscanf(yytext+yyleng-4, "%2x", &n);
+		   tempbuf[yyleng-6+tempbuf_len] = (char) n;
+		   tempbuf_len += yyleng-5;
 		}
 
-
-if		{
-                  rewind_to_char ('i');
-		  return 0;
+<IN_STRING>{GRAPHIC}*"[\"\"\"]" {
+		   int n;
+		   resize_tempbuf (yyleng-4+tempbuf_len+1);
+		   strncpy (tempbuf+tempbuf_len, yytext, yyleng-6);
+		   tempbuf[yyleng-5+tempbuf_len] = '"';
+		   tempbuf_len += yyleng-4;
 		}
 
-task            {
-                  rewind_to_char ('t');
-		  return 0;
-		}
-
-thread{WHITE}+{DIG} {
-                  /* This keyword signals the end of the expression and
-                     will be processed separately.  */
-                  rewind_to_char ('t');
+if		{ 
+		  while (*lexptr != 'i' && *lexptr != 'I') 
+		    lexptr -= 1; 
+		  yyrestart(NULL); 
 		  return 0;
 		}
 
@@ -199,24 +206,13 @@ new		{ return NEW; }
 not		{ return NOT; }
 null		{ return NULL_PTR; }
 or		{ return OR; }
-others          { return OTHERS; }
 rem		{ return REM; }
 then		{ return THEN; }
 xor		{ return XOR; }
 
-	/* BOOLEAN "KEYWORDS" */
-
- /* True and False are not keywords in Ada, but rather enumeration constants.
-    However, the boolean type is no longer represented as an enum, so True
-    and False are no longer defined in symbol tables.  We compromise by
-    making them keywords (when bare). */
-
-true		{ return TRUEKEYWORD; }
-false		{ return FALSEKEYWORD; }
-
         /* ATTRIBUTES */
 
-{TICK}[a-zA-Z][a-zA-Z_]+ { BEGIN INITIAL; return processAttribute (yytext+1); }
+{TICK}[a-zA-Z][a-zA-Z]+ { return processAttribute (yytext+1); }
 
 	/* PUNCTUATION */
 
@@ -232,93 +228,152 @@ false		{ return FALSEKEYWORD; }
 
 [-&*+./:<>=|;\[\]] { return yytext[0]; }
 
-","		{ if (paren_depth == 0 && pstate->comma_terminates)
+","		{ if (paren_depth == 0 && comma_terminates)
 		    {
-		      rewind_to_char (',');
+		      lexptr -= 1;
+		      yyrestart(NULL);
 		      return 0;
 		    }
-		  else
+		  else 
 		    return ',';
 		}
 
 "("		{ paren_depth += 1; return '('; }
-")"		{ if (paren_depth == 0)
+")"		{ if (paren_depth == 0) 
 		    {
-		      rewind_to_char (')');
+		      lexptr -= 1;
+		      yyrestart(NULL);
 		      return 0;
 		    }
-		  else
+		  else 
  		    {
-		      paren_depth -= 1;
+		      paren_depth -= 1; 
 		      return ')';
 		    }
 		}
 
 "."{WHITE}*all  { return DOT_ALL; }
 
-"."{WHITE}*{ID} {
-	 	  yylval.sval = processId (yytext+1, yyleng-1);
-	          return DOT_ID;
+"."{WHITE}*{ID} { 
+	 	  processId (yytext+1, yyleng-1);
+	          return DOT_ID; 
 		}
 
-{ID}({WHITE}*"."{WHITE}*({ID}|\"{OPER}\"))*(" "*"'")?  {
+{ID}({WHITE}*"."{WHITE}*({ID}|\"{OPER}\"))*(" "*"'")?  { 
                   int all_posn = find_dot_all (yytext);
+		  int token_type, segments, k;
+		  int quote_follows;
 
-                  if (all_posn == -1 && yytext[yyleng-1] == '\'')
+                  if (all_posn == -1 && yytext[yyleng-1] == '\'') 
 		    {
-		      BEGIN BEFORE_QUAL_QUOTE;
-		      yyless (yyleng-1);
+		      quote_follows = 1;
+		      do { 
+			yyless (yyleng-1); 
+		      } while (yytext[yyleng-1] == ' ');
 		    }
-                  else if (all_posn >= 0)
+		  else
+		    quote_follows = 0;			
+		    
+                  if (all_posn >= 0)
 		    yyless (all_posn);
-                  yylval.sval = processId (yytext, yyleng);
-                  return NAME;
-               }
-
+                  processId(yytext, yyleng);
+                  segments = name_lookup (ada_mangle (yylval.ssym.stoken.ptr),
+		                          yylval.ssym.stoken.ptr, &token_type);
+		  left_block_context = NULL;
+		  for (k = yyleng; segments > 0 && k > 0; k -= 1)
+                    {
+		      if (yytext[k-1] == '.')
+			segments -= 1;
+		      quote_follows = 0;
+		    }
+		  if (k <= 0)
+		    error ("confused by name %s", yytext);
+		  yyless (k);
+		  if (quote_follows) 
+		    BEGIN BEFORE_QUAL_QUOTE;
+		  return token_type;
+                }
 
 	/* GDB EXPRESSION CONSTRUCTS  */
 
+
 "'"[^']+"'"{WHITE}*:: {
-                  yyless (yyleng - 2);
-		  yylval.sval = processId (yytext, yyleng);
-		  return NAME;
+                  processId(yytext, yyleng-2);
+                  block_lookup (yylval.ssym.stoken.ptr, yylval.ssym.stoken.ptr);
+                  return BLOCKNAME;
 		}
 
-"::"            { return COLONCOLON; }
+{ID}({WHITE}*"."{WHITE}*({ID}|\"{OPER}\"))*{WHITE}*::  { 
+                  processId(yytext, yyleng-2);
+                  block_lookup (ada_mangle (yylval.ssym.stoken.ptr),
+                                yylval.ssym.stoken.ptr);
+                  return BLOCKNAME;
+		}
 
 [{}@]		{ return yytext[0]; }
 
+"$$"		{ yylval.lval = -1; return LAST; }
+"$$"{DIG}+	{ yylval.lval = -atoi(yytext+2); return LAST; }
+"$"		{ yylval.lval = 0; return LAST; }
+"$"{DIG}+	{ yylval.lval = atoi(yytext+1); return LAST; }
+
+
 	/* REGISTERS AND GDB CONVENIENCE VARIABLES */
 
-"$"({LETTER}|{DIG}|"$")*  {
+"$"({LETTER}|{DIG}|"$")+  {
+    		  int c;
+		  for (c = 0; c < NUM_REGS; c++)
+		    if (REGISTER_NAME (c) &&
+                        strcmp (yytext + 1, REGISTER_NAME (c)) == 0)
+		      {
+			yylval.lval = c;
+			return REGNAME;
+		      }
 		  yylval.sval.ptr = yytext;
 		  yylval.sval.length = yyleng;
-		  return DOLLAR_VARIABLE;
+		  yylval.ivar = 
+		    lookup_internalvar (copy_name (yylval.sval) + 1);
+		  return INTERNAL_VARIABLE;
 		}
 
 	/* CATCH-ALL ERROR CASE */
 
-.		{ error (_("Invalid character '%s' in expression."), yytext); }
+.		{ error ("Invalid character '%s' in expression.", yytext); }
 %%
 
 #include <ctype.h>
-/* Initialize the lexer for processing new expression. */
+#include <string.h>
 
-static void
-lexer_init (FILE *inp)
+/* Initialize the lexer for processing new expression */
+void
+lexer_init (FILE* inp)
 {
   BEGIN INITIAL;
-  paren_depth = 0;
   yyrestart (inp);
 }
 
 
-/* Copy S2 to S1, removing all underscores, and downcasing all letters.  */
+/* Make sure that tempbuf points at an array at least N characters long. */
 
 static void
-canonicalizeNumeral (char *s1, const char *s2)
+resize_tempbuf (n)
+     unsigned int n;
 {
-  for (; *s2 != '\000'; s2 += 1)
+  if (tempbufsize < n)
+    {
+      tempbufsize = (n+63) & ~63;
+      tempbuf = (char*) xrealloc (tempbuf, tempbufsize);
+    }
+}
+ 
+/* Copy S2 to S1, removing all underscores, and downcasing all letters. */
+
+static void
+canonicalizeNumeral (s1,s2)
+     char* s1;
+     const char* s2;
+{
+  for (; *s2 != '\000'; s2 += 1) 
     {
       if (*s2 != '_')
 	{
@@ -329,137 +384,203 @@ canonicalizeNumeral (char *s1, const char *s2)
   s1[0] = '\000';
 }
 
+#define HIGH_BYTE_POSN ((sizeof (ULONGEST) - 1) * HOST_CHAR_BIT)
+
+/* True (non-zero) iff DIGIT is a valid digit in radix BASE, 
+   where 2 <= BASE <= 16.  */
+
+static int
+is_digit_in_base (digit, base)
+     unsigned char digit;
+     int base;
+{
+  if (!isxdigit (digit))
+    return 0;
+  if (base <= 10)
+    return (isdigit (digit) && digit < base + '0');
+  else 
+    return (isdigit (digit) || tolower (digit) < base - 10 + 'a');
+}
+
+static int
+digit_to_int (c)
+     unsigned char c;
+{
+  if (isdigit (c))
+    return c - '0';
+  else
+    return tolower (c) - 'a' + 10;
+}
+
+/* As for strtoul, but for ULONGEST results. */
+ULONGEST
+strtoulst (num, trailer, base)
+     const char *num;
+     const char **trailer;
+     int base;
+{
+  unsigned int high_part;
+  ULONGEST result;
+  int i;
+  unsigned char lim;
+
+  if (base < 2 || base > 16)
+    {
+      errno = EINVAL;
+      return 0;
+    }
+  lim = base - 1 + '0';
+
+  result = high_part = 0;
+  for (i = 0; is_digit_in_base (num[i], base); i += 1)
+    {
+      result = result*base + digit_to_int (num[i]);
+      high_part = high_part*base + (unsigned int) (result >> HIGH_BYTE_POSN);
+      result &= ((ULONGEST) 1 << HIGH_BYTE_POSN) - 1;
+      if (high_part > 0xff) 
+	{
+	  errno = ERANGE;
+	  result = high_part = 0;
+	  break;
+	}
+    }
+
+  if (trailer != NULL)
+    *trailer = &num[i];
+
+  return result + ((ULONGEST) high_part << HIGH_BYTE_POSN);
+}
+
+
+
 /* Interprets the prefix of NUM that consists of digits of the given BASE
    as an integer of that BASE, with the string EXP as an exponent.
    Puts value in yylval, and returns INT, if the string is valid.  Causes
-   an error if the number is improperly formated.   BASE, if NULL, defaults
-   to "10", and EXP to "1".  The EXP does not contain a leading 'e' or 'E'.
- */
+   an error if the number is improperly formated.   BASE, if NULL, defaults 
+   to "10", and EXP to "1". The EXP does not contain a leading 'e' or 'E'. */
 
 static int
-processInt (struct parser_state *par_state, const char *base0,
-	    const char *num0, const char *exp0)
+processInt (base0, num0, exp0)
+     const char* num0;
+     const char* base0;
+     const char* exp0;
 {
   ULONGEST result;
   long exp;
   int base;
-  const char *trailer;
+
+  char* trailer;
 
   if (base0 == NULL)
     base = 10;
   else
-    {
-      base = strtol (base0, (char **) NULL, 10);
+    {	
+      base = strtol (base0, (char**) NULL, 10);
       if (base < 2 || base > 16)
-	error (_("Invalid base: %d."), base);
+	error ("Invalid base: %d.", base);
     }
 
   if (exp0 == NULL)
     exp = 0;
   else
-    exp = strtol(exp0, (char **) NULL, 10);
+    exp = strtol(exp0, (char**) NULL, 10);
 
   errno = 0;
   result = strtoulst (num0, &trailer, base);
   if (errno == ERANGE)
-    error (_("Integer literal out of range"));
+    error ("Integer literal out of range");
   if (isxdigit(*trailer))
-    error (_("Invalid digit `%c' in based literal"), *trailer);
+    error ("Invalid digit `%c' in based literal", *trailer);
 
-  while (exp > 0)
+  while (exp > 0) 
     {
       if (result > (ULONG_MAX / base))
-	error (_("Integer literal out of range"));
+	error ("Integer literal out of range");
       result *= base;
       exp -= 1;
     }
-
-  if ((result >> (gdbarch_int_bit (par_state->gdbarch ())-1)) == 0)
-    yylval.typed_val.type = type_int (par_state);
-  else if ((result >> (gdbarch_long_bit (par_state->gdbarch ())-1)) == 0)
-    yylval.typed_val.type = type_long (par_state);
-  else if (((result >> (gdbarch_long_bit (par_state->gdbarch ())-1)) >> 1) == 0)
+    
+  if ((result >> (TARGET_INT_BIT-1)) == 0)
+    yylval.typed_val.type = builtin_type_ada_int;
+  else if ((result >> (TARGET_LONG_BIT-1)) == 0)
+    yylval.typed_val.type = builtin_type_ada_long;
+  else if (((result >> (TARGET_LONG_BIT-1)) >> 1) == 0)
     {
       /* We have a number representable as an unsigned integer quantity.
-         For consistency with the C treatment, we will treat it as an
+         For consistency with the C treatment, we will treat it as an 
 	 anonymous modular (unsigned) quantity.  Alas, the types are such
-	 that we need to store .val as a signed quantity.  Sorry
+	 that we need to store .val as a signed quantity.  Sorry 
          for the mess, but C doesn't officially guarantee that a simple
          assignment does the trick (no, it doesn't; read the reference manual).
        */
-      yylval.typed_val.type
-	= builtin_type (par_state->gdbarch ())->builtin_unsigned_long;
+      yylval.typed_val.type = builtin_type_unsigned_long;
       if (result & LONGEST_SIGN)
-	yylval.typed_val.val =
-	  (LONGEST) (result & ~LONGEST_SIGN)
+	yylval.typed_val.val = 
+	  (LONGEST) (result & ~LONGEST_SIGN) 
 	  - (LONGEST_SIGN>>1) - (LONGEST_SIGN>>1);
       else
 	yylval.typed_val.val = (LONGEST) result;
       return INT;
     }
-  else
-    yylval.typed_val.type = type_long_long (par_state);
+  else 
+    yylval.typed_val.type = builtin_type_ada_long_long;
 
   yylval.typed_val.val = (LONGEST) result;
   return INT;
 }
 
 static int
-processReal (struct parser_state *par_state, const char *num0)
+processReal (num0)
+     const char* num0;
 {
-  yylval.typed_val_float.type = type_long_double (par_state);
+  if (sizeof (DOUBLEST) <= sizeof (float))
+    sscanf (num0, "%g", &yylval.typed_val_float.dval);
+  else if (sizeof (DOUBLEST) <= sizeof (double))
+    sscanf (num0, "%lg", &yylval.typed_val_float.dval);
+  else
+    {
+#ifdef PRINTF_HAS_LONG_DOUBLE
+      sscanf (num0, "%Lg", &yylval.typed_val_float.dval);
+#else
+      /* Scan it into a double, then convert and assign it to the 
+	 long double.  This at least wins with values representable 
+	 in the range of doubles. */
+      double temp;
+      sscanf (num0, "%lg", &temp);
+      yylval.typed_val_float.dval = temp;
+#endif
+    }
 
-  bool parsed = parse_float (num0, strlen (num0),
-			     yylval.typed_val_float.type,
-			     yylval.typed_val_float.val);
-  gdb_assert (parsed);
+  yylval.typed_val_float.type = builtin_type_ada_float;
+  if (sizeof(DOUBLEST) >= TARGET_DOUBLE_BIT / TARGET_CHAR_BIT)
+    yylval.typed_val_float.type = builtin_type_ada_double;
+  if (sizeof(DOUBLEST) >= TARGET_LONG_DOUBLE_BIT / TARGET_CHAR_BIT)
+    yylval.typed_val_float.type = builtin_type_ada_long_double;
+
   return FLOAT;
 }
 
-
-/* Store a canonicalized version of NAME0[0..LEN-1] in yylval.ssym.  The
-   resulting string is valid until the next call to ada_parse.  If
-   NAME0 contains the substring "___", it is assumed to be already
-   encoded and the resulting name is equal to it.  Similarly, if the name
-   starts with '<', it is copied verbatim.  Otherwise, it differs
-   from NAME0 in that:
-    + Characters between '...' are transfered verbatim to yylval.ssym.
-    + Trailing "'" characters in quoted sequences are removed (a leading quote is
-      preserved to indicate that the name is not to be GNAT-encoded).
-    + Unquoted whitespace is removed.
-    + Unquoted alphabetic characters are mapped to lower case.
-   Result is returned as a struct stoken, but for convenience, the string
-   is also null-terminated.  Result string valid until the next call of
-   ada_parse.
- */
-static struct stoken
-processId (const char *name0, int len)
+static int
+processId (name0, len)
+     const char *name0;
+     int len;
 {
-  char *name = (char *) obstack_alloc (&temp_parse_space, len + 11);
+  char* name = xmalloc (len + 11);
   int i0, i;
-  struct stoken result;
-
-  result.ptr = name;
+  
+/*  add_name_string_cleanup (name); */
+/* FIXME: add_name_string_cleanup should be defined in parse.c */
   while (len > 0 && isspace (name0[len-1]))
     len -= 1;
-
-  if (name0[0] == '<' || strstr (name0, "___") != NULL)
-    {
-      strncpy (name, name0, len);
-      name[len] = '\000';
-      result.length = len;
-      return result;
-    }
-
   i = i0 = 0;
-  while (i0 < len)
+  while (i0 < len) 
     {
       if (isalnum (name0[i0]))
 	{
 	  name[i] = tolower (name0[i0]);
 	  i += 1; i0 += 1;
 	}
-      else switch (name0[i0])
+      else switch (name0[i0]) 
 	{
 	default:
 	  name[i] = name0[i0];
@@ -469,96 +590,278 @@ processId (const char *name0, int len)
 	  i0 += 1;
 	  break;
 	case '\'':
-	  do
+	  i0 += 1;
+	  while (i0 < len && name0[i0] != '\'')
 	    {
 	      name[i] = name0[i0];
 	      i += 1; i0 += 1;
 	    }
-	  while (i0 < len && name0[i0] != '\'');
+	  i0 += 1;
+	  break;
+	case '<':
+	  i0 += 1;
+	  while (i0 < len && name0[i0] != '>')
+	    {
+	      name[i] = name0[i0];
+	      i += 1; i0 += 1;
+	    }
 	  i0 += 1;
 	  break;
 	}
     }
   name[i] = '\000';
 
-  result.length = i;
-  return result;
+  yylval.ssym.sym = NULL;
+  yylval.ssym.stoken.ptr = name;
+  yylval.ssym.stoken.length = i;
+  return NAME;
 }
 
-/* Return TEXT[0..LEN-1], a string literal without surrounding quotes,
-   with special hex character notations replaced with characters. 
-   Result valid until the next call to ada_parse.  */
-
-static struct stoken
-processString (const char *text, int len)
+static void 
+block_lookup (name, err_name)
+     char* name;
+     char* err_name;
 {
-  const char *p;
-  char *q;
-  const char *lim = text + len;
-  struct stoken result;
+  struct symbol** syms;
+  struct block** blocks;
+  int nsyms;
+  struct symtab *symtab;
+  nsyms = ada_lookup_symbol_list (name, left_block_context,
+				  VAR_NAMESPACE, &syms, &blocks);
+  if (left_block_context == NULL &&
+      (nsyms == 0 || SYMBOL_CLASS (syms[0]) != LOC_BLOCK))
+    symtab = lookup_symtab (name);
+  else
+    symtab = NULL;
 
-  q = (char *) obstack_alloc (&temp_parse_space, len);
-  result.ptr = q;
-  p = text;
-  while (p < lim)
+  if (symtab != NULL)
+    left_block_context = yylval.bval =
+      BLOCKVECTOR_BLOCK (BLOCKVECTOR (symtab), STATIC_BLOCK);
+  else if (nsyms == 0 || SYMBOL_CLASS (syms[0]) != LOC_BLOCK)
     {
-      if (p[0] == '[' && p[1] == '"' && p+2 < lim)
-         {
-           if (p[2] == '"')  /* "...["""]... */
-             {
-               *q = '"';
-	       p += 4;
-	     }
-           else
-	     {
-               int chr;
-	       sscanf (p+2, "%2x", &chr);
-	       *q = (char) chr;
-	       p += 5;
-	     }
-         }
-       else
-         *q = *p;
-       q += 1;
-       p += 1;
-     }
-  result.length = q - result.ptr;
-  return result;
+      if (left_block_context == NULL)
+	error ("No file or function \"%s\".", err_name);
+      else
+	error ("No function \"%s\" in specified context.", err_name);
+    }
+  else 
+    {
+      left_block_context = yylval.bval = SYMBOL_BLOCK_VALUE (syms[0]); 
+      if (nsyms > 1)
+	warning ("Function name \"%s\" ambiguous here", err_name);
+    }
+}
+
+/* Look up NAME0 (assumed to be mangled) as a name in VAR_NAMESPACE,
+   setting *TOKEN_TYPE to NAME or TYPENAME, depending on what is
+   found.  Try first the entire name, then the name without the last 
+   segment (i.e., after the last .id), etc., and return the number of
+   segments that had to be removed to get a match.  Calls error if no
+   matches are found, using ERR_NAME in any error message.  When
+   exactly one symbol match is found, it is placed in yylval. */
+ 
+static int
+name_lookup (name0, err_name, token_type)
+     char* name0;
+     char* err_name;
+     int* token_type;
+{
+  struct symbol** syms;
+  struct block** blocks;
+  struct type* type;
+  int len0 = strlen (name0);
+  char* name = savestring (name0, len0);
+  int nsyms;
+  int segments;
+ 
+/*  add_name_string_cleanup (name);*/
+/* FIXME: add_name_string_cleanup should be defined in parse.c */
+  yylval.ssym.stoken.ptr = name;
+  yylval.ssym.stoken.length = strlen (name);
+  for (segments = 0; ; segments += 1)
+    {
+      struct type* preferred_type;
+      int i, preferred_index;
+
+      if (left_block_context == NULL) 
+	nsyms = ada_lookup_symbol_list (name, expression_context_block, 
+					VAR_NAMESPACE, &syms, &blocks);
+      else
+	nsyms = ada_lookup_symbol_list (name, left_block_context, 
+					VAR_NAMESPACE, &syms, &blocks);
+
+      /* Check for a type definition. */
+
+      /* Look for a symbol that doesn't denote void.  This is (I think) a */
+      /* temporary kludge to get around problems in GNAT output. */
+      preferred_index = -1; preferred_type = NULL;
+      for (i = 0; i < nsyms; i += 1)
+	switch (SYMBOL_CLASS (syms[i])) 
+	  {
+	  case LOC_TYPEDEF:
+	    if (ada_prefer_type (SYMBOL_TYPE (syms[i]), preferred_type))
+	      {
+		preferred_index = i;
+		preferred_type = SYMBOL_TYPE (syms[i]);
+	      }
+	    break;
+	  case LOC_REGISTER:
+	  case LOC_ARG:
+	  case LOC_REF_ARG:
+	  case LOC_REGPARM:
+	  case LOC_REGPARM_ADDR:
+	  case LOC_LOCAL:
+	  case LOC_LOCAL_ARG:
+	  case LOC_BASEREG:
+	  case LOC_BASEREG_ARG:
+	    goto NotType;
+	  default:
+	    break;
+	  }
+      if (preferred_type != NULL)
+	{
+/*	  if (TYPE_CODE (preferred_type) == TYPE_CODE_VOID)
+	    error ("`%s' matches only void type name(s)", 
+		   ada_demangle (name));
+*/
+/* FIXME: ada_demangle should be defined in defs.h, and is located in ada-lang.c */
+/*	  else*/ if (ada_is_object_renaming (syms[preferred_index]))
+	    {
+	      yylval.ssym.sym = syms[preferred_index];
+	      *token_type = OBJECT_RENAMING;
+	      return segments;
+	    } 
+	  else if (ada_renaming_type (SYMBOL_TYPE (syms[preferred_index])) 
+                   != NULL)
+	    {
+	      int result;
+	      const char* renaming = 
+		ada_simple_renamed_entity (syms[preferred_index]);
+	      char* new_name = xmalloc (strlen (renaming) + len0 
+					- yylval.ssym.stoken.length + 1);
+/*	      add_name_string_cleanup (new_name);*/
+/* FIXME: add_name_string_cleanup should be defined in parse.c */
+	      strcpy (new_name, renaming);
+	      strcat (new_name, name0 + yylval.ssym.stoken.length);
+	      result = name_lookup (new_name, err_name, token_type);
+	      if (result > segments) 
+		error ("Confused by renamed symbol.");
+	      return result;
+	    }
+	  else if (segments == 0)
+	    {
+	      yylval.tval = preferred_type;
+	      *token_type = TYPENAME;
+	      return 0;
+	    } 
+	}
+
+      if (segments == 0)
+	{
+	  type = lookup_primitive_typename (name);
+	  if (type == NULL && STREQ ("system__address", name))
+	    type = builtin_type_ada_system_address;
+	  if (type != NULL)
+	    {
+	      yylval.tval = type;
+	      *token_type = TYPENAME;
+	      return 0;
+	    }
+	}
+
+    NotType:
+      if (nsyms == 1) 
+	{
+	  *token_type = NAME;
+	  yylval.ssym.sym = syms[0];
+	  yylval.ssym.msym = NULL;
+	  yylval.ssym.block = blocks[0];
+	  return segments;
+	}
+      else if (nsyms == 0) {
+	int i;
+	yylval.ssym.msym = ada_lookup_minimal_symbol (name);
+	if (yylval.ssym.msym != NULL)
+	  {
+	    yylval.ssym.sym = NULL;
+	    yylval.ssym.block = NULL;
+            *token_type = NAME;
+	    return segments;
+	  }
+
+	for (i = yylval.ssym.stoken.length - 1; i > 0; i -= 1)
+	  {
+            if (name[i] == '.')
+	      { 
+		name[i] = '\0';
+		yylval.ssym.stoken.length = i;
+		break;
+	      }
+	    else if (name[i] == '_' && name[i-1] == '_')
+	      {
+		i -= 1;
+		name[i] = '\0';
+		yylval.ssym.stoken.length = i;
+		break;
+	      }
+	  }
+	if (i <= 0) 
+	  {
+	    if (!have_full_symbols () && !have_partial_symbols ()
+		&& left_block_context == NULL)
+	      error ("No symbol table is loaded.  Use the \"file\" command.");
+	    if (left_block_context == NULL)
+	      error ("No definition of \"%s\" in current context.", 
+		     err_name);
+	    else
+	      error ("No definition of \"%s\" in specified context.", 
+		     err_name);
+	  }
+      }
+      else 
+	{
+	  *token_type = NAME;
+	  yylval.ssym.sym = NULL;
+	  yylval.ssym.msym = NULL;
+	  if (left_block_context == NULL)
+	    yylval.ssym.block = expression_context_block;
+	  else
+	    yylval.ssym.block = left_block_context;
+	  return segments;
+	}
+    }
 }
 
 /* Returns the position within STR of the '.' in a
-   '.{WHITE}*all' component of a dotted name, or -1 if there is none.
-   Note: we actually don't need this routine, since 'all' can never be an
-   Ada identifier.  Thus, looking up foo.all or foo.all.x as a name
-   must fail, and will eventually be interpreted as (foo).all or
-   (foo).all.x.  However, this does avoid an extraneous lookup. */
-
+   '.{WHITE}*all' component of a dotted name, or -1 if there is none. */
 static int
-find_dot_all (const char *str)
+find_dot_all (str)
+     const char* str;
 {
   int i;
-
-  for (i = 0; str[i] != '\000'; i++)
-    if (str[i] == '.')
-      {
-	int i0 = i;
-
-	do
-	  i += 1;
-	while (isspace (str[i]));
-
-	if (strncasecmp (str + i, "all", 3) == 0
-	    && !isalnum (str[i + 3]) && str[i + 3] != '_')
-	  return i0;
-      }
+  for (i = 0; str[i] != '\000'; i += 1)
+    {
+      if (str[i] == '.')
+	{
+	  int i0 = i;
+	  do 
+	    i += 1;
+	  while (isspace (str[i]));
+	  if (strcmp (str+i, "all") == 0
+	      && ! isalnum (str[i+3]) && str[i+3] != '_')
+	    return i0;
+	}
+    }
   return -1;
-}
+}    
 
 /* Returns non-zero iff string SUBSEQ matches a subsequence of STR, ignoring
-   case.  */
+   case. */
 
 static int
-subseqMatch (const char *subseq, const char *str)
+subseqMatch (subseq, str)
+     const char* subseq;
+     const char* str;
 {
   if (subseq[0] == '\0')
     return 1;
@@ -569,9 +872,9 @@ subseqMatch (const char *subseq, const char *str)
   else
     return subseqMatch (subseq, str+1);
 }
+  
 
-
-static struct { const char *name; int code; }
+static struct { const char* name; int code; } 
 attributes[] = {
   { "address", TICK_ADDRESS },
   { "unchecked_access", TICK_ACCESS },
@@ -595,7 +898,8 @@ attributes[] = {
    abbreviation STR.  */
 
 static int
-processAttribute (const char *str)
+processAttribute (str)
+     const char* str;
 {
   int i, k;
 
@@ -604,41 +908,21 @@ processAttribute (const char *str)
       return attributes[i].code;
 
   for (i = 0, k = -1; attributes[i].code != -1; i += 1)
-    if (subseqMatch (str, attributes[i].name))
+    if (subseqMatch (str, attributes[i].name)) 
       {
 	if (k == -1)
 	  k = i;
-	else
-	  error (_("ambiguous attribute name: `%s'"), str);
+	else 
+	  error ("ambiguous attribute name: `%s'", str);
       }
   if (k == -1)
-    error (_("unrecognized attribute: `%s'"), str);
+    error ("unrecognized attribute: `%s'", str);
 
   return attributes[k].code;
 }
 
-/* Back up lexptr by yyleng and then to the rightmost occurrence of
-   character CH, case-folded (there must be one).  WARNING: since
-   lexptr points to the next input character that Flex has not yet
-   transferred to its internal buffer, the use of this function
-   depends on the assumption that Flex calls YY_INPUT only when it is
-   logically necessary to do so (thus, there is no reading ahead
-   farther than needed to identify the next token.)  */
-
-static void
-rewind_to_char (int ch)
+int
+yywrap()
 {
-  pstate->lexptr -= yyleng;
-  while (toupper (*pstate->lexptr) != toupper (ch))
-    pstate->lexptr -= 1;
-  yyrestart (NULL);
+  return 1;
 }
-
-/* Dummy definition to suppress warnings about unused static definitions. */
-typedef void (*dummy_function) ();
-dummy_function ada_flex_use[] = 
-{ 
-  (dummy_function) yyunput
-};
-
-DIAGNOSTIC_POP

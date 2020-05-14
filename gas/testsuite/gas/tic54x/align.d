@@ -4,26 +4,26 @@
 .*: +file format .*c54x.*
 
 Sections:
-Idx Name          Size      VMA + LMA + File off  Algn
-  0 .text         00000089  0+000  0+000  0000....  2..7
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .text         000000c0  00000000  00000000  0000....  2..7
                   CONTENTS, ALLOC, LOAD, ....
-  1 .data         00000005  0+000  0+000  0000....  2..1
+  1 .data         00000005  00000000  00000000  0000....  2..1
                   CONTENTS, ALLOC, LOAD, DATA
-  2 .bss          00000000  0+000  0+000  0000....  2..0
+  2 .bss          00000000  00000000  00000000  0000....  2..0
                   ALLOC
 Disassembly of section .text:
 
-0+000 <.text>:
+00000000 <.text>:
    0:	4160.*
    1:	0001.*
    2:	0002.*
 	...
 
-0+004 <even>:
+00000004 <even>:
    4:	0003.*
 	...
 
-0+006 <align2>:
+00000006 <align2>:
    6:	0061.*
    7:	0062.*
    8:	0063.*
@@ -31,7 +31,7 @@ Disassembly of section .text:
    a:	0065.*
 	...
 
-0+010 <align8>:
+00000010 <align8>:
   10:	0008.*
   11:	0000.*
   12:	0001.*
@@ -43,7 +43,7 @@ Disassembly of section .text:
   18:	0007.*
 	...
 
-0+080 <align128>:
+00000080 <align128>:
   80:	0004.*
   81:	0000.*
   82:	0001.*
@@ -53,3 +53,4 @@ Disassembly of section .text:
   86:	0005.*
   87:	0006.*
   88:	0007.*
+	...

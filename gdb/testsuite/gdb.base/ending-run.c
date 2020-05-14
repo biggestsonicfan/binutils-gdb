@@ -4,11 +4,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../lib/unbuffer_output.c"
-
+#ifdef PROTOTYPES
 int callee (int x)
+#else
+int callee( x )
+int x;
+#endif
 {
-    int y = x * x;		/* -break1- */
+    int y = x * x;
     return (y - 2);
 }
 
@@ -18,8 +21,6 @@ int main()
     int *p;
     int i;
 
-    gdb_unbuffer_output ();
-
     p = (int *) malloc( 4 );
 
     for (i = 1; i < 10; i++)
@@ -27,6 +28,6 @@ int main()
             printf( "%d ", callee( i ));
             fflush (stdout);
         }
-    printf( " Goodbye!\n" ); fflush (stdout); /* -break2- */
+    printf( " Goodbye!\n" ); fflush (stdout);
     return 0;
 }

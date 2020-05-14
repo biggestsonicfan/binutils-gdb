@@ -1,31 +1,29 @@
 /* MMIX support for BFD.
-   Copyright (C) 2001-2020 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002 Free Software Foundation, Inc.
 
-   This file is part of BFD, the Binary File Descriptor library.
+This file is part of BFD, the Binary File Descriptor library.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-/* This file holds definitions specific to the MMIX ELF ABI.  */
-
+/* This file holds definitions specific to the MMIX ELF ABI. */
 #ifndef ELF_MMIX_H
 #define ELF_MMIX_H
 
 #include "elf/reloc-macros.h"
 
-/* Relocations.  See the reloc table in bfd/elf64-mmix.c for details.  */
+/* Relocations.  */
 START_RELOC_NUMBERS (elf_mmix_reloc_type)
   RELOC_NUMBER (R_MMIX_NONE, 0)
 
@@ -92,9 +90,6 @@ START_RELOC_NUMBERS (elf_mmix_reloc_type)
 
   /* A LOCAL assertion.  */
   RELOC_NUMBER (R_MMIX_LOCAL, 35)
-
-  /* A PUSHJ instruction, generating a stub if it does not reach.  */
-  RELOC_NUMBER (R_MMIX_PUSHJ_STUBBABLE, 36)
 END_RELOC_NUMBERS (R_MMIX_max)
 
 
@@ -162,12 +157,12 @@ END_RELOC_NUMBERS (R_MMIX_max)
 #define MMO_SEC_DEBUGGING 0x10000
 
 #ifdef BFD_ARCH_SIZE
-extern bfd_boolean _bfd_mmix_before_linker_allocation
-  (bfd *, struct bfd_link_info *);
-extern bfd_boolean _bfd_mmix_after_linker_allocation
-  (bfd *, struct bfd_link_info *);
-extern bfd_boolean _bfd_mmix_check_all_relocs
-  (bfd *, struct bfd_link_info *);
+extern boolean _bfd_mmix_prepare_linker_allocated_gregs
+ PARAMS ((bfd *, struct bfd_link_info *));
+extern boolean _bfd_mmix_finalize_linker_allocated_gregs
+ PARAMS ((bfd *, struct bfd_link_info *));
+extern boolean _bfd_mmix_check_all_relocs
+ PARAMS ((bfd *, struct bfd_link_info *));
 #endif
 
 #endif /* ELF_MMIX_H */

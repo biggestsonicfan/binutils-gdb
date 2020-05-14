@@ -115,8 +115,8 @@ t2:
 
 titi = 10
 toto = 100
-min5b= -16
+min5b= -15
 max5b= 15
-min9b= -256
+min9b= -255
 max9b= 255
 bb = 10240

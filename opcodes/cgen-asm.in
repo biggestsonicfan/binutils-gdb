@@ -1,27 +1,26 @@
 /* Assembler interface for targets using CGEN. -*- C -*-
    CGEN: Cpu tools GENerator
 
-   THIS FILE IS MACHINE GENERATED WITH CGEN.
-   - the resultant file is machine generated, cgen-asm.in isn't
+THIS FILE IS MACHINE GENERATED WITH CGEN.
+- the resultant file is machine generated, cgen-asm.in isn't
 
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+Copyright 1996, 1997, 1998, 1999, 2000, 2001 Free Software Foundation, Inc.
 
-   This file is part of libopcodes.
+This file is part of the GNU Binutils and GDB, the GNU debugger.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
-
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* ??? Eventually more and more of this stuff can go to cpu-independent files.
    Keep that in mind.  */
@@ -44,7 +43,7 @@
 #define max(a,b) ((a) > (b) ? (a) : (b))
 
 static const char * parse_insn_normal
-  (CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *);
+     PARAMS ((CGEN_CPU_DESC, const CGEN_INSN *, const char **, CGEN_FIELDS *));
 
 /* -- assembler routines inserted here.  */
 
@@ -60,9 +59,10 @@ static const char * parse_insn_normal
 
    Returns NULL for success, an error message for failure.  */
 
-char *
-@arch@_cgen_build_insn_regex (CGEN_INSN *insn)
-{
+char * 
+@arch@_cgen_build_insn_regex (insn)
+     CGEN_INSN *insn;
+{  
   CGEN_OPCODE *opc = (CGEN_OPCODE *) CGEN_INSN_OPCODE (insn);
   const char *mnem = CGEN_INSN_MNEMONIC (insn);
   char rxbuf[CGEN_MAX_RX_ELEMENTS];
@@ -101,18 +101,18 @@ char *
   /* Copy any remaining literals from the syntax string into the rx.  */
   for(; * syn != 0 && rx <= rxbuf + (CGEN_MAX_RX_ELEMENTS - 7 - 4); ++syn)
     {
-      if (CGEN_SYNTAX_CHAR_P (* syn))
+      if (CGEN_SYNTAX_CHAR_P (* syn)) 
 	{
 	  char c = CGEN_SYNTAX_CHAR (* syn);
 
-	  switch (c)
+	  switch (c) 
 	    {
 	      /* Escape any regex metacharacters in the syntax.  */
-	    case '.': case '[': case '\\':
-	    case '*': case '^': case '$':
+	    case '.': case '[': case '\\': 
+	    case '*': case '^': case '$': 
 
 #ifdef CGEN_ESCAPE_EXTENDED_REGEX
-	    case '?': case '{': case '}':
+	    case '?': case '{': case '}': 
 	    case '(': case ')': case '*':
 	    case '|': case '+': case ']':
 #endif
@@ -142,20 +142,20 @@ char *
     }
 
   /* Trailing whitespace ok.  */
-  * rx++ = '[';
-  * rx++ = ' ';
-  * rx++ = '\t';
-  * rx++ = ']';
-  * rx++ = '*';
+  * rx++ = '['; 
+  * rx++ = ' '; 
+  * rx++ = '\t'; 
+  * rx++ = ']'; 
+  * rx++ = '*'; 
 
   /* But anchor it after that.  */
-  * rx++ = '$';
+  * rx++ = '$'; 
   * rx = '\0';
 
   CGEN_INSN_RX (insn) = xmalloc (sizeof (regex_t));
   reg_err = regcomp ((regex_t *) CGEN_INSN_RX (insn), rxbuf, REG_NOSUB);
 
-  if (reg_err == 0)
+  if (reg_err == 0) 
     return NULL;
   else
     {
@@ -184,10 +184,11 @@ char *
    Returns NULL for success, an error message for failure.  */
 
 static const char *
-parse_insn_normal (CGEN_CPU_DESC cd,
-		   const CGEN_INSN *insn,
-		   const char **strp,
-		   CGEN_FIELDS *fields)
+parse_insn_normal (cd, insn, strp, fields)
+     CGEN_CPU_DESC cd;
+     const CGEN_INSN *insn;
+     const char **strp;
+     CGEN_FIELDS *fields;
 {
   /* ??? Runtime added insns not handled yet.  */
   const CGEN_SYNTAX *syntax = CGEN_INSN_SYNTAX (insn);
@@ -273,11 +274,9 @@ parse_insn_normal (CGEN_CPU_DESC cd,
 	  continue;
 	}
 
-#ifdef CGEN_MNEMONIC_OPERANDS
-      (void) past_opcode_p;
-#endif
       /* We have an operand of some sort.  */
-      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn), &str, fields);
+      errmsg = cd->parse_operand (cd, CGEN_SYNTAX_FIELD (*syn),
+					  &str, fields);
       if (errmsg)
 	return errmsg;
 
@@ -327,11 +326,12 @@ parse_insn_normal (CGEN_CPU_DESC cd,
    mind helps keep the design clean.  */
 
 const CGEN_INSN *
-@arch@_cgen_assemble_insn (CGEN_CPU_DESC cd,
-			   const char *str,
-			   CGEN_FIELDS *fields,
-			   CGEN_INSN_BYTES_PTR buf,
-			   char **errmsg)
+@arch@_cgen_assemble_insn (cd, str, fields, buf, errmsg)
+     CGEN_CPU_DESC cd;
+     const char *str;
+     CGEN_FIELDS *fields;
+     CGEN_INSN_BYTES_PTR buf;
+     char **errmsg;
 {
   const char *start;
   CGEN_INSN_LIST *ilist;
@@ -354,17 +354,17 @@ const CGEN_INSN *
       const CGEN_INSN *insn = ilist->insn;
       recognized_mnemonic = 1;
 
-#ifdef CGEN_VALIDATE_INSN_SUPPORTED
+#ifdef CGEN_VALIDATE_INSN_SUPPORTED 
       /* Not usually needed as unsupported opcodes
 	 shouldn't be in the hash lists.  */
       /* Is this insn supported by the selected cpu?  */
       if (! @arch@_cgen_insn_supported (cd, insn))
 	continue;
 #endif
-      /* If the RELAXED attribute is set, this is an insn that shouldn't be
+      /* If the RELAX attribute is set, this is an insn that shouldn't be
 	 chosen immediately.  Instead, it is used during assembler/linker
 	 relaxation if possible.  */
-      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAXED) != 0)
+      if (CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAX) != 0)
 	continue;
 
       str = start;
@@ -394,41 +394,62 @@ const CGEN_INSN *
 
   {
     static char errbuf[150];
-    const char *tmp_errmsg;
 #ifdef CGEN_VERBOSE_ASSEMBLER_ERRORS
-#define be_verbose 1
+    const char *tmp_errmsg;
+
+    /* If requesting verbose error messages, use insert_errmsg.
+       Failing that, use parse_errmsg.  */
+    tmp_errmsg = (insert_errmsg ? insert_errmsg :
+		  parse_errmsg ? parse_errmsg :
+		  recognized_mnemonic ?
+		  _("unrecognized form of instruction") :
+		  _("unrecognized instruction"));
+
+    if (strlen (start) > 50)
+      /* xgettext:c-format */
+      sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
+    else 
+      /* xgettext:c-format */
+      sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
 #else
-#define be_verbose 0
+    if (strlen (start) > 50)
+      /* xgettext:c-format */
+      sprintf (errbuf, _("bad instruction `%.50s...'"), start);
+    else 
+      /* xgettext:c-format */
+      sprintf (errbuf, _("bad instruction `%.50s'"), start);
 #endif
-
-    if (be_verbose)
-      {
-	/* If requesting verbose error messages, use insert_errmsg.
-	   Failing that, use parse_errmsg.  */
-	tmp_errmsg = (insert_errmsg ? insert_errmsg :
-		      parse_errmsg ? parse_errmsg :
-		      recognized_mnemonic ?
-		      _("unrecognized form of instruction") :
-		      _("unrecognized instruction"));
-
-	if (strlen (start) > 50)
-	  /* xgettext:c-format */
-	  sprintf (errbuf, "%s `%.50s...'", tmp_errmsg, start);
-	else
-	  /* xgettext:c-format */
-	  sprintf (errbuf, "%s `%.50s'", tmp_errmsg, start);
-      }
-    else
-      {
-	if (strlen (start) > 50)
-	  /* xgettext:c-format */
-	  sprintf (errbuf, _("bad instruction `%.50s...'"), start);
-	else
-	  /* xgettext:c-format */
-	  sprintf (errbuf, _("bad instruction `%.50s'"), start);
-      }
-
+      
     *errmsg = errbuf;
     return NULL;
   }
 }
+
+#if 0 /* This calls back to GAS which we can't do without care.  */
+
+/* Record each member of OPVALS in the assembler's symbol table.
+   This lets GAS parse registers for us.
+   ??? Interesting idea but not currently used.  */
+
+/* Record each member of OPVALS in the assembler's symbol table.
+   FIXME: Not currently used.  */
+
+void
+@arch@_cgen_asm_hash_keywords (cd, opvals)
+     CGEN_CPU_DESC cd;
+     CGEN_KEYWORD *opvals;
+{
+  CGEN_KEYWORD_SEARCH search = cgen_keyword_search_init (opvals, NULL);
+  const CGEN_KEYWORD_ENTRY * ke;
+
+  while ((ke = cgen_keyword_search_next (& search)) != NULL)
+    {
+#if 0 /* Unnecessary, should be done in the search routine.  */
+      if (! @arch@_cgen_opval_supported (ke))
+	continue;
+#endif
+      cgen_asm_record_register (cd, ke->name, ke->value);
+    }
+}
+
+#endif /* 0 */

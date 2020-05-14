@@ -1,27 +1,27 @@
-/* The common simulator framework for GDB, the GNU Debugger.
+/*  This file is part of the program psim.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+    Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
+    Copyright (C) 1997, 1998, Free Software Foundation, Inc.
 
-   Contributed by Andrew Cagney and Red Hat.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   This file is part of GDB.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ 
+    */
 
 
-#ifndef SIM_BASICS_H
-#define SIM_BASICS_H
+#ifndef _SIM_BASICS_H_
+#define _SIM_BASICS_H_
 
 
 /* Basic configuration */
@@ -48,14 +48,7 @@ extern int asprintf (char **result, const char *format, ...);
 #endif
 
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-#ifndef max
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#endif
-
-
+	
 /* Some versions of GCC include an attribute operator, define it */
 
 #if !defined (__attribute__)
@@ -67,6 +60,7 @@ extern int asprintf (char **result, const char *format, ...);
 
 /* Global types that code manipulates */
 
+typedef struct _device device;
 struct hw;
 struct _sim_fpu;
 
@@ -132,6 +126,11 @@ typedef enum {
 
 /* Basic definitions - ordered so that nothing calls what comes after it.  */
 
+/* FIXME: conditionalizing tconfig.h on HAVE_CONFIG_H seems wrong.  */
+#ifdef HAVE_CONFIG_H
+#include "tconfig.h"
+#endif
+
 #include "ansidecl.h"
 #include "gdb/callback.h"
 #include "gdb/remote-sim.h"
@@ -144,13 +143,12 @@ typedef enum {
 #include "sim-bits.h"
 #include "sim-endian.h"
 #include "sim-signal.h"
+#include "sim-arange.h"
 
 #include "sim-utils.h"
-
-#include "libiberty.h"
 
 /* Note: Only the simpler interfaces are defined here.  More heavy
    weight objects, such as core and events, are defined in the more
    serious sim-base.h header. */
 
-#endif /* SIM_BASICS_H */
+#endif /* _SIM_BASICS_H_ */

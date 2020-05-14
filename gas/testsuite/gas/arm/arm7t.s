@@ -74,8 +74,9 @@ misc:
 	.word	fred
 	
 	.ltorg
-
-	# Add two nop instructions to ensure that the
-	# output is 32-byte aligned as required for arm-aout.
-	nop
-	nop
+	.thumb
+	.global thumb_tests
+	.thumb_func
+thumb_tests:	
+	sub	r0, #0
+	add	r0, #0

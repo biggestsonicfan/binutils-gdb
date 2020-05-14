@@ -1,28 +1,36 @@
 # Expect script for ld selective linking tests running run_dump_test
-#   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+#   Copyright 2002 Free Software Foundation, Inc.
 #
-# This file is part of the GNU Binutils.
-#
-# This program is free software; you can redistribute it and/or modify
+# This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 # Test for ELF here, so we don't have to qualify on ELF specifically
 # in every .d-file.
-if { ![is_elf_format] || ![check_gc_sections_available] } {
+
+if { ![istarget *-*-linux*]
+     && ![istarget *-*-gnu]
+     && ![istarget hppa*64*-*-hpux*]
+     && ![istarget *-*-elf] } {
     return
 }
+
+if { [istarget *-*-linux*aout*] \
+     || [istarget *-*-linux*oldld*] } {
+    return
+}
+
+load_lib ld-lib.exp
 
 set test_list [lsort [glob -nocomplain $srcdir/$subdir/*.d]]
 for { set i 0 } { $i < [llength $test_list] } { incr i } {

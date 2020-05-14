@@ -1,12 +1,12 @@
 /* Shared library declarations for GDB, the GNU Debugger.
-   
-   Copyright (C) 1992-2020 Free Software Foundation, Inc.
+   Copyright 1992, 1993, 1995, 1998, 1999, 2000, 2001
+   Free Software Foundation, Inc.
 
    This file is part of GDB.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -15,109 +15,190 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef SOLIB_H
 #define SOLIB_H
 
 /* Forward decl's for prototypes */
-struct so_list;
 struct target_ops;
-struct target_so_ops;
-struct program_space;
-
-#include "symfile-add-flags.h"
 
 /* Called when we free all symtabs, to free the shared library information
-   as well.  */
+   as well. */
+
+#define CLEAR_SOLIB			clear_solib
 
 extern void clear_solib (void);
 
-/* Called to add symbols from a shared library to gdb's symbol table.  */
+/* Called to add symbols from a shared library to gdb's symbol table. */
 
-extern void solib_add (const char *, int, int);
-extern bool solib_read_symbols (struct so_list *, symfile_add_flags);
+#define SOLIB_ADD(filename, from_tty, targ, readsyms) \
+    solib_add (filename, from_tty, targ, readsyms)
 
-/* Function to be called when the inferior starts up, to discover the
-   names of shared libraries that are dynamically linked, the base
-   addresses to which they are linked, and sufficient information to
-   read in their symbols at a later time.  */
+extern void solib_add (char *, int, struct target_ops *, int);
 
-extern void solib_create_inferior_hook (int from_tty);
+/* Function to be called when the inferior starts up, to discover the names
+   of shared libraries that are dynamically linked, the base addresses to
+   which they are linked, and sufficient information to read in their symbols
+   at a later time. */
+
+#define SOLIB_CREATE_INFERIOR_HOOK(PID)	solib_create_inferior_hook()
+
+/* Function to be called to remove the connection between debugger and
+   dynamic linker that was established by SOLIB_CREATE_INFERIOR_HOOK.
+   (This operation does not remove shared library information from
+   the debugger, as CLEAR_SOLIB does.)
+
+   This functionality is presently not implemented for this target.
+ */
+#define SOLIB_REMOVE_INFERIOR_HOOK(PID) (0)
+
+extern void solib_create_inferior_hook (void);	/* solib.c */
+
+/* This function is called by the "catch load" command.  It allows
+   the debugger to be notified by the dynamic linker when a specified
+   library file (or any library file, if filename is NULL) is loaded.
+
+   Presently, this functionality is not implemented.
+ */
+#define SOLIB_CREATE_CATCH_LOAD_HOOK(pid,tempflag,filename,cond_string) \
+   error("catch of library loads/unloads not yet implemented on this platform")
+
+/* This function is called by the "catch unload" command.  It allows
+   the debugger to be notified by the dynamic linker when a specified
+   library file (or any library file, if filename is NULL) is unloaded.
+
+   Presently, this functionality is not implemented.
+ */
+#define SOLIB_CREATE_CATCH_UNLOAD_HOOK(pid,tempflag,filename,cond_string) \
+   error("catch of library loads/unloads not yet implemented on this platform")
+
+/* This function returns TRUE if the dynamic linker has just reported
+   a load of a library.
+
+   This function must be used only when the inferior has stopped in
+   the dynamic linker hook, or undefined results are guaranteed.
+
+   Presently, this functionality is not implemented.
+ */
+
+/*
+   #define SOLIB_HAVE_LOAD_EVENT(pid) \
+   error("catch of library loads/unloads not yet implemented on this platform")
+ */
+
+#define SOLIB_HAVE_LOAD_EVENT(pid) \
+(0)
+
+/* This function returns a pointer to the string representation of the
+   pathname of the dynamically-linked library that has just been loaded.
+
+   This function must be used only when SOLIB_HAVE_LOAD_EVENT is TRUE,
+   or undefined results are guaranteed.
+
+   This string's contents are only valid immediately after the inferior
+   has stopped in the dynamic linker hook, and becomes invalid as soon
+   as the inferior is continued.  Clients should make a copy of this
+   string if they wish to continue the inferior and then access the string.
+
+   Presently, this functionality is not implemented.
+ */
+
+/*
+   #define SOLIB_LOADED_LIBRARY_PATHNAME(pid) \
+   error("catch of library loads/unloads not yet implemented on this platform")
+ */
+
+#define SOLIB_LOADED_LIBRARY_PATHNAME(pid) \
+(0)
+
+/* This function returns TRUE if the dynamic linker has just reported
+   an unload of a library.
+
+   This function must be used only when the inferior has stopped in
+   the dynamic linker hook, or undefined results are guaranteed.
+
+   Presently, this functionality is not implemented.
+ */
+/*
+   #define SOLIB_HAVE_UNLOAD_EVENT(pid) \
+   error("catch of library loads/unloads not yet implemented on this platform")
+ */
+
+#define SOLIB_HAVE_UNLOAD_EVENT(pid) \
+(0)
+
+/* This function returns a pointer to the string representation of the
+   pathname of the dynamically-linked library that has just been unloaded.
+
+   This function must be used only when SOLIB_HAVE_UNLOAD_EVENT is TRUE,
+   or undefined results are guaranteed.
+
+   This string's contents are only valid immediately after the inferior
+   has stopped in the dynamic linker hook, and becomes invalid as soon
+   as the inferior is continued.  Clients should make a copy of this
+   string if they wish to continue the inferior and then access the string.
+
+   Presently, this functionality is not implemented.
+ */
+/*
+   #define SOLIB_UNLOADED_LIBRARY_PATHNAME(pid) \
+   error("catch of library loads/unloads not yet implemented on this platform")
+ */
+
+#define SOLIB_UNLOADED_LIBRARY_PATHNAME(pid) \
+(0)
+
+/* This function returns TRUE if pc is the address of an instruction that
+   lies within the dynamic linker (such as the event hook, or the dld
+   itself).
+
+   This function must be used only when a dynamic linker event has been
+   caught, and the inferior is being stepped out of the hook, or undefined
+   results are guaranteed.
+
+   Presently, this functionality is not implemented.
+ */
+
+/*
+   #define SOLIB_IN_DYNAMIC_LINKER(pid,pc) \
+   error("catch of library loads/unloads not yet implemented on this platform")
+ */
+
+#define SOLIB_IN_DYNAMIC_LINKER(pid,pc) \
+(0)
+
+/* This function must be called when the inferior is killed, and the program
+   restarted.  This is not the same as CLEAR_SOLIB, in that it doesn't discard
+   any symbol tables.
+
+   Presently, this functionality is not implemented.
+ */
+#define SOLIB_RESTART() \
+  (0)
+
+/* If we can't set a breakpoint, and it's in a shared library, just
+   disable it.  */
+
+#define DISABLE_UNSETTABLE_BREAK(addr)	(solib_address(addr) != NULL)
+
+extern char *solib_address (CORE_ADDR);	/* solib.c */
 
 /* If ADDR lies in a shared library, return its name.  */
 
-extern char *solib_name_from_address (struct program_space *, CORE_ADDR);
+#define PC_SOLIB(addr)	solib_address (addr)
 
-/* Return true if ADDR lies within SOLIB.  */
-
-extern bool solib_contains_address_p (const struct so_list *, CORE_ADDR);
-
-/* Return whether the data starting at VADDR, size SIZE, must be kept
-   in a core file for shared libraries loaded before "gcore" is used
-   to be handled correctly when the core file is loaded.  This only
-   applies when the section would otherwise not be kept in the core
-   file (in particular, for readonly sections).  */
-
-extern bool solib_keep_data_in_core (CORE_ADDR vaddr, unsigned long size);
-
-/* Return true if PC lies in the dynamic symbol resolution code of the
+/* Return 1 if PC lies in the dynamic symbol resolution code of the
    run time loader.  */
 
-extern bool in_solib_dynsym_resolve_code (CORE_ADDR);
+#define IN_SOLIB_DYNSYM_RESOLVE_CODE(pc) in_solib_dynsym_resolve_code (pc)
 
-/* Discard symbols that were auto-loaded from shared libraries.  */
+extern int in_solib_dynsym_resolve_code (CORE_ADDR);	/* solib.c */
 
-extern void no_shared_libraries (const char *ignored, int from_tty);
+/* Discard symbols that were auto-loaded from shared libraries. */
 
-/* Set the solib operations for GDBARCH to NEW_OPS.  */
-
-extern void set_solib_ops (struct gdbarch *gdbarch,
-			   const struct target_so_ops *new_ops);
-
-/* Synchronize GDB's shared object list with inferior's.
-
-   Extract the list of currently loaded shared objects from the
-   inferior, and compare it with the list of shared objects in the
-   current program space's list of shared libraries.  Edit
-   so_list_head to bring it in sync with the inferior's new list.
-
-   If we notice that the inferior has unloaded some shared objects,
-   free any symbolic info GDB had read about those shared objects.
-
-   Don't load symbolic info for any new shared objects; just add them
-   to the list, and leave their symbols_loaded flag clear.
-
-   If FROM_TTY is non-null, feel free to print messages about what
-   we're doing.  */
-
-extern void update_solib_list (int from_tty);
-
-/* Return true if NAME is the libpthread shared library.  */
-
-extern bool libpthread_name_p (const char *name);
-
-/* Look up symbol from both symbol table and dynamic string table.  */
-
-extern CORE_ADDR gdb_bfd_lookup_symbol (bfd *abfd,
-					int (*match_sym) (const asymbol *,
-							  const void *),
-					const void *data);
-
-/* Look up symbol from symbol table.  */
-
-extern CORE_ADDR gdb_bfd_lookup_symbol_from_symtab (bfd *abfd,
-						    int (*match_sym)
-						      (const asymbol *,
-						       const void *),
-						    const void *data);
-
-/* Enable or disable optional solib event breakpoints as appropriate.  */
-
-extern void update_solib_breakpoints (void);
-
-/* Handle an solib event by calling solib_add.  */
-
-extern void handle_solib_event (void);
+extern void no_shared_libraries (char *ignored, int from_tty);
 
 #endif /* SOLIB_H */
