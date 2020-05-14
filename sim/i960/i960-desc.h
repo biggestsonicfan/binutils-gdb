@@ -210,7 +210,7 @@ typedef enum isa_attr {
 
 /* Ifield support.  */
 
-extern const struct cgen_ifld i960_cgen_ifld_table[];
+extern const struct cgen_ifld * i960_cgen_ifld_table;
 
 /* Ifield attribute indices.  */
 

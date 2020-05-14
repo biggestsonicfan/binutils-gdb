@@ -213,7 +213,7 @@ const CGEN_HW_ENTRY i960_cgen_hw_table[] =
 #define A(a) (1 << CGEN_IFLD_/**/a)
 #endif
 
-const CGEN_IFLD i960_cgen_ifld_table[] =
+const CGEN_IFLD *i960_cgen_ifld_table =
 {
   { I960_F_NIL, "f-nil", 0, 0, 0, 0, { 0, { (1<<MACH_BASE) } }  },
   { I960_F_OPCODE, "f-opcode", 0, 32, 0, 8, { 0, { (1<<MACH_BASE) } }  },

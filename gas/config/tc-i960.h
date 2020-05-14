@@ -182,7 +182,7 @@ extern void i960_handle_align ();
 
 #define md_operand(x)
 
-extern const struct relax_type md_relax_table[];
+extern const struct relax_type * md_relax_table;
 #define TC_GENERIC_RELAX_TABLE md_relax_table
 
 #define LINKER_RELAXING_SHRINKS_ONLY
